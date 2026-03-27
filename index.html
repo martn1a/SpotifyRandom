@@ -695,6 +695,51 @@
       border-bottom:1px solid var(--border)}
     .lib-view-tab{flex:1;border:1px solid var(--border);border-radius:var(--r-f);padding:8px 6px;background:none;font-size:12px;font-weight:500;color:var(--text-dim);cursor:pointer;font-family:var(--font-b);transition:all .12s;text-align:center;overflow:visible}
     .lib-view-tab.active{border-color:var(--blue);color:var(--blue);background:var(--blue-glow)}
+    /* Phase 7A: Library Coverage Bar */
+    .lib-cov-bar{padding:14px 16px;margin-bottom:14px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg)}
+    .lib-cov-stat{font-family:var(--font-h);font-size:14px;font-weight:700;margin-bottom:8px}
+    .lib-cov-track{height:6px;background:var(--surface3);border-radius:var(--r-f);overflow:hidden;margin-bottom:8px}
+    .lib-cov-fill{height:100%;border-radius:var(--r-f);transition:width .6s cubic-bezier(.4,0,.2,1)}
+    .lib-cov-sub{font-size:12px;color:var(--text-dim)}
+    /* Phase 7B: Browser Tab Redesign */
+    .brw-header{display:flex;align-items:center;gap:6px;margin:-16px -16px 0;padding:10px 16px;
+      position:sticky;top:-16px;z-index:30;
+      background:rgba(30,30,30,.97);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
+      border-bottom:1px solid var(--border)}
+    .brw-tab{flex:0 0 auto;border:1px solid var(--border);border-radius:var(--r-f);padding:8px 14px;
+      background:none;font-size:12px;font-weight:500;color:var(--text-dim);cursor:pointer;
+      font-family:var(--font-b);transition:all .12s;white-space:nowrap;min-height:36px}
+    .brw-tab.active{border-color:var(--blue);color:var(--blue);background:var(--blue-glow)}
+    .brw-hdr-right{margin-left:auto;flex-shrink:0}
+    /* Active chips spacing for browser */
+    .lib-filter-bar{position:sticky;top:36px;margin:0 -16px;z-index:20;
+      background:rgba(30,30,30,.96);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
+      border-bottom:1px solid var(--border);padding:8px 16px 8px}
+    /* Search inside filter bar */
+    .lib-srch-wrap{position:relative;flex:1}
+    .lib-srch-icon{position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:14px;pointer-events:none}
+    .lib-srch{width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:var(--r-f);
+      color:var(--text);font-family:var(--font-b);font-size:13px;padding:8px 12px 8px 32px;
+      outline:none;transition:border-color .15s;min-height:38px}
+    .lib-srch:focus{border-color:var(--blue)}
+    /* Cover-list grid: 2 Mobile, 3 Tablet, 4 Desktop */
+    .alb-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}
+    @media(min-width:540px){.alb-grid{grid-template-columns:repeat(3,1fr)}}
+    @media(min-width:900px){.alb-grid{grid-template-columns:repeat(4,1fr)}}
+    /* Mood chip size consistent with genre chips */
+    .lib-mood-chips{display:flex;flex-wrap:wrap;gap:7px}
+    .lib-mood-chip{padding:7px 13px;border:1px solid var(--border2);border-radius:var(--r-f);font-size:12px;font-weight:600;background:none;color:var(--text-dim);cursor:pointer;font-family:var(--font-b);transition:all .12s;white-space:nowrap;min-height:36px}
+    .lib-mood-chip:active{transform:scale(.95)}
+    .lib-mood-chip.active{border-color:var(--blue);color:var(--blue);background:var(--blue-glow)}
+    .lib-sh-range-wrap{display:flex;flex-direction:column;gap:10px}
+    .lib-sh-range-row{display:flex;align-items:center;gap:10px}
+    .lib-sh-range-row input[type=range]{flex:1;accent-color:var(--blue)}
+    .lib-sh-range-val{font-size:12px;color:var(--text);font-weight:600;min-width:36px;text-align:right}
+    .lib-sh-range-lbl{font-size:12px;color:var(--text-dim);min-width:28px}
+    .lib-sh-radio-group{display:flex;flex-direction:column;gap:11px}
+    .lib-sh-radio-row{display:flex;align-items:center;gap:10px;cursor:pointer}
+    .lib-sh-radio-row input{accent-color:var(--blue);width:16px;height:16px;flex-shrink:0;cursor:pointer}
+    .lib-sh-radio-row span{font-size:13px;color:var(--text)}
   </style>
 </head>
 <body>
@@ -1362,24 +1407,35 @@ function renderHomeTab(panel){
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// SECTION 13 — BROWSER TAB  (Phase 7B: ersetzt Library Tab)
+// SECTION 13 — BROWSER TAB  (Phase 7B: Cover-List + Dynamic Filters)
 // ═══════════════════════════════════════════════════════════════════
 // ── Browser sub-view state ────────────────────────────────────────
-const libViewState={activeView:'genres'}; // 'genres' | 'search' | 'listenlater'
+const libViewState={activeView:'browse'}; // 'browse' | 'listenlater'
 
 function renderBrowserTab(panel){
-  // Build view-tab bar once (or if missing)
-  if(!panel.querySelector('.lib-view-tabs')){
-    const vt=document.createElement('div');vt.className='lib-view-tabs';
-    vt.innerHTML=`<button class="lib-view-tab${libViewState.activeView==='genres'?' active':''}" data-libview="genres">📚 Browse</button><button class="lib-view-tab${libViewState.activeView==='search'?' active':''}" data-libview="search">🔍 Search</button><button class="lib-view-tab${libViewState.activeView==='listenlater'?' active':''}" data-libview="listenlater">🕐 Listen Later</button>`;
-    panel.prepend(vt);
-    vt.querySelectorAll('.lib-view-tab').forEach(b=>b.addEventListener('click',()=>{
-      libViewState.activeView=b.dataset.libview;
-      vt.querySelectorAll('.lib-view-tab').forEach(x=>x.classList.toggle('active',x.dataset.libview===libViewState.activeView));
+  // Build header bar once
+  if(!panel.querySelector('.brw-header')){
+    const hdr=document.createElement('div');hdr.className='brw-header';
+    hdr.innerHTML=`
+      <button class="brw-tab${libViewState.activeView==='browse'?' active':''}" data-brwview="browse">📚 Browse</button>
+      <button class="brw-tab${libViewState.activeView==='listenlater'?' active':''}" data-brwview="listenlater">🕐 Listen Later</button>
+      <div class="brw-hdr-right">
+        <button class="lib-filter-btn" id="brwFilterBtn">⚙ Filter</button>
+      </div>`;
+    panel.prepend(hdr);
+    hdr.querySelectorAll('.brw-tab').forEach(b=>b.addEventListener('click',()=>{
+      libViewState.activeView=b.dataset.brwview;
+      hdr.querySelectorAll('.brw-tab').forEach(x=>x.classList.toggle('active',x.dataset.brwview===libViewState.activeView));
+      const fb=hdr.querySelector('#brwFilterBtn');if(fb)fb.style.display=libViewState.activeView==='browse'?'':'none';
       renderLibraryView(panel);
     }));
+    hdr.querySelector('#brwFilterBtn').addEventListener('click',()=>{
+      const vc=panel.querySelector('.lib-view-container');
+      if(vc)_openLibSheet(vc);
+    });
   } else {
-    panel.querySelectorAll('.lib-view-tab').forEach(b=>b.classList.toggle('active',b.dataset.libview===libViewState.activeView));
+    panel.querySelectorAll('.brw-tab').forEach(b=>b.classList.toggle('active',b.dataset.brwview===libViewState.activeView));
+    const fb=panel.querySelector('#brwFilterBtn');if(fb)fb.style.display=libViewState.activeView==='browse'?'':'none';
   }
   renderLibraryView(panel);
 }
@@ -1389,8 +1445,7 @@ function renderLibraryView(panel){
   if(vc)vc.remove();
   vc=document.createElement('div');vc.className='lib-view-container';
   panel.appendChild(vc);
-  if(libViewState.activeView==='genres') renderLibraryGenreNav(vc);
-  else if(libViewState.activeView==='search') renderSearchView(vc,'');
+  if(libViewState.activeView==='browse') renderLibraryGenreNav(vc);
   else if(libViewState.activeView==='listenlater') renderListenLaterView(vc);
 }
 
@@ -2030,6 +2085,18 @@ function renderHomeDashboard(panel){
 
   panel.innerHTML='';
 
+  // ── Phase 7A: Library Coverage Bar
+  (()=>{
+    const tot=allAlbums.length;
+    const heard=HistoryProvider.getMap().size;
+    const pct=tot>0?Math.round(heard/tot*100):0;
+    const col=pct>66?'var(--blue)':pct>33?'var(--warm)':'var(--error)';
+    const bar=document.createElement('div');
+    bar.className='lib-cov-bar';
+    bar.innerHTML=`<div class="lib-cov-stat">📊 ${heard} / ${tot} gehört (${pct}%)</div><div class="lib-cov-track"><div class="lib-cov-fill" style="width:${pct}%;background:${col}"></div></div><div class="lib-cov-sub">Du hast noch <strong>${tot-heard}</strong> Alben zu entdecken</div>`;
+    panel.appendChild(bar);
+  })();
+
   // ── Quick Stats Banner
   const statsBanner=document.createElement('div');
   statsBanner.className='dash-stats';
@@ -2366,10 +2433,27 @@ const libState={
   activeCluster:null,   // null = All, string = über-genre id
   activeSubGenres:[],   // selected sub-genre strings
   albumTypes:[],        // 'album','single','compilation' — empty = all
-  sortMode:'added',     // 'added'|'az'|'release'|'duration'
+  sortMode:'added',     // 'added'|'az'|'release'|'duration'|'mostplayed'|'lastplayed'
   page:1,
   PAGE_SIZE:50,
+  // Phase 7B filters
+  yearMin:1950,         // release year range
+  yearMax:new Date().getFullYear(),
+  moods:[],             // mood keys: energetic/relaxed/dark/uplifting/melancholic/focused
+  heardStatus:'all',    // 'all'|'unheard'|'heard'
+  addedWithin:'all',    // 'all'|'month'|'6months'|'year'
 };
+
+// Phase 7B: Mood → Genre mapping
+const MOOD_TO_GENRES={
+  energetic:['Electronic','Dance','Hip-Hop','Rock','Pop','Funk'],
+  relaxed:['Jazz','Ambient','Lo-Fi','Soul','Classical','Indie','Folk'],
+  dark:['Metal','Industrial','Dark Ambient','Trip-Hop','Synthwave','Goth'],
+  uplifting:['Pop','Indie Pop','Indie Rock','Soul','R&B','Funk','Gospel'],
+  melancholic:['Indie','Alternative','Emo','Singer-Songwriter','Blues','Soul'],
+  focused:['Ambient','Post-Rock','Minimal','Classical','Lo-Fi Hip-Hop','Electronic'],
+};
+const MOOD_LABELS={energetic:'⚡ Energetic',relaxed:'😌 Relaxed',dark:'🌑 Dark',uplifting:'☀️ Uplifting',melancholic:'💧 Melancholic',focused:'🎯 Focused'};
 
 /** Build over-genre counts from current library */
 function _buildClusterCounts(){
@@ -2409,6 +2493,20 @@ function _guessAlbumType(a){
 /** Apply all library filters and return sorted albums */
 function _applyLibFilters(){
   const q=libState.search.toLowerCase();
+  const now=Date.now();
+  const histMap=HistoryProvider.getMap();
+  // Mood → genre expansion
+  let moodGenres=null;
+  if(libState.moods.length>0){
+    moodGenres=new Set();
+    for(const m of libState.moods)(MOOD_TO_GENRES[m]||[]).forEach(g=>moodGenres.add(g.toLowerCase()));
+  }
+  // addedWithin cutoff
+  let addedCutoff=0;
+  if(libState.addedWithin==='month')addedCutoff=now-30*86400000;
+  else if(libState.addedWithin==='6months')addedCutoff=now-180*86400000;
+  else if(libState.addedWithin==='year')addedCutoff=now-365*86400000;
+
   let result=allAlbums.filter(a=>{
     // text search
     if(q&&!a.name.toLowerCase().includes(q)&&!(a.artists||[]).some(ar=>ar.name.toLowerCase().includes(q)))return false;
@@ -2422,16 +2520,47 @@ function _applyLibFilters(){
       const ag=a._genres||[];
       if(!libState.activeSubGenres.some(sg=>ag.includes(sg)))return false;
     }
-    // album type (AND with genre)
+    // album type
     if(libState.albumTypes.length>0){
       if(!libState.albumTypes.includes(_guessAlbumType(a)))return false;
+    }
+    // Phase 7B: year range
+    const yr=releaseYear(a);
+    if(yr&&(yr<libState.yearMin||yr>libState.yearMax))return false;
+    // Phase 7B: mood (OR match against genres)
+    if(moodGenres){
+      const ag=(a._genres||[]).map(g=>g.toLowerCase());
+      if(!ag.some(g=>moodGenres.has(g)))return false;
+    }
+    // Phase 7B: heard status
+    if(libState.heardStatus==='heard'&&!histMap.has(a.id))return false;
+    if(libState.heardStatus==='unheard'&&histMap.has(a.id))return false;
+    // Phase 7B: added within
+    if(addedCutoff>0){
+      const addedMs=a._added_at?new Date(a._added_at).getTime():0;
+      if(addedMs<addedCutoff)return false;
     }
     return true;
   });
   // sort
   if(libState.sortMode==='az'){result.sort((a,b)=>a.name.localeCompare(b.name));}
+  else if(libState.sortMode==='za'){result.sort((a,b)=>b.name.localeCompare(a.name));}
   else if(libState.sortMode==='release'){result.sort((a,b)=>releaseYear(b)-releaseYear(a));}
+  else if(libState.sortMode==='oldest'){result.sort((a,b)=>releaseYear(a)-releaseYear(b));}
   else if(libState.sortMode==='duration'){result.sort((a,b)=>albumDurMin(b)-albumDurMin(a));}
+  else if(libState.sortMode==='mostplayed'){
+    result.sort((a,b)=>{
+      // count plays from histMap (value is last-played timestamp, use presence for count)
+      const pa=histMap.has(a.id)?1:0;const pb=histMap.has(b.id)?1:0;
+      return pb-pa;
+    });
+  }
+  else if(libState.sortMode==='lastplayed'){
+    result.sort((a,b)=>{
+      const ta=histMap.get(a.id)||0;const tb=histMap.get(b.id)||0;
+      if(!ta&&!tb)return 0;if(!ta)return 1;if(!tb)return-1;return tb-ta;
+    });
+  }
   else{// added (recently added first)
     result.sort((a,b)=>{const ta=a._added_at?new Date(a._added_at).getTime():0;const tb=b._added_at?new Date(b._added_at).getTime():0;return tb-ta;});
   }
@@ -2469,7 +2598,7 @@ function _renderGenreChips(){}
 /** Render sub-genre row — REPLACED BY BOTTOM SHEET, kept as no-op for safety */
 function _renderSubGenreRow(){}
 
-/** PHASE 2: Render Library Tab with genre zoom-in navigation */
+/** Phase 7B: Render Browse view — search bar + active chips + cover grid */
 function renderLibraryGenreNav(panel){
   if(!panel.dataset.libBuilt){
     panel.dataset.libBuilt='1';
@@ -2483,7 +2612,6 @@ function renderLibraryGenreNav(panel){
             <span class="lib-srch-icon">🔍</span>
             <input class="lib-srch" id="libSearch2" type="search" placeholder="Search albums or artists…" autocomplete="off">
           </div>
-          <button class="lib-filter-btn" id="libFilterBtn">⚙ Filter</button>
         </div>
         <div class="lib-active-chips" id="libActiveChips" style="display:none"></div>
       </div>
@@ -2496,7 +2624,6 @@ function renderLibraryGenreNav(panel){
       libState.search=e.target.value;libState.page=1;
       const albums=_applyLibFilters();_renderLibGrid(panel,albums);
     });
-    panel.querySelector('#libFilterBtn').addEventListener('click',()=>_openLibSheet(panel));
   }
 
   _renderLibActiveChips(panel);
@@ -2507,8 +2634,9 @@ function renderLibraryGenreNav(panel){
 /** Render the compact active-filter chips below the search bar */
 function _renderLibActiveChips(panel){
   const row=panel.querySelector('#libActiveChips');
-  const btn=panel.querySelector('#libFilterBtn');
-  if(!row||!btn)return;
+  // Filter btn lives in brw-header (parent of .lib-view-container)
+  const btn=panel.querySelector('#libFilterBtn')||panel.closest('.tab-panel')?.querySelector('#brwFilterBtn');
+  if(!row)return;
 
   const chips=[];
   if(libState.activeCluster){
@@ -2523,8 +2651,24 @@ function _renderLibActiveChips(panel){
     chips.push({label:lbl,cls:'type-chip',action:()=>{libState.albumTypes=libState.albumTypes.filter(x=>x!==t);libState.page=1;_renderLibActiveChips(panel);const albums=_applyLibFilters();_renderLibGrid(panel,albums);}});
   }
   if(libState.sortMode!=='added'){
-    const lbl={az:'A–Z',release:'Release Year',duration:'Duration'}[libState.sortMode]||libState.sortMode;
+    const lbl={az:'A–Z',za:'Z–A',release:'Newest',oldest:'Oldest',duration:'Duration',mostplayed:'Most Played',lastplayed:'Last Played'}[libState.sortMode]||libState.sortMode;
     chips.push({label:`↕ ${lbl}`,cls:'sort-chip',action:()=>{libState.sortMode='added';libState.page=1;_renderLibActiveChips(panel);const albums=_applyLibFilters();_renderLibGrid(panel,albums);}});
+  }
+  // Phase 7B chips
+  const curYear=new Date().getFullYear();
+  if(libState.yearMin!==1950||libState.yearMax!==curYear){
+    chips.push({label:`📅 ${libState.yearMin}–${libState.yearMax}`,cls:'',action:()=>{libState.yearMin=1950;libState.yearMax=curYear;libState.page=1;_renderLibActiveChips(panel);const albums=_applyLibFilters();_renderLibGrid(panel,albums);}});
+  }
+  for(const m of libState.moods){
+    chips.push({label:MOOD_LABELS[m]||m,cls:'',action:()=>{libState.moods=libState.moods.filter(x=>x!==m);libState.page=1;_renderLibActiveChips(panel);const albums=_applyLibFilters();_renderLibGrid(panel,albums);}});
+  }
+  if(libState.heardStatus!=='all'){
+    const lbl={heard:'👂 Heard',unheard:'🆕 Unheard'}[libState.heardStatus];
+    chips.push({label:lbl,cls:'type-chip',action:()=>{libState.heardStatus='all';libState.page=1;_renderLibActiveChips(panel);const albums=_applyLibFilters();_renderLibGrid(panel,albums);}});
+  }
+  if(libState.addedWithin!=='all'){
+    const lbl={month:'Added: Month',['6months']:'Added: 6 Mo',year:'Added: Year'}[libState.addedWithin];
+    chips.push({label:lbl,cls:'sort-chip',action:()=>{libState.addedWithin='all';libState.page=1;_renderLibActiveChips(panel);const albums=_applyLibFilters();_renderLibGrid(panel,albums);}});
   }
 
   const count=chips.length;
@@ -2551,6 +2695,7 @@ function _openLibSheet(panel){
   sheet.className='lib-sheet';
 
   function _buildSheetHTML(){
+    const curYear=new Date().getFullYear();
     const genreChips=GENRE_CLUSTERS.map(c=>{
       const cnt=clusterCounts.get(c.id)||0;if(!cnt)return'';
       const active=libState.activeCluster===c.id;
@@ -2570,7 +2715,22 @@ function _openLibSheet(panel){
       return`<button class="lib-type-chip${libState.albumTypes.includes(t)?' active':''}" data-shtype="${t}">${lbl}</button>`;
     }).join('');
 
-    const sortChips=[['added','Recently Added'],['az','A–Z'],['release','Release Year'],['duration','Duration']].map(([v,l])=>`<button class="lib-sort-chip${libState.sortMode===v?' active':''}" data-shsort="${v}">${l}</button>`).join('');
+    const sortChips=[['added','Recently Added'],['release','Newest First'],['oldest','Oldest First'],['az','A–Z'],['za','Z–A'],['mostplayed','Most Played'],['lastplayed','Last Played']].map(([v,l])=>`<button class="lib-sort-chip${libState.sortMode===v?' active':''}" data-shsort="${v}">${l}</button>`).join('');
+
+    // Phase 7B: Year range
+    const yearHTML=`<div class="lib-sh-range-wrap">
+      <div class="lib-sh-range-row"><span class="lib-sh-range-lbl">Von</span><input type="range" min="1950" max="${curYear}" value="${libState.yearMin}" data-shyear="min"><span class="lib-sh-range-val" id="shYearMinVal">${libState.yearMin}</span></div>
+      <div class="lib-sh-range-row"><span class="lib-sh-range-lbl">Bis</span><input type="range" min="1950" max="${curYear}" value="${libState.yearMax}" data-shyear="max"><span class="lib-sh-range-val" id="shYearMaxVal">${libState.yearMax}</span></div>
+    </div>`;
+
+    // Phase 7B: Mood chips
+    const moodHTML=Object.entries(MOOD_LABELS).map(([k,l])=>`<button class="lib-mood-chip${libState.moods.includes(k)?' active':''}" data-shmood="${k}">${l}</button>`).join('');
+
+    // Phase 7B: Heard status radios
+    const heardHTML=[['all','Alle'],['unheard','🆕 Ungehört'],['heard','👂 Gehört']].map(([v,l])=>`<label class="lib-sh-radio-row"><input type="radio" name="shheard" value="${v}"${libState.heardStatus===v?' checked':''}><span>${l}</span></label>`).join('');
+
+    // Phase 7B: Added within radios
+    const addedHTML=[['all','Alles'],['month','Letzter Monat'],['6months','Letzte 6 Monate'],['year','Letztes Jahr']].map(([v,l])=>`<label class="lib-sh-radio-row"><input type="radio" name="shadded" value="${v}"${libState.addedWithin===v?' checked':''}><span>${l}</span></label>`).join('');
 
     return`
       <div class="lib-sheet-handle"></div>
@@ -2580,16 +2740,32 @@ function _openLibSheet(panel){
       </div>
       <div class="lib-sheet-body">
         <div class="lib-sh-sec">
-          <div class="lib-sh-sec-title">Genre</div>
+          <div class="lib-sh-sec-title">📅 Erscheinungsjahr</div>
+          ${yearHTML}
+        </div>
+        <div class="lib-sh-sec">
+          <div class="lib-sh-sec-title">😊 Stimmung</div>
+          <div class="lib-mood-chips">${moodHTML}</div>
+        </div>
+        <div class="lib-sh-sec">
+          <div class="lib-sh-sec-title">🎸 Genre</div>
           <div class="lib-genre-wrap">${genreChips}</div>
           ${subHTML}
         </div>
         <div class="lib-sh-sec">
-          <div class="lib-sh-sec-title">Type</div>
+          <div class="lib-sh-sec-title">👂 Gehört-Status</div>
+          <div class="lib-sh-radio-group">${heardHTML}</div>
+        </div>
+        <div class="lib-sh-sec">
+          <div class="lib-sh-sec-title">🗓 Hinzugefügt</div>
+          <div class="lib-sh-radio-group">${addedHTML}</div>
+        </div>
+        <div class="lib-sh-sec">
+          <div class="lib-sh-sec-title">📦 Typ</div>
           <div class="lib-type-chips">${typeChips}</div>
         </div>
         <div class="lib-sh-sec">
-          <div class="lib-sh-sec-title">Sort</div>
+          <div class="lib-sh-sec-title">↕ Sortierung</div>
           <div class="lib-sort-chips">${sortChips}</div>
         </div>
       </div>`;
@@ -2606,8 +2782,10 @@ function _openLibSheet(panel){
   }
 
   function attachSheetEvents(){
+    const curYear=new Date().getFullYear();
     sheet.querySelector('#sheetReset')?.addEventListener('click',()=>{
       libState.activeCluster=null;libState.activeSubGenres=[];libState.albumTypes=[];libState.sortMode='added';libState.page=1;
+      libState.yearMin=1950;libState.yearMax=curYear;libState.moods=[];libState.heardStatus='all';libState.addedWithin='all';
       refreshSheet();
     });
     sheet.querySelectorAll('[data-shcluster]').forEach(b=>b.addEventListener('click',()=>{
@@ -2629,6 +2807,31 @@ function _openLibSheet(panel){
     }));
     sheet.querySelectorAll('[data-shsort]').forEach(b=>b.addEventListener('click',()=>{
       libState.sortMode=b.dataset.shsort;libState.page=1;refreshSheet();
+    }));
+    // Phase 7B events
+    sheet.querySelectorAll('[data-shyear]').forEach(inp=>inp.addEventListener('input',()=>{
+      const v=+inp.value;
+      if(inp.dataset.shyear==='min'){
+        libState.yearMin=Math.min(v,libState.yearMax);
+        const el=sheet.querySelector('#shYearMinVal');if(el)el.textContent=libState.yearMin;
+        inp.value=libState.yearMin;
+      } else {
+        libState.yearMax=Math.max(v,libState.yearMin);
+        const el=sheet.querySelector('#shYearMaxVal');if(el)el.textContent=libState.yearMax;
+        inp.value=libState.yearMax;
+      }
+      libState.page=1;
+    }));
+    sheet.querySelectorAll('[data-shmood]').forEach(b=>b.addEventListener('click',()=>{
+      const m=b.dataset.shmood;const idx=libState.moods.indexOf(m);
+      if(idx>=0)libState.moods.splice(idx,1);else libState.moods.push(m);
+      libState.page=1;b.classList.toggle('active',libState.moods.includes(m));
+    }));
+    sheet.querySelectorAll('input[name=shheard]').forEach(r=>r.addEventListener('change',()=>{
+      libState.heardStatus=r.value;libState.page=1;
+    }));
+    sheet.querySelectorAll('input[name=shadded]').forEach(r=>r.addEventListener('change',()=>{
+      libState.addedWithin=r.value;libState.page=1;
     }));
   }
 
