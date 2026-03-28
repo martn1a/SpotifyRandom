@@ -790,7 +790,7 @@ const DELAY_BROWSER_MS = 5000;
 const HISTORY_MAX_AGE_DAYS = 30;
 const BLOCKLIST_KW = ['instrumental','remix','edit','live','reprise','version'];
 const DB_NAME = 'albumdiscovery_db';
-const DB_VERSION = 6; // Phase 7B: removed lastfm_cache, radar_cache, custom_playlists
+const DB_VERSION = 7; // Phase 8: added homeLayout store
 
 const GENRE_CLUSTERS = [
   {id:'electronic',label:'Electronic', icon:'⚡',kw:['electronic','techno','house','ambient','drum and bass','dnb','dubstep','trance','garage','jungle','breakbeat','idm','glitch','downtempo','synthwave','darkwave','edm','electronica','trip-hop','synth','rave','acid','chillout','dub','eurodance','electro','bass music','vaporwave','industrial','noise','minimal techno','tech house','deep house','progressive house','elektronisch','tanzmusik','elektronische musik']},
@@ -819,6 +819,7 @@ const DB=(()=>{
       if(!db.objectStoreNames.contains('settings'))  db.createObjectStore('settings');          // PHASE 2
       if(!db.objectStoreNames.contains('genre_index'))db.createObjectStore('genre_index');      // PHASE 2
       if(!db.objectStoreNames.contains('listen_later'))db.createObjectStore('listen_later',{keyPath:'id'}); // PHASE 4
+      if(!db.objectStoreNames.contains('homeLayout'))  db.createObjectStore('homeLayout'); // Phase 8 QID-004
       // Phase 7B migration: remove deprecated stores
       if(db.objectStoreNames.contains('lastfm_cache'))   db.deleteObjectStore('lastfm_cache');
       if(db.objectStoreNames.contains('radar_cache'))    db.deleteObjectStore('radar_cache');
@@ -884,6 +885,15 @@ async function getHeavyRotation(days=30, limit=10){
     })
     .filter(x=>x!==null);
   return sorted;
+}
+
+/** QID-005: Get the most recently queued album from history */
+function getLastPlayedAlbum(){
+  if(!allAlbums.length||!historyCache.size)return null;
+  let lastId=null,lastTs=0;
+  for(const[id,ts]of historyCache){if(ts>lastTs){lastTs=ts;lastId=id;}}
+  if(!lastId)return null;
+  return allAlbums.find(a=>a.id===lastId)||null;
 }
 
 /** PHASE 6A: Get shuffled top-50 all-time albums for Library Radio */
@@ -1057,6 +1067,57 @@ function getCovStats(){
   let nh=0,la=0,re=0;for(const a of allAlbums){const lh=hm.get(a.id);if(!lh)nh++;else if(now-lh>SIX)la++;else re++;}
   const ev=allAlbums.length-nh;return{total:allAlbums.length,neverHeard:nh,longAgo:la,recent:re,everHeard:ev,pct:Math.round(ev/allAlbums.length*100)};
 }
+
+// ═══════════════════════════════════════════════════════════════════
+// SECTION 2B — HOME LAYOUT (QID-004 MVP)
+// ═══════════════════════════════════════════════════════════════════
+const HOME_CAROUSEL_DEFAULTS=[
+  {id:'daily-pick',     label:'🎲 Album of the Day',       visible:true},
+  {id:'forgotten-gems', label:'💎 Forgotten Gems',         visible:true},
+  {id:'heavy-rotation', label:'🔥 Heavy Rotation',         visible:true},
+  {id:'library-radio',  label:'📻 Library Radio',          visible:true},
+  {id:'random-pick',    label:'🎲 Random Pick',            visible:true},
+  {id:'new-in-library', label:'📥 New in Library',         visible:true},
+  {id:'rediscover',     label:'🕰️ Rediscover',             visible:true},
+  {id:'on-this-day',    label:'📅 On This Day',            visible:true},
+  {id:'quick-queue',    label:'⚡ Quick Queue 5',           visible:true},
+  {id:'because-you-played',label:'🎵 Because You Played',  visible:true},
+  {id:'same-artist',    label:'🎨 Same Artist',            visible:true},
+  {id:'added-last-year',label:'📅 Added This Month Last Year',visible:true},
+  {id:'decade-roulette',label:'🔀 Decade Roulette',        visible:true},
+  {id:'almost-there',   label:'🎯 Almost There',           visible:true},
+  {id:'top-albums',     label:'🏆 Top Albums',             visible:true},
+];
+
+const HomeLayout={
+  _cache:null,
+  async load(){
+    try{
+      const db=await DB.getDb();
+      const saved=await db.get('homeLayout','config');
+      if(saved&&Array.isArray(saved)){
+        // Merge: ensure all defaults exist, preserve user visibility
+        const map=new Map(saved.map(x=>[x.id,x]));
+        this._cache=HOME_CAROUSEL_DEFAULTS.map(d=>({...d,...(map.get(d.id)||{})}));
+      }else{
+        this._cache=[...HOME_CAROUSEL_DEFAULTS.map(d=>({...d}))];
+      }
+    }catch(e){this._cache=[...HOME_CAROUSEL_DEFAULTS.map(d=>({...d}))]; }
+    return this._cache;
+  },
+  get(id){
+    if(!this._cache)return true; // default visible until loaded
+    const entry=this._cache.find(x=>x.id===id);
+    return entry?entry.visible:true;
+  },
+  async setVisible(id,visible){
+    if(!this._cache)await this.load();
+    const entry=this._cache.find(x=>x.id===id);
+    if(entry)entry.visible=visible;
+    try{const db=await DB.getDb();await db.put('homeLayout',this._cache,'config');}catch(e){}
+  },
+  getAll(){return this._cache||HOME_CAROUSEL_DEFAULTS.map(d=>({...d}));}
+};
 
 // ═══════════════════════════════════════════════════════════════════
 // SECTION 8 — APPLICATION STATE
@@ -1652,6 +1713,30 @@ async function renderProfileTab(panel){
     panel.appendChild(stDiv);
   }
 
+  // ── Home Layout (QID-004 MVP) ─────────────────────────────────
+  (()=>{
+    const layout=HomeLayout.getAll();
+    const hlDiv=document.createElement('div');hlDiv.className='p4-section';
+    hlDiv.innerHTML=`<div class="p4-section-title">Home Tab — Carousels</div>
+      <div class="card" style="overflow:hidden">
+        ${layout.map(item=>`
+          <div class="settings-row" style="min-height:44px">
+            <div><div class="settings-row-label" style="font-size:13px">${esc(item.label)}</div></div>
+            <label class="tgl-sw">
+              <input type="checkbox" data-carousel-id="${esc(item.id)}"${item.visible?' checked':''}>
+              <span class="tgl-track"></span>
+            </label>
+          </div>`).join('')}
+      </div>`;
+    panel.appendChild(hlDiv);
+    hlDiv.querySelectorAll('input[data-carousel-id]').forEach(cb=>{
+      cb.addEventListener('change',async e=>{
+        await HomeLayout.setVisible(e.target.dataset.carouselId,e.target.checked);
+        _toast(e.target.checked?'Carousel aktiviert':'Carousel ausgeblendet');
+      });
+    });
+  })();
+
   // ── History management ────────────────────────────────────────
   const histDiv=document.createElement('div');histDiv.className='p4-section';
   histDiv.innerHTML=`<div class="p4-section-title">Listening History</div>
@@ -1850,7 +1935,7 @@ async function migrateFromLegacy(){
   await migrateFromLegacy();
 
   if(Auth.isLoggedIn()){
-    await Promise.all([Cache.loadLibrary(),HistoryProvider.load()]);
+    await Promise.all([Cache.loadLibrary(),HistoryProvider.load(),HomeLayout.load()]);
     restoreSession();
     // Show sync button if library loaded
     if(allAlbums.length){const syncBtn=document.getElementById('syncBtn');if(syncBtn)syncBtn.style.display='';}
@@ -2133,6 +2218,103 @@ function loadOnThisDayAlbums(){
   });
 }
 
+// ═══════════════════════════════════════════════════════════════════
+// SECTION 11.6 — NEW HOME CAROUSEL DATA FUNCTIONS (Phase 8)
+// ═══════════════════════════════════════════════════════════════════
+
+/** QID-005: Because You Played — unheard albums in same genre cluster as last queued */
+function loadBecauseYouPlayed(){
+  const last=getLastPlayedAlbum();
+  if(!last)return{albums:[],refName:''};
+  const hm=HistoryProvider.getMap();
+  const firstGenre=(last._genres||[])[0];
+  if(!firstGenre)return{albums:[],refName:''};
+  const cluster=clusterOf(firstGenre);
+  if(cluster==='other')return{albums:[],refName:''};
+  const pool=allAlbums.filter(a=>{
+    if(hm.has(a.id))return false; // already heard
+    if(a.id===last.id)return false;
+    const gs=a._genres||[];
+    return gs.some(g=>clusterOf(g)===cluster);
+  });
+  if(pool.length<=3)return{albums:[],refName:''};
+  return{albums:shuffleArray(pool).slice(0,10),refName:last.name};
+}
+
+/** Same Artist, Different Album — unheard albums by same artist(s) as current Random Pick */
+function loadSameArtistAlbums(referenceAlbum){
+  if(!referenceAlbum)return{albums:[],artistName:''};
+  const hm=HistoryProvider.getMap();
+  const artistIds=new Set((referenceAlbum.artists||[]).map(ar=>ar.id));
+  const artistName=(referenceAlbum.artists||[])[0]?.name||'';
+  const pool=allAlbums.filter(a=>{
+    if(a.id===referenceAlbum.id)return false;
+    if(hm.has(a.id))return false;
+    return(a.artists||[]).some(ar=>artistIds.has(ar.id));
+  });
+  return{albums:shuffleArray(pool),artistName};
+}
+
+/** Added This Month, Last Year — albums added ±2 weeks around same month last year */
+function loadAddedThisMonthLastYear(){
+  if(!allAlbums.length)return[];
+  const now=new Date();
+  const targetStart=new Date(now.getFullYear()-1,now.getMonth()-1,now.getDate()).getTime();
+  const targetEnd  =new Date(now.getFullYear()-1,now.getMonth()+1,now.getDate()).getTime();
+  const pool=allAlbums.filter(a=>{
+    if(!a._added_at)return false;
+    const t=new Date(a._added_at).getTime();
+    return t>=targetStart&&t<=targetEnd;
+  });
+  return shuffleArray(pool).slice(0,10);
+}
+
+/** Decade Roulette — 3 random unheard albums per decade */
+function loadDecadeRoulette(){
+  const hm=HistoryProvider.getMap();
+  const DEC_ORDER=['pre-70s','70s','80s','90s','00s','10s','20s'];
+  const byDecade={};
+  for(const a of allAlbums){
+    const d=decadeOf(releaseYear(a));
+    if(!byDecade[d])byDecade[d]=[];
+    byDecade[d].push(a);
+  }
+  const result=[];
+  for(const dec of DEC_ORDER){
+    const pool=(byDecade[dec]||[]);
+    if(pool.length<3)continue;
+    const picks=shuffleArray(pool).slice(0,3);
+    result.push({decade:dec,albums:picks});
+  }
+  return result;
+}
+
+/** Almost Heard Everything — artists where 70%+ of their library albums are heard, show the rest */
+function loadAlmostHeardEverything(){
+  const hm=HistoryProvider.getMap();
+  // Build per-artist album map
+  const artistAlbums=new Map();
+  for(const a of allAlbums){
+    for(const ar of(a.artists||[])){
+      if(!artistAlbums.has(ar.id))artistAlbums.set(ar.id,{name:ar.name,albums:[]});
+      artistAlbums.get(ar.id).albums.push(a);
+    }
+  }
+  const result=[];
+  for(const[,{name,albums}]of artistAlbums){
+    if(albums.length<2)continue; // need at least 2 to be meaningful
+    const heard=albums.filter(a=>hm.has(a.id)).length;
+    const pct=heard/albums.length;
+    if(pct>=0.7&&pct<1.0){
+      const missing=albums.filter(a=>!hm.has(a.id));
+      if(missing.length>0)result.push({artistName:name,missing,heardPct:Math.round(pct*100),total:albums.length});
+    }
+  }
+  // Sort by completion desc, take top 5 artists, flatten missing albums
+  result.sort((a,b)=>b.heardPct-a.heardPct);
+  return result.slice(0,5);
+}
+
 function renderHomeDashboard(panel){
   if(!allAlbums.length){
     panel.innerHTML=`<div class="ph-card" style="margin-top:20px">
@@ -2189,7 +2371,7 @@ function renderHomeDashboard(panel){
 
   // ── PHASE 7A: Daily Pick Hero Card
   const dailyPick=loadDailyPick();
-  if(dailyPick){
+  if(dailyPick&&HomeLayout.get('daily-pick')){
     const dpArt=getArt(dailyPick,'lg')||getArt(dailyPick,'md');
     const dpArtist=(dailyPick.artists||[]).map(a=>a.name).join(', ');
     const dpSection=document.createElement('div');
@@ -2229,6 +2411,7 @@ function renderHomeDashboard(panel){
 
   // ── PHASE 7A: Forgotten Gems Carousel
   (async()=>{
+    if(!HomeLayout.get('forgotten-gems'))return;
     const gems=loadForgottenGems();
     if(gems.length<3)return;
     const hm=HistoryProvider.getMap();
@@ -2253,6 +2436,7 @@ function renderHomeDashboard(panel){
 
   // ── PHASE 6A: Heavy Rotation Section
   (async()=>{
+    if(!HomeLayout.get('heavy-rotation'))return;
     const hotAlbums = await getHeavyRotation(30, 10);
     if (hotAlbums.length > 0) {
       const hrSection = document.createElement('div');
@@ -2317,6 +2501,7 @@ function renderHomeDashboard(panel){
 
   // ── PHASE 6A: Library Radio Section
   (async()=>{
+    if(!HomeLayout.get('library-radio'))return;
     const radioAlbums = await getLibraryRadio(50);
     if (radioAlbums.length > 0) {
       const lrSection = document.createElement('div');
@@ -2381,7 +2566,7 @@ function renderHomeDashboard(panel){
   })();
 
   // ── Random Pick Teaser
-  if(randomPick){
+  if(randomPick&&HomeLayout.get('random-pick')){
     const art=getArt(randomPick,'md')||getArt(randomPick,'lg');
     const artist=(randomPick.artists||[]).map(a=>a.name).join(', ');
     const teaser=document.createElement('div');
@@ -2409,7 +2594,7 @@ function renderHomeDashboard(panel){
 
   // ── New in Library
   const newSection=document.createElement('div');newSection.className='dash-section';
-  if(newAlbums.length){
+  if(newAlbums.length&&HomeLayout.get('new-in-library')){
     // PHASE 6B: shuffle, show 20
     const displayNew=shuffleArray(newAlbums).slice(0,20);
     const newHdr=`<div class="car-section-hdr"><span class="car-section-title" id="newInLibTitle">📥 New in Library<span class="car-see-all">See All ›</span></span><span class="car-section-sub">${newAlbums.length} in 30 days</span></div>`;
@@ -2420,7 +2605,7 @@ function renderHomeDashboard(panel){
   }
 
   // ── Rediscover
-  if(rediscover.length){
+  if(rediscover.length&&HomeLayout.get('rediscover')){
     const hm=HistoryProvider.getMap();const now=Date.now();
     // PHASE 6B: shuffle, show 20
     const displayRediscover=shuffleArray(rediscover).slice(0,20);
@@ -2434,6 +2619,7 @@ function renderHomeDashboard(panel){
 
   // ── PHASE 7A: On This Day
   (()=>{
+    if(!HomeLayout.get('on-this-day'))return;
     const otdAlbums=loadOnThisDayAlbums();
     if(!otdAlbums.length)return;
     const otdSection=document.createElement('div');otdSection.className='dash-section';
@@ -2457,6 +2643,7 @@ function renderHomeDashboard(panel){
 
   // ── PHASE 7A: Quick Queue 5
   (()=>{
+    if(!HomeLayout.get('quick-queue'))return;
     const qqSection=document.createElement('div');qqSection.className='quick-queue-wrap';
     qqSection.innerHTML=`
       <button class="btn btn-full quick-queue-btn" id="quickQueue5">
@@ -2495,8 +2682,104 @@ function renderHomeDashboard(panel){
     panel.appendChild(qqSection);
   })();
 
+  // ── PHASE 8: Because You Played (QID-005)
+  (()=>{
+    if(!HomeLayout.get('because-you-played'))return;
+    const{albums:bypAlbums,refName}=loadBecauseYouPlayed();
+    if(!bypAlbums.length)return;
+    const sec=document.createElement('div');sec.className='dash-section';
+    const hdr=document.createElement('div');hdr.className='car-section-hdr';
+    hdr.innerHTML=`<span class="car-section-title" id="bypTitle">🎵 Because You Played<span class="car-see-all">See All ›</span></span><span class="car-section-sub">${esc(refName)}</span>`;
+    sec.appendChild(hdr);
+    hdr.querySelector('#bypTitle').addEventListener('click',()=>openPlaylistModal('Because You Played',bypAlbums,'🎵'));
+    const wrap=document.createElement('div');wrap.className='carousel-wrap';
+    wrap.innerHTML=`<div class="carousel-track">${bypAlbums.map(a=>_carCard(a,null)).join('')}</div>`;
+    sec.appendChild(wrap);
+    _attachCarouselClicks(sec);
+    panel.appendChild(sec);
+  })();
+
+  // ── PHASE 8: Same Artist, Different Album
+  (()=>{
+    if(!HomeLayout.get('same-artist'))return;
+    if(!randomPick)return;
+    const{albums:saAlbums,artistName}=loadSameArtistAlbums(randomPick);
+    if(!saAlbums.length)return;
+    const display=saAlbums.slice(0,10);
+    const sec=document.createElement('div');sec.className='dash-section';
+    const hdr=document.createElement('div');hdr.className='car-section-hdr';
+    hdr.innerHTML=`<span class="car-section-title" id="saTitle">🎨 More by ${esc(artistName)}<span class="car-see-all">See All ›</span></span><span class="car-section-sub">${saAlbums.length} unheard</span>`;
+    sec.appendChild(hdr);
+    hdr.querySelector('#saTitle').addEventListener('click',()=>openPlaylistModal('More by '+artistName,saAlbums,'🎨'));
+    const wrap=document.createElement('div');wrap.className='carousel-wrap';
+    wrap.innerHTML=`<div class="carousel-track">${display.map(a=>_carCard(a,releaseYear(a)||null)).join('')}</div>`;
+    sec.appendChild(wrap);
+    _attachCarouselClicks(sec);
+    panel.appendChild(sec);
+  })();
+
+  // ── PHASE 8: Added This Month, Last Year
+  (()=>{
+    if(!HomeLayout.get('added-last-year'))return;
+    const atly=loadAddedThisMonthLastYear();
+    if(atly.length<3)return;
+    const now=new Date();
+    const monthName=now.toLocaleDateString('en-US',{month:'long'});
+    const lastYear=now.getFullYear()-1;
+    const sec=document.createElement('div');sec.className='dash-section';
+    const hdr=document.createElement('div');hdr.className='car-section-hdr';
+    hdr.innerHTML=`<span class="car-section-title" id="atlyTitle">📅 ${monthName} Last Year<span class="car-see-all">See All ›</span></span><span class="car-section-sub">Added in ${monthName} ${lastYear}</span>`;
+    sec.appendChild(hdr);
+    hdr.querySelector('#atlyTitle').addEventListener('click',()=>openPlaylistModal(`${monthName} ${lastYear}`,atly,'📅'));
+    const wrap=document.createElement('div');wrap.className='carousel-wrap';
+    wrap.innerHTML=`<div class="carousel-track">${atly.map(a=>_carCard(a,lastYear)).join('')}</div>`;
+    sec.appendChild(wrap);
+    _attachCarouselClicks(sec);
+    panel.appendChild(sec);
+  })();
+
+  // ── PHASE 8: Decade Roulette
+  (()=>{
+    if(!HomeLayout.get('decade-roulette'))return;
+    const decades=loadDecadeRoulette();
+    if(!decades.length)return;
+    const sec=document.createElement('div');sec.className='dash-section';
+    const hdr=document.createElement('div');hdr.className='car-section-hdr';
+    hdr.innerHTML=`<span class="car-section-title">🔀 Decade Roulette</span><span class="car-section-sub">${decades.length} decades</span>`;
+    sec.appendChild(hdr);
+    const wrap=document.createElement('div');wrap.className='carousel-wrap';
+    const cards=decades.flatMap(({decade,albums})=>
+      albums.map(a=>_carCard(a,decade))
+    ).join('');
+    wrap.innerHTML=`<div class="carousel-track">${cards}</div>`;
+    sec.appendChild(wrap);
+    _attachCarouselClicks(sec);
+    panel.appendChild(sec);
+  })();
+
+  // ── PHASE 8: Almost Heard Everything
+  (()=>{
+    if(!HomeLayout.get('almost-there'))return;
+    const artists=loadAlmostHeardEverything();
+    if(!artists.length)return;
+    const allMissing=artists.flatMap(({missing,artistName,heardPct,total})=>
+      missing.map(a=>({...a,_aheBadge:`${heardPct}% done`,_aheArtist:artistName}))
+    );
+    if(!allMissing.length)return;
+    const sec=document.createElement('div');sec.className='dash-section';
+    const hdr=document.createElement('div');hdr.className='car-section-hdr';
+    hdr.innerHTML=`<span class="car-section-title" id="aheTitle">🎯 Almost There<span class="car-see-all">See All ›</span></span><span class="car-section-sub">Complete these artists</span>`;
+    sec.appendChild(hdr);
+    hdr.querySelector('#aheTitle').addEventListener('click',()=>openPlaylistModal('Almost There',allMissing,'🎯'));
+    const wrap=document.createElement('div');wrap.className='carousel-wrap';
+    wrap.innerHTML=`<div class="carousel-track">${allMissing.map(a=>_carCard(a,a._aheBadge)).join('')}</div>`;
+    sec.appendChild(wrap);
+    _attachCarouselClicks(sec);
+    panel.appendChild(sec);
+  })();
+
   // ── Top Albums (async, renders itself)
-  renderTopAlbumsSection(panel);
+  if(HomeLayout.get('top-albums'))renderTopAlbumsSection(panel);
 }
 
 // ── Library state
