@@ -101,6 +101,32 @@
       background:rgba(255,255,255,.28);border-radius:50%;transition:transform .2s,background .2s}
     .tgl-sw input:checked+.tgl-track{background:var(--blue)}
     .tgl-sw input:checked+.tgl-track::after{transform:translateX(18px);background:#fff}
+    /* Phase 11 QID-013: Burn Mode */
+    .burn-mode-active{color:var(--error)!important}
+    .tgl-sw input:checked+.burn-track{background:var(--error)!important}
+    /* Phase 11 QID-014: Hidden Gem + Just Added badges */
+    .badge-hiddengem{background:rgba(212,165,116,.15);color:var(--warm);border:1px solid rgba(212,165,116,.3)}
+    .badge-justadded{background:rgba(74,144,217,.15);color:var(--blue);border:1px solid var(--blue-glow)}
+    /* Phase 11 QID-021: Artist Deep Dive Modal */
+    .adm-bg{position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:210;display:flex;flex-direction:column;animation:fadein .18s ease}
+    .adm-sheet{position:absolute;inset:0;display:flex;flex-direction:column;background:var(--bg);overflow:hidden}
+    .adm-hdr{display:flex;align-items:center;gap:12px;padding:14px 16px 12px;border-bottom:1px solid var(--border);flex-shrink:0;background:var(--surface)}
+    .adm-art{width:48px;height:48px;border-radius:50%;object-fit:cover;flex-shrink:0;background:var(--surface3)}
+    .adm-hdr-info{flex:1;min-width:0}
+    .adm-hdr-name{font-family:var(--font-h);font-size:17px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .adm-hdr-sub{font-size:12px;color:var(--text-dim);margin-top:2px}
+    .adm-close{border:none;background:none;color:var(--text-dim);font-size:22px;cursor:pointer;padding:4px 8px;flex-shrink:0}
+    .adm-filters{display:flex;gap:8px;padding:10px 14px;border-bottom:1px solid var(--border);overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;flex-shrink:0}
+    .adm-filter-chip{padding:5px 12px;border:1px solid var(--border2);border-radius:var(--r-f);font-size:12px;font-weight:600;background:none;color:var(--text-dim);cursor:pointer;white-space:nowrap;transition:all .12s}
+    .adm-filter-chip.active{border-color:var(--blue);color:var(--blue);background:var(--blue-glow)}
+    .adm-scroll{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:12px 16px calc(var(--tab-h) + 16px)}
+    .adm-alb-row{display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid var(--border);cursor:pointer}
+    .adm-alb-row:last-child{border-bottom:none}
+    .adm-alb-art{width:52px;height:52px;border-radius:var(--r-sm);object-fit:cover;flex-shrink:0;background:var(--surface3)}
+    .adm-alb-info{flex:1;min-width:0}
+    .adm-alb-name{font-size:14px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .adm-alb-meta{font-size:12px;color:var(--text-dim);margin-top:2px}
+    .adm-alb-heard{color:var(--blue);font-size:12px;flex-shrink:0}
     /* Sliders */
     input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:3px;
       background:var(--border2);border-radius:var(--r-f);outline:none;cursor:pointer}
@@ -771,6 +797,12 @@
     .sam-cluster-hdr-count{font-size:11px;color:var(--text-dim);font-weight:400;text-transform:none;letter-spacing:0}
     .sam-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:4px 10px 10px}
     @media(min-width:540px){.sam-grid{grid-template-columns:repeat(4,1fr)}}
+    /* QID-016: 2-col grid variant for better badge readability */
+    .sam-grid-2col{grid-template-columns:repeat(2,1fr)!important}
+    @media(min-width:540px){.sam-grid-2col{grid-template-columns:repeat(3,1fr)!important}}
+    /* QID-016: Grouping + Artist filter controls */
+    .sam-ctrl-row{display:flex;gap:8px;padding:8px 14px;border-bottom:1px solid var(--border);flex-shrink:0;background:var(--surface)}
+    .sam-ctrl-sel{flex:1;background:var(--surface2);color:var(--text);border:1px solid var(--border2);border-radius:var(--r-sm);padding:6px 10px;font-size:12px;font-family:var(--font-b);outline:none;cursor:pointer}
     .sam-item{cursor:pointer;border-radius:var(--r-md);overflow:hidden;background:var(--surface2);transition:transform .12s,opacity .12s;position:relative}
     .sam-item:active{transform:scale(.94);opacity:.85}
     .sam-art-wrap{position:relative;aspect-ratio:1;background:var(--surface3);overflow:hidden}
@@ -871,6 +903,9 @@ const DB=(()=>{
       if(!db.objectStoreNames.contains('playlist_tracks_cache'))db.createObjectStore('playlist_tracks_cache'); // Phase 9 QID-009
       if(!db.objectStoreNames.contains('favorites'))           db.createObjectStore('favorites',{keyPath:'id'}); // Phase 10 QID-012
       if(!db.objectStoreNames.contains('enriched_library'))    db.createObjectStore('enriched_library'); // Phase 11 QID-017
+      if(!db.objectStoreNames.contains('top_albums'))          db.createObjectStore('top_albums'); // Phase 11 QID-018
+      if(!db.objectStoreNames.contains('top_artists'))         db.createObjectStore('top_artists'); // Phase 11 QID-021
+      if(!db.objectStoreNames.contains('burn_tracking'))       db.createObjectStore('burn_tracking',{keyPath:'id'}); // Phase 11 QID-013
       // Phase 7B migration: remove deprecated stores
       if(db.objectStoreNames.contains('lastfm_cache'))   db.deleteObjectStore('lastfm_cache');
       if(db.objectStoreNames.contains('radar_cache'))    db.deleteObjectStore('radar_cache');
@@ -1076,6 +1111,86 @@ const EnrichedLibrary={
 
 
 // ═══════════════════════════════════════════════════════════════════
+// SECTION 4D — TOP ALBUMS & TOP ARTISTS CACHE (QID-018, QID-021)
+// ═══════════════════════════════════════════════════════════════════
+const TOP_ALBUMS_TTL=7*24*60*60*1000; // 7 days
+const TOP_ARTISTS_TTL=7*24*60*60*1000; // 7 days
+
+const TopAlbumsCache={
+  async get(timeRange){
+    try{const db=await DB.getDb();const r=await db.get('top_albums',timeRange);if(!r)return null;if(Date.now()-r.updatedAt>TOP_ALBUMS_TTL)return null;return r.albums;}catch(e){return null;}
+  },
+  async save(timeRange,albums){
+    try{const db=await DB.getDb();await db.put('top_albums',{timeRange,albums,updatedAt:Date.now()},timeRange);}catch(e){}
+  },
+  async fetchAndCache(timeRange){
+    const cached=await this.get(timeRange);if(cached)return cached;
+    try{
+      const data=await SpotifyAPI.get(`https://api.spotify.com/v1/me/top/tracks?limit=50&time_range=${timeRange}`);
+      const albMap=new Map();
+      for(const track of(data.items||[])){
+        const albId=track.album?.id;if(!albId)continue;
+        const libAlb=allAlbums.find(a=>a.id===albId);
+        const base=libAlb?{...libAlb}:{id:albId,name:track.album.name,artists:track.album.artists||[],images:track.album.images||[],release_date:track.album.release_date||'',_genres:[],_inLibrary:false,_added_at:null,tracks:{total:track.album.total_tracks||0,items:[],next:`https://api.spotify.com/v1/albums/${encodeURIComponent(albId)}/tracks?limit=50`}};
+        const prev=albMap.get(albId)||{...base,count:0};
+        prev.count=(prev.count||0)+1;
+        albMap.set(albId,prev);
+      }
+      const albums=[...albMap.values()].sort((a,b)=>(b.count||0)-(a.count||0));
+      await this.save(timeRange,albums);
+      return albums;
+    }catch(e){return[];}
+  },
+};
+
+const TopArtistsCache={
+  async get(timeRange){
+    try{const db=await DB.getDb();const r=await db.get('top_artists',timeRange);if(!r)return null;if(Date.now()-r.updatedAt>TOP_ARTISTS_TTL)return null;return r.artists;}catch(e){return null;}
+  },
+  async save(timeRange,artists){
+    try{const db=await DB.getDb();await db.put('top_artists',{timeRange,artists,updatedAt:Date.now()},timeRange);}catch(e){}
+  },
+  async fetchAndCache(timeRange){
+    const cached=await this.get(timeRange);if(cached)return cached;
+    try{
+      const data=await SpotifyAPI.get(`https://api.spotify.com/v1/me/top/artists?limit=20&time_range=${timeRange}`);
+      const artists=(data.items||[]).map(ar=>({id:ar.id,name:ar.name,genres:ar.genres||[],images:ar.images||[],popularity:ar.popularity||0}));
+      await this.save(timeRange,artists);
+      return artists;
+    }catch(e){return[];}
+  },
+};
+
+// ═══════════════════════════════════════════════════════════════════
+// SECTION 4E — BURN MODE (QID-013)
+// ═══════════════════════════════════════════════════════════════════
+const BurnMode={
+  _burned:null, // Set<albumId> — loaded lazily
+  async load(){
+    if(this._burned)return;
+    try{const db=await DB.getDb();const all=await db.getAll('burn_tracking');this._burned=new Set(all.map(e=>e.id));}
+    catch(e){this._burned=new Set();}
+  },
+  async burn(albumId,albumName){
+    await this.load();
+    if(this._burned.has(albumId))return;
+    this._burned.add(albumId);
+    try{const db=await DB.getDb();await db.put('burn_tracking',{id:albumId,name:albumName,burnedAt:Date.now(),burn_count:1});}catch(e){}
+  },
+  async unburn(albumId){
+    await this.load();
+    this._burned.delete(albumId);
+    try{const db=await DB.getDb();await db.delete('burn_tracking',albumId);}catch(e){}
+  },
+  async clearAll(){
+    try{const db=await DB.getDb();await db.clear('burn_tracking');}catch(e){}
+    this._burned=new Set();
+  },
+  isBurned(albumId){return this._burned?this._burned.has(albumId):false;},
+  getBurnedIds(){return this._burned||new Set();},
+};
+
+// ═══════════════════════════════════════════════════════════════════
 const Auth={
   isLoggedIn(){return!!localStorage.getItem('spotify_refresh_token');},
   async login(){
@@ -1167,6 +1282,23 @@ const SpotifyAPI={
       url=d.next||null;
     }
     return[...albumMap.values()];
+  },
+  // QID-021: Get artist's full discography (paginated, album+single+compilation)
+  async getArtistAlbums(artistId,includeGroups='album,single,compilation'){
+    const albums=[];
+    let url=`https://api.spotify.com/v1/artists/${encodeURIComponent(artistId)}/albums?include_groups=${includeGroups}&limit=50`;
+    while(url){
+      const d=await this.get(url);
+      for(const a of(d.items||[])){
+        albums.push({id:a.id,name:a.name,release_date:a.release_date||'',artists:(a.artists||[]).map(ar=>({id:ar.id,name:ar.name})),images:(a.images||[]).slice(0,3),tracks:{total:a.total_tracks||0,items:[],next:`https://api.spotify.com/v1/albums/${encodeURIComponent(a.id)}/tracks?limit=50`},album_type:a.album_type||'album',_genres:[],_inLibrary:false,_added_at:null});
+      }
+      url=d.next||null;
+      if(albums.length>=200)break; // safety cap
+    }
+    // Cross-ref with library to set _inLibrary + _genres
+    const libMap=new Map(allAlbums.map(a=>[a.id,a]));
+    for(const a of albums){const lib=libMap.get(a.id);if(lib){a._inLibrary=true;a._genres=lib._genres||[];}}
+    return albums;
   },
 };
 
@@ -1288,6 +1420,7 @@ const HOME_CAROUSEL_DEFAULTS=[
   {id:'decade-roulette',label:'🔀 Decade Roulette',        visible:true},
   {id:'almost-there',   label:'🎯 Almost There',           visible:true},
   {id:'top-albums',     label:'🏆 Top Albums',             visible:true},
+  {id:'top-artists',    label:'🎤 Top Artists',             visible:true},
 ];
 
 const HomeLayout={
@@ -1335,13 +1468,15 @@ const state={
   // QID-017: Enriched Library
   useEnrichedLibrary:false,
   enrichedSource:'all', // 'all' | 'library' | 'playlists'
+  // QID-013: Burn Mode
+  burnMode:false,
   // QID-011/012: See All modal state
-  _badgeToggles:{heavyRotation:true,newAlbum:true,trending:true,favorite:true},
+  _badgeToggles:{heavyRotation:true,newAlbum:true,trending:true,favorite:true,hiddenGem:true,justAdded:true},
   _samFilters:{},
 };
 
-function saveSession(){try{sessionStorage.setItem('ad_s',JSON.stringify({f:state.filters,ac:state.albumCount,as:state.albumSort,ap:state.activePreset,fo:state.filterOpen,fs:state.filterSections,bm:state.browserMode,uel:state.useEnrichedLibrary,es:state.enrichedSource}));}catch(e){}}
-function restoreSession(){try{const r=sessionStorage.getItem('ad_s');if(!r)return;const s=JSON.parse(r);if(s.f)Object.assign(state.filters,s.f);if(s.ac)state.albumCount=s.ac;if(s.as)state.albumSort=s.as;if(s.ap!==undefined)state.activePreset=s.ap;if(s.fo!==undefined)state.filterOpen=s.fo;if(s.fs)Object.assign(state.filterSections,s.fs);if(s.bm!==undefined)state.browserMode=s.bm;if(s.uel!==undefined)state.useEnrichedLibrary=s.uel;if(s.es)state.enrichedSource=s.es;}catch(e){}}
+function saveSession(){try{sessionStorage.setItem('ad_s',JSON.stringify({f:state.filters,ac:state.albumCount,as:state.albumSort,ap:state.activePreset,fo:state.filterOpen,fs:state.filterSections,bm:state.browserMode,uel:state.useEnrichedLibrary,es:state.enrichedSource,burn:state.burnMode}));}catch(e){}}
+function restoreSession(){try{const r=sessionStorage.getItem('ad_s');if(!r)return;const s=JSON.parse(r);if(s.f)Object.assign(state.filters,s.f);if(s.ac)state.albumCount=s.ac;if(s.as)state.albumSort=s.as;if(s.ap!==undefined)state.activePreset=s.ap;if(s.fo!==undefined)state.filterOpen=s.fo;if(s.fs)Object.assign(state.filterSections,s.fs);if(s.bm!==undefined)state.browserMode=s.bm;if(s.uel!==undefined)state.useEnrichedLibrary=s.uel;if(s.es)state.enrichedSource=s.es;if(s.burn!==undefined)state.burnMode=s.burn;}catch(e){}}
 
 function applyPreset(name){
   const rst=()=>Object.assign(state.filters,{decades:[],decadesExcl:[],genres:[],clusters:[],excludeKW:false,minAgeMonths:0,avoidRecent:false,weightUnheard:false,minDur:0,maxDur:200,queueHistory:'any'});
@@ -1491,7 +1626,10 @@ function buildPickerHTML(){
   const pickBtn=`<button class="btn btn-primary btn-full" id="queueBtn" ${state.isWorking?'disabled':''} style="height:52px;font-size:14px;font-weight:700;font-family:var(--font-h);border-radius:var(--r-xl);margin-bottom:12px">${state.isWorking&&state.phase!=='queuing'?'<span class="spinner" style="width:18px;height:18px;border-width:2px"></span> Picking…':'🎲 Pick Albums'}</button>`;
   const albumsHTML=['picked','queuing','done','error'].includes(state.phase)&&state.selectedAlbums.length?buildAlbumListHTML():'';
   const browserModeHTML=`<div class="card section" style="margin-top:14px"><div style="padding:12px 14px"><div class="tgl-row"><div class="tgl-info"><div class="tgl-title">Browser client mode</div><div class="tgl-sub">5 s delay between tracks — reduces rate limits on Spotify Web Player</div></div><label class="tgl-sw" aria-label="Browser client mode"><input type="checkbox" id="browserModeToggle"${state.browserMode?' checked':''}><span class="tgl-track"></span></label></div></div></div>`;
-  return presetsHTML+countHTML+pickerSourceHTML+filtersHTML+cvgHTML+statsHTML+pickBtn+albumsHTML+browserModeHTML;
+  // QID-013: Burn Mode
+  const burnModeHTML=`<div class="card section" style="margin-top:10px"><div style="padding:12px 14px"><div class="tgl-row"><div class="tgl-info"><div class="tgl-title${state.burnMode?' burn-mode-active':''}">🔥 Burn Mode${state.burnMode?' — ON':''}</div><div class="tgl-sub">Queued albums disappear from the pool until you turn this off</div></div><label class="tgl-sw" aria-label="Burn Mode"><input type="checkbox" id="burnModeToggle"${state.burnMode?' checked':''}><span class="tgl-track${state.burnMode?' burn-track':''}"></span></label></div>${state.burnMode?`<div style="margin-top:10px;display:flex;gap:8px;align-items:center"><span style="font-size:12px;color:var(--text-dim)">🔥 ${BurnMode.getBurnedIds().size} albums burned</span><button class="btn btn-sm btn-danger" id="burnResetBtn" style="font-size:11px">↺ Reset</button></div>`:''}
+  </div></div>`;
+  return presetsHTML+countHTML+pickerSourceHTML+filtersHTML+cvgHTML+statsHTML+pickBtn+albumsHTML+browserModeHTML+burnModeHTML;
 }
 
 function buildFiltersInner(){
@@ -1633,6 +1771,17 @@ function attachPickerEvents(panel){
   if(gs)gs.addEventListener('input',()=>{const q=gs.value.trim().toLowerCase();const res=panel.querySelector('#genreResults');if(!res)return;if(!q){res.innerHTML='';return;}const m=allGenres.filter(g=>g.toLowerCase().includes(q)).slice(0,30);res.innerHTML=m.map(g=>`<button class="gsr-chip${fa.genres.includes(g)?' sel':''}" data-genre="${esc(g)}">${esc(g)}</button>`).join('');res.querySelectorAll('.gsr-chip[data-genre]').forEach(b=>b.addEventListener('click',()=>{const g=b.dataset.genre;const i=fa.genres.indexOf(g);if(i>=0)fa.genres.splice(i,1);else fa.genres.push(g);b.classList.toggle('sel',fa.genres.includes(g));state.activePreset=null;saveSession();renderPickerContent();}));});
   panel.querySelectorAll('[data-remove-genre]').forEach(b=>b.addEventListener('click',()=>{fa.genres=fa.genres.filter(g=>g!==b.dataset.removeGenre);state.activePreset=null;saveSession();renderPickerContent();}));
   ['avoidRecentToggle','weightUnheardToggle','kwFilterToggle','browserModeToggle'].forEach(id=>{panel.querySelector('#'+id)?.addEventListener('change',e=>{if(id==='avoidRecentToggle')fa.avoidRecent=e.target.checked;if(id==='weightUnheardToggle')fa.weightUnheard=e.target.checked;if(id==='kwFilterToggle')fa.excludeKW=e.target.checked;if(id==='browserModeToggle')state.browserMode=e.target.checked;state.activePreset=null;saveSession();});});
+  // QID-013: Burn Mode events
+  panel.querySelector('#burnModeToggle')?.addEventListener('change',async e=>{
+    state.burnMode=e.target.checked;
+    if(state.burnMode)await BurnMode.load();
+    saveSession();renderPickerContent();
+    _toast(state.burnMode?'🔥 Burn Mode an — gequeuete Alben verschwinden aus dem Pool':'🔥 Burn Mode aus');
+  });
+  panel.querySelector('#burnResetBtn')?.addEventListener('click',async()=>{
+    await BurnMode.clearAll();saveSession();renderPickerContent();
+    _toast('🔥 Burn reset — alle Alben wieder verfügbar');
+  });
   const minS=panel.querySelector('#minDur'),maxS=panel.querySelector('#maxDur');
   if(minS)minS.addEventListener('input',e=>{fa.minDur=+e.target.value;if(fa.minDur>fa.maxDur){fa.maxDur=fa.minDur;if(maxS)maxS.value=fa.maxDur;const el=panel.querySelector('#maxDurVal');if(el)el.textContent=fa.maxDur;}const el=panel.querySelector('#minDurVal');if(el)el.textContent=fa.minDur;state.activePreset=null;saveSession();});
   if(maxS)maxS.addEventListener('input',e=>{fa.maxDur=+e.target.value;if(fa.maxDur<fa.minDur){fa.minDur=fa.maxDur;if(minS)minS.value=fa.minDur;const el=panel.querySelector('#minDurVal');if(el)el.textContent=fa.minDur;}const el=panel.querySelector('#maxDurVal');if(el)el.textContent=fa.maxDur;state.activePreset=null;saveSession();});
@@ -1711,9 +1860,20 @@ async function handlePick(){
 
   let pool=applyFilters(basePool);
   const hm=HistoryProvider.getMap();const now=Date.now();
+  // QID-013: Burn Mode — exclude burned albums from pool
+  if(state.burnMode){await BurnMode.load();pool=pool.filter(a=>!BurnMode.isBurned(a.id));}
   if(state.coverageFilter==='unheard'){pool=pool.filter(a=>!hm.has(a.id));state.coverageFilter=null;}
   else if(state.coverageFilter==='longAgo'){pool=pool.filter(a=>{const lh=hm.get(a.id);return!lh||now-lh>180*86400000;});state.coverageFilter=null;}
-  if(!pool.length){state.isWorking=false;state.phase='idle';renderPickerContent();const p=document.getElementById('tab-picker');if(p){const m=document.createElement('div');m.className='status-msg err';m.textContent='No albums match the current filters. Try relaxing your criteria.';const b=p.querySelector('#queueBtn');if(b)b.insertAdjacentElement('beforebegin',m);setTimeout(()=>m.remove(),4000);}return;}
+  if(!pool.length){
+    state.isWorking=false;state.phase='idle';renderPickerContent();
+    const p=document.getElementById('tab-picker');
+    if(p){
+      const m=document.createElement('div');m.className='status-msg err';
+      m.textContent=state.burnMode?'🔥 All albums burned! Turn off Burn Mode to reset.':'No albums match the current filters. Try relaxing your criteria.';
+      const b=p.querySelector('#queueBtn');if(b)b.insertAdjacentElement('beforebegin',m);setTimeout(()=>m.remove(),4000);
+    }
+    return;
+  }
   state.selectedAlbums=state.filters.weightUnheard?weightedPick(pool,state.albumCount):plainPick(pool,state.albumCount);
   state.phase='picked';state.isWorking=false;renderPickerContent(true);
 }
@@ -1742,7 +1902,7 @@ async function rerollAlbum(idx){
       }
     }
   }
-  const pool=applyFilters(basePool).filter(a=>!state.selectedAlbums.includes(a));if(!pool.length)return;
+  const pool=applyFilters(basePool).filter(a=>!state.selectedAlbums.includes(a)&&(!state.burnMode||!BurnMode.isBurned(a.id)));if(!pool.length)return;
   const[rep]=state.filters.weightUnheard?weightedPick(pool,1):plainPick(pool,1);
   const item=document.querySelector(`.album-item[data-idx="${idx}"]`);
   if(item){item.classList.add('swipe-exit');await sleep(200);}
@@ -1761,6 +1921,7 @@ async function handleQueue(){
       const tracks=await SpotifyAPI.getAlbumTracks(album);
       for(const t of tracks){await SpotifyAPI.addToQueue(t.uri);await sleep(delay);}
       await HistoryProvider.log(album.id,album.name);
+      if(state.burnMode)await BurnMode.burn(album.id,album.name); // QID-013
     }
     state.phase='done';
   }catch(err){const el=document.getElementById('queueStatus');if(el)el.textContent=err.message;state.phase='error';}
@@ -1847,10 +2008,20 @@ function openAlbumDetail(album){
   const dur=Math.round(albumDurMin(album));const genres=(album._genres||[]).slice(0,4).join(' · ');
   const lh=HistoryProvider.getMap().get(album.id);const heard=lh?`Last queued ${formatAge(Date.now()-lh)}`:'Never queued';
   const modal=document.createElement('div');modal.className='modal-bg';
-  modal.innerHTML=`<div class="modal"><div class="modal-handle"></div><div class="modal-body">${art?`<img class="modal-art" src="${esc(art)}" alt="">`:`<div class="modal-art-ph">🎵</div>`}<div class="modal-title">${esc(album.name)}</div><div class="modal-artist">${esc(artist)}</div><div class="modal-meta">${yr?yr+' · ':''}${trk} tracks · ${dur} min${genres?' · '+esc(genres):''}<br><span style="color:var(--blue)">${heard}</span></div><div class="modal-actions"><button class="btn btn-primary" id="mdlQueue">▶ Queue Album</button><div class="modal-actions-row2"><button class="btn" id="mdlSaveLater">🕐 Save for Later</button><button class="btn" id="mdlClose">Close</button></div></div></div></div>`;
+  const firstArtist=(album.artists||[])[0];
+  modal.innerHTML=`<div class="modal"><div class="modal-handle"></div><div class="modal-body">${art?`<img class="modal-art" src="${esc(art)}" alt="">`:`<div class="modal-art-ph">🎵</div>`}<div class="modal-title">${esc(album.name)}</div><div class="modal-artist">${esc(artist)}</div><div class="modal-meta">${yr?yr+' · ':''}${trk} tracks · ${dur} min${genres?' · '+esc(genres):''}<br><span style="color:var(--blue)">${heard}</span></div><div class="modal-actions"><button class="btn btn-primary" id="mdlQueue">▶ Queue Album</button><div class="modal-actions-row2"><button class="btn" id="mdlSaveLater">🕐 Save for Later</button>${firstArtist?.id?`<button class="btn" id="mdlArtistDive">🎤 Artist</button>`:''}<button class="btn" id="mdlClose">Close</button></div></div></div></div>`;
   document.body.appendChild(modal);
   modal.addEventListener('click',e=>{if(e.target===modal)modal.remove();});
   modal.querySelector('#mdlClose').addEventListener('click',()=>modal.remove());
+  if(firstArtist?.id){
+    modal.querySelector('#mdlArtistDive')?.addEventListener('click',async()=>{
+      modal.remove();
+      // Try to get artist image from Spotify (GET /artists/{id} still available Feb 2026)
+      let imgUrl=null;
+      try{const ar=await SpotifyAPI.get('https://api.spotify.com/v1/artists/'+encodeURIComponent(firstArtist.id));imgUrl=ar.images?.[1]?.url||ar.images?.[0]?.url||null;}catch(e){}
+      openArtistDeepDive(firstArtist.id,firstArtist.name,imgUrl);
+    });
+  }
   modal.querySelector('#mdlSaveLater').addEventListener('click',async()=>{
     const btn=modal.querySelector('#mdlSaveLater');btn.disabled=true;
     const alreadyIn=await ListenLater.has(album.id);
@@ -1862,7 +2033,7 @@ function openAlbumDetail(album){
   ListenLater.has(album.id).then(has=>{const b=modal.querySelector('#mdlSaveLater');if(b&&has)b.textContent='✓ Already saved';});
   modal.querySelector('#mdlQueue').addEventListener('click',async()=>{
     const btn=modal.querySelector('#mdlQueue');btn.disabled=true;btn.textContent='Queueing…';
-    try{const delay=state.browserMode?DELAY_BROWSER_MS:DELAY_DESKTOP_MS;const tracks=await SpotifyAPI.getAlbumTracks(album);for(const t of tracks){await SpotifyAPI.addToQueue(t.uri);await sleep(delay);}await HistoryProvider.log(album.id,album.name);btn.textContent='✓ Queued!';setTimeout(()=>modal.remove(),1500);}
+    try{const delay=state.browserMode?DELAY_BROWSER_MS:DELAY_DESKTOP_MS;const tracks=await SpotifyAPI.getAlbumTracks(album);for(const t of tracks){await SpotifyAPI.addToQueue(t.uri);await sleep(delay);}await HistoryProvider.log(album.id,album.name);if(state.burnMode)await BurnMode.burn(album.id,album.name);btn.textContent='✓ Queued!';setTimeout(()=>modal.remove(),1500);}
     catch(err){btn.disabled=false;btn.textContent='▶ Queue Album';alert(err.message);}
   });
 }
@@ -2368,7 +2539,7 @@ async function migrateFromLegacy(){
   await migrateFromLegacy();
 
   if(Auth.isLoggedIn()){
-    await Promise.all([Cache.loadLibrary(),HistoryProvider.load(),HomeLayout.load()]);
+    await Promise.all([Cache.loadLibrary(),HistoryProvider.load(),HomeLayout.load(),BurnMode.load()]);
     restoreSession();
     // Show sync button if library loaded
     if(allAlbums.length){const syncBtn=document.getElementById('syncBtn');if(syncBtn)syncBtn.style.display='';}
@@ -2443,9 +2614,16 @@ function getRediscoverAlbums(maxDays=90){
  * @param {'4w'|'6m'|'all'|'app30d'|'appAll'} timeRange */
 async function getTopAlbums(timeRange){
   const hm=HistoryProvider.getMap();const now=Date.now();
+  // Spotify ranges — use persistent TopAlbumsCache (QID-018)
+  if(timeRange==='4w'||timeRange==='6m'||timeRange==='all'){
+    const tRange=timeRange==='4w'?'short_term':timeRange==='6m'?'medium_term':'long_term';
+    const albums=await TopAlbumsCache.fetchAndCache(tRange);
+    // Score by count field
+    return albums.slice(0,30).map(a=>({album:a,playCount:a.count||1,source:'spotify'}));
+  }
+  // App history ranges
   let cutoff=0;
   if(timeRange==='app30d')cutoff=now-30*86400000;
-  // Map history entries to albums
   const scored=new Map();
   for(const[id,queuedAt]of hm){
     if(cutoff&&queuedAt<cutoff)continue;
@@ -2453,20 +2631,6 @@ async function getTopAlbums(timeRange){
     const prev=scored.get(id)||{album:a,playCount:0,source:'app',lastPlayed:0};
     prev.playCount++;prev.lastPlayed=Math.max(prev.lastPlayed,queuedAt);
     scored.set(id,prev);
-  }
-  if(timeRange==='4w'||timeRange==='6m'||timeRange==='all'){
-    // Fetch Spotify top tracks and map to albums
-    try{
-      const tRange=timeRange==='4w'?'short_term':timeRange==='6m'?'medium_term':'long_term';
-      const data=await SpotifyAPI.get(`https://api.spotify.com/v1/me/top/tracks?limit=50&time_range=${tRange}`);
-      for(const track of(data.items||[])){
-        const albId=track.album?.id;if(!albId)continue;
-        const a=allAlbums.find(x=>x.id===albId);if(!a)continue;
-        const prev=scored.get(albId)||{album:a,playCount:0,source:'spotify',lastPlayed:0};
-        prev.playCount++;if(prev.source==='app')prev.source='both';else prev.source='spotify';
-        scored.set(albId,prev);
-      }
-    }catch(e){/* API not available, fall back to app history only */}
   }
   return [...scored.values()].sort((a,b)=>b.playCount-a.playCount).slice(0,30);
 }
@@ -2478,6 +2642,9 @@ function renderTopAlbumsSection(container){
   const chips=[
     {id:'app30d',label:'App 30d'},
     {id:'appAll',label:'App All'},
+    {id:'4w',label:'Spotify 4w'},
+    {id:'6m',label:'Spotify 6m'},
+    {id:'all',label:'Spotify All'},
   ];
   let activeRange='app30d';
   let currentResults=[];
@@ -2655,7 +2822,7 @@ function _samGenreLabel(album){
  *  @param {Set} favoriteIds                — album IDs in favorites store
  *  @returns {Array<{cls,label}>}
  */
-function _computeBadges(album, relatedArtistName, badgeToggles, heavyIds, trendingIds, favoriteIds){
+function _computeBadges(album, relatedArtistName, badgeToggles, heavyIds, trendingIds, favoriteIds, hiddenGemIds){
   const badges=[];
   // "Related to Artist" — only for Because You Played, single artist
   if(relatedArtistName&&(album.artists||[]).length===1){
@@ -2663,10 +2830,14 @@ function _computeBadges(album, relatedArtistName, badgeToggles, heavyIds, trendi
     badges.push({cls:'related',label:`🎵 ${name}`});
   }
   if(badgeToggles.heavyRotation&&heavyIds.has(album.id))badges.push({cls:'heavy',label:'⭐ Heavy'});
-  if(badgeToggles.newAlbum&&album._added_at&&Date.now()-new Date(album._added_at).getTime()<30*86400000)badges.push({cls:'new',label:'📅 New'});
+  // QID-014: Just Added — added within 7 days
+  if(badgeToggles.justAdded&&album._added_at&&Date.now()-new Date(album._added_at).getTime()<7*86400000)badges.push({cls:'new',label:'🆕 Just Added'});
+  else if(badgeToggles.newAlbum&&album._added_at&&Date.now()-new Date(album._added_at).getTime()<30*86400000)badges.push({cls:'new',label:'📅 New'});
   if(badgeToggles.trending&&trendingIds.has(album.id))badges.push({cls:'trending',label:'🔥 Trending'});
   if(badgeToggles.favorite&&favoriteIds.has(album.id))badges.push({cls:'related',label:'❤️ Fave'});
-  return badges.slice(0,2); // max 2 badges
+  // QID-014: Hidden Gem — in library but rarely played (< 3 times in history)
+  if(badgeToggles.hiddenGem&&hiddenGemIds&&hiddenGemIds.has(album.id))badges.push({cls:'hiddengem',label:'💎 Hidden Gem'});
+  return badges.slice(0,3); // QID-013: max 3 badges (was 2)
 }
 
 /** QID-011: Open See All grid modal for a carousel.
@@ -2703,6 +2874,10 @@ async function openCarouselSeeAllModal(carouselId, title, albums, icon='🎵', r
   // favorites — store exists but QID-007 not yet active; return empty set gracefully
   const favoriteIds=new Set();
   try{const db=await DB.getDb();const favs=await db.getAll('favorites');for(const f of favs)favoriteIds.add(f.id);}catch(e){}
+  // QID-014: Hidden Gem — in library, queued < 3 times total
+  const hiddenGemIds=new Set();
+  const playCounts=new Map();for(const[id]of hm)playCounts.set(id,(playCounts.get(id)||0)+1);
+  for(const a of albums){if(a._inLibrary!==false&&(!playCounts.has(a.id)||(playCounts.get(a.id)||0)<3))hiddenGemIds.add(a.id);}
 
   // ── Build modal ──
   const bg=document.createElement('div');bg.className='sam-bg';
@@ -2721,10 +2896,10 @@ async function openCarouselSeeAllModal(carouselId, title, albums, icon='🎵', r
     ALL_DEC.filter(d=>usedDecades.has(d)).map(d=>`<button class="sam-filter-chip${sf.decade===d?' active':''}" data-samdec="${d}">${d}</button>`).join('');
   sheet.appendChild(decFilters);
 
-  // Badge toggles bar
+  // Badge toggles bar — QID-014: added Hidden Gem + Just Added
   const badgeBar=document.createElement('div');badgeBar.className='sam-badge-toggles';
   badgeBar.innerHTML=`<span class="sam-badge-label">Badges:</span>`+
-    [['heavyRotation','⭐ Heavy'],['newAlbum','📅 New'],['trending','🔥 Trending'],['favorite','❤️ Fave']].map(
+    [['heavyRotation','⭐ Heavy'],['newAlbum','📅 New'],['justAdded','🆕 Just Added'],['trending','🔥 Trending'],['favorite','❤️ Fave'],['hiddenGem','💎 Hidden Gem']].map(
       ([k,l])=>`<button class="sam-badge-chip${bt[k]?' active':''}" data-badgekey="${k}">${l}</button>`
     ).join('');
   sheet.appendChild(badgeBar);
@@ -2735,42 +2910,69 @@ async function openCarouselSeeAllModal(carouselId, title, albums, icon='🎵', r
   bg.appendChild(sheet);
   document.body.appendChild(bg);
 
+  // QID-016: Grouping + Artist filter state (persisted per carousel in _samFilters)
+  if(!sf.grouping)sf.grouping='genre';
+  if(!sf.artistFilter)sf.artistFilter='';
+
+  // Build artist list from albums (for dropdown)
+  const allArtistNames=[...new Set(albums.flatMap(a=>(a.artists||[]).map(ar=>ar.name)))].sort();
+
+  // Grouping + Artist dropdowns row
+  const ctrlRow=document.createElement('div');ctrlRow.className='sam-ctrl-row';
+  ctrlRow.innerHTML=`
+    <select class="sam-ctrl-sel" id="samGrouping">
+      <option value="genre"${sf.grouping==='genre'?' selected':''}>Group: Genre</option>
+      <option value="decade"${sf.grouping==='decade'?' selected':''}>Group: Decade</option>
+      <option value="artist"${sf.grouping==='artist'?' selected':''}>Group: Artist</option>
+      <option value="year"${sf.grouping==='year'?' selected':''}>Group: Year</option>
+    </select>
+    <select class="sam-ctrl-sel" id="samArtistFilter" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis">
+      <option value="">All Artists</option>
+      ${allArtistNames.map(n=>`<option value="${esc(n)}"${sf.artistFilter===n?' selected':''}>${esc(n)}</option>`).join('')}
+    </select>`;
+  sheet.appendChild(ctrlRow);
+
   // ── Render grid ──
   function _render(){
-    // Apply decade filter
+    // Apply decade filter + artist filter
     let pool=sf.decade?albums.filter(a=>decadeOf(releaseYear(a))===sf.decade):albums;
+    if(sf.artistFilter)pool=pool.filter(a=>(a.artists||[]).some(ar=>ar.name===sf.artistFilter));
     hdr.querySelector('#samCount').textContent=`${pool.length} albums`;
 
-    // Group by broad genre
-    const clusters=new Map();
-    for(const a of pool){
-      const lbl=_samGenreLabel(a);
-      if(!clusters.has(lbl))clusters.set(lbl,[]);
-      clusters.get(lbl).push(a);
+    // Grouping logic — QID-016
+    let groups=new Map();
+    if(sf.grouping==='genre'){
+      for(const a of pool){const lbl=_samGenreLabel(a);if(!groups.has(lbl))groups.set(lbl,[]);groups.get(lbl).push(a);}
+      groups=new Map([...groups.entries()].sort((a,b)=>{if(a[0]==='Other')return 1;if(b[0]==='Other')return-1;return b[1].length-a[1].length;}));
+    } else if(sf.grouping==='decade'){
+      const DEC_ORDER=['20s','10s','00s','90s','80s','70s','pre-70s'];
+      for(const a of pool){const d=decadeOf(releaseYear(a));if(!groups.has(d))groups.set(d,[]);groups.get(d).push(a);}
+      const ordered=new Map();for(const d of DEC_ORDER)if(groups.has(d))ordered.set(d,groups.get(d));
+      for(const[k,v]of groups)if(!ordered.has(k))ordered.set(k,v);
+      groups=ordered;
+    } else if(sf.grouping==='artist'){
+      for(const a of pool){const n=(a.artists||[])[0]?.name||'Unknown';if(!groups.has(n))groups.set(n,[]);groups.get(n).push(a);}
+      groups=new Map([...groups.entries()].sort((a,b)=>b[1].length-a[1].length));
+    } else { // year
+      for(const a of pool){const y=String(releaseYear(a)||'Unknown');if(!groups.has(y))groups.set(y,[]);groups.get(y).push(a);}
+      groups=new Map([...groups.entries()].sort((a,b)=>Number(b[0])-Number(a[0])));
     }
-    // Sort clusters: largest first, "Other" always last
-    const sorted=[...clusters.entries()].sort((a,b)=>{
-      if(a[0]==='Other')return 1;if(b[0]==='Other')return-1;
-      return b[1].length-a[1].length;
-    });
 
     body.innerHTML='';
     if(!pool.length){body.innerHTML=`<div class="sam-empty">No albums match this filter.</div>`;return;}
 
-    for(const [clusterLabel, clusterAlbums] of sorted){
-      // Cluster header
+    for(const[groupLabel,groupAlbums]of groups){
       const ch=document.createElement('div');ch.className='sam-cluster-hdr';
-      ch.innerHTML=`${esc(clusterLabel)} <span class="sam-cluster-hdr-count">${clusterAlbums.length}</span>`;
+      ch.innerHTML=`${esc(groupLabel)} <span class="sam-cluster-hdr-count">${groupAlbums.length}</span>`;
       body.appendChild(ch);
 
-      // Grid
-      const grid=document.createElement('div');grid.className='sam-grid';
-      for(const a of clusterAlbums){
+      // QID-016: 2-col grid
+      const grid=document.createElement('div');grid.className='sam-grid sam-grid-2col';
+      for(const a of groupAlbums){
         const art=getArt(a,'md')||getArt(a,'lg');
         const artist=(a.artists||[]).map(x=>x.name).join(', ');
-        const badges=_computeBadges(a,relatedArtistName,bt,heavyIds,trendingIds,favoriteIds);
+        const badges=_computeBadges(a,relatedArtistName,bt,heavyIds,trendingIds,favoriteIds,hiddenGemIds);
         const badgesHTML=badges.length?`<div class="sam-badges">${badges.map(b=>`<span class="sam-badge ${b.cls}">${esc(b.label)}</span>`).join('')}</div>`:'';
-
         const item=document.createElement('div');item.className='sam-item';
         item.innerHTML=`<div class="sam-art-wrap">${art?`<img class="sam-art" src="${esc(art)}" alt="" loading="lazy">`:`<div class="sam-art-ph">🎵</div>`}${badgesHTML}</div><div class="sam-name">${esc(a.name)}</div><div class="sam-artist">${esc(artist)}</div>`;
         item.addEventListener('click',()=>openAlbumDetail(a));
@@ -2800,8 +3002,102 @@ async function openCarouselSeeAllModal(carouselId, title, albums, icon='🎵', r
     _render();
   });
 
+  // QID-016: Grouping + Artist filter
+  ctrlRow.querySelector('#samGrouping').addEventListener('change',e=>{sf.grouping=e.target.value;_render();});
+  ctrlRow.querySelector('#samArtistFilter').addEventListener('change',e=>{sf.artistFilter=e.target.value;_render();});
+
   const onKey=e=>{if(e.key==='Escape'){bg.remove();document.removeEventListener('keydown',onKey);}};
   document.addEventListener('keydown',onKey);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// QID-021 — ARTIST DEEP DIVE MODAL
+// ═══════════════════════════════════════════════════════════════════
+async function openArtistDeepDive(artistId, artistName, artistImageUrl){
+  document.querySelector('.adm-bg')?.remove();
+
+  const bg=document.createElement('div');bg.className='adm-bg';
+  const sheet=document.createElement('div');sheet.className='adm-sheet';
+
+  // Header
+  const hdr=document.createElement('div');hdr.className='adm-hdr';
+  hdr.innerHTML=`
+    ${artistImageUrl?`<img class="adm-art" src="${esc(artistImageUrl)}" alt="">`:`<div class="adm-art" style="display:flex;align-items:center;justify-content:center;font-size:22px">🎤</div>`}
+    <div class="adm-hdr-info">
+      <div class="adm-hdr-name">${esc(artistName)}</div>
+      <div class="adm-hdr-sub" id="admSub">Loading discography…</div>
+    </div>
+    <button class="adm-close" id="admClose">✕</button>`;
+  sheet.appendChild(hdr);
+
+  // Type filter chips
+  const typeFilters=document.createElement('div');typeFilters.className='adm-filters';
+  typeFilters.innerHTML=`
+    <button class="adm-filter-chip active" data-atype="">All</button>
+    <button class="adm-filter-chip" data-atype="album">Albums</button>
+    <button class="adm-filter-chip" data-atype="single">Singles</button>
+    <button class="adm-filter-chip" data-atype="compilation">Compilations</button>`;
+  sheet.appendChild(typeFilters);
+
+  // Scroll body
+  const scrollEl=document.createElement('div');scrollEl.className='adm-scroll';
+  scrollEl.innerHTML=`<div style="padding:20px;text-align:center;color:var(--text-dim)"><div class="spinner"></div></div>`;
+  sheet.appendChild(scrollEl);
+
+  bg.appendChild(sheet);
+  document.body.appendChild(bg);
+
+  hdr.querySelector('#admClose').addEventListener('click',()=>bg.remove());
+  bg.addEventListener('click',e=>{if(e.target===bg)bg.remove();});
+  const onKey=e=>{if(e.key==='Escape'){bg.remove();document.removeEventListener('keydown',onKey);}};
+  document.addEventListener('keydown',onKey);
+
+  // Load discography
+  let allAlbDisco=[];
+  let activeType='';
+  try{
+    allAlbDisco=await SpotifyAPI.getArtistAlbums(artistId);
+    // Sort by release_date desc
+    allAlbDisco.sort((a,b)=>(b.release_date||'').localeCompare(a.release_date||''));
+    hdr.querySelector('#admSub').textContent=`${allAlbDisco.length} releases`;
+  }catch(e){
+    scrollEl.innerHTML=`<div style="padding:20px;color:var(--error)">Could not load discography: ${esc(e.message)}</div>`;
+    return;
+  }
+
+  function _renderDisco(){
+    const hm=HistoryProvider.getMap();
+    const pool=activeType?allAlbDisco.filter(a=>a.album_type===activeType):allAlbDisco;
+    hdr.querySelector('#admSub').textContent=`${pool.length} release${pool.length!==1?'s':''}`;
+    if(!pool.length){scrollEl.innerHTML=`<div style="padding:20px;color:var(--text-dim);text-align:center">No releases found.</div>`;return;}
+    scrollEl.innerHTML='';
+    for(const a of pool){
+      const art=getArt(a,'sm')||getArt(a,'md');
+      const yr=a.release_date?a.release_date.slice(0,4):'';
+      const typeLabel=a.album_type?a.album_type.charAt(0).toUpperCase()+a.album_type.slice(1):'';
+      const heard=hm.has(a.id);
+      const inLib=a._inLibrary;
+      const row=document.createElement('div');row.className='adm-alb-row';
+      row.innerHTML=`
+        ${art?`<img class="adm-alb-art" src="${esc(art)}" alt="" loading="lazy">`:`<div class="adm-alb-art" style="display:flex;align-items:center;justify-content:center;font-size:20px">🎵</div>`}
+        <div class="adm-alb-info">
+          <div class="adm-alb-name">${esc(a.name)}</div>
+          <div class="adm-alb-meta">${[yr,typeLabel,inLib?'📚 In Library':''].filter(Boolean).join(' · ')}</div>
+        </div>
+        ${heard?`<span class="adm-alb-heard">✓</span>`:''}`;
+      row.addEventListener('click',()=>openAlbumDetail(a));
+      scrollEl.appendChild(row);
+    }
+  }
+
+  _renderDisco();
+
+  typeFilters.addEventListener('click',e=>{
+    const btn=e.target.closest('[data-atype]');if(!btn)return;
+    activeType=btn.dataset.atype;
+    typeFilters.querySelectorAll('[data-atype]').forEach(b=>b.classList.toggle('active',b.dataset.atype===activeType));
+    _renderDisco();
+  });
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -3414,6 +3710,46 @@ function renderHomeDashboard(panel){
 
   // ── Top Albums (async, renders itself)
   if(HomeLayout.get('top-albums'))renderTopAlbumsSection(panel);
+
+  // ── QID-021: Top Artists Carousel (async)
+  if(HomeLayout.get('top-artists')){
+    (async()=>{
+      const sec=document.createElement('div');sec.className='dash-section';
+      sec.innerHTML=`<div class="car-section-hdr"><span class="car-section-title">🎤 Top Artists</span><div class="time-chips" id="topArtistsChips"><button class="time-chip active" data-tarange="medium_term">6 mo</button><button class="time-chip" data-tarange="short_term">4 wk</button><button class="time-chip" data-tarange="long_term">All Time</button></div></div><div id="topArtistsCarousel"><div class="carousel-empty">Loading…</div></div>`;
+      panel.appendChild(sec);
+
+      async function _loadArtists(timeRange){
+        const carEl=sec.querySelector('#topArtistsCarousel');
+        carEl.innerHTML='<div class="carousel-empty">Loading…</div>';
+        try{
+          const artists=await TopArtistsCache.fetchAndCache(timeRange);
+          if(!artists.length){carEl.innerHTML='<div class="carousel-empty">No data yet — listen to more music on Spotify!</div>';return;}
+          const track=document.createElement('div');track.className='carousel-track';
+          for(const ar of artists){
+            const imgUrl=ar.images?.[1]?.url||ar.images?.[0]?.url||null;
+            const genreLbl=(ar.genres||[]).slice(0,2).join(' · ');
+            const card=document.createElement('div');card.className='car-card';
+            card.style.cssText='display:flex;flex-direction:column;align-items:center;gap:6px;padding:10px 6px;cursor:pointer;min-width:100px';
+            card.innerHTML=`${imgUrl?`<img src="${esc(imgUrl)}" alt="${esc(ar.name)}" style="width:72px;height:72px;border-radius:50%;object-fit:cover;border:2px solid var(--border2)">`:`<div style="width:72px;height:72px;border-radius:50%;background:var(--surface3);display:flex;align-items:center;justify-content:center;font-size:28px">🎤</div>`}<div style="font-size:12px;font-weight:600;text-align:center;max-width:90px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(ar.name)}</div>${genreLbl?`<div style="font-size:10px;color:var(--text-dim);text-align:center;max-width:90px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(genreLbl)}</div>`:''}`;
+            card.addEventListener('click',()=>openArtistDeepDive(ar.id,ar.name,imgUrl));
+            track.appendChild(card);
+          }
+          const wrap=document.createElement('div');wrap.className='carousel-wrap';
+          wrap.appendChild(track);
+          carEl.innerHTML='';
+          carEl.appendChild(wrap);
+        }catch(e){carEl.innerHTML=`<div class="carousel-empty">Couldn't load top artists</div>`;}
+      }
+
+      sec.querySelector('#topArtistsChips').addEventListener('click',e=>{
+        const btn=e.target.closest('.time-chip');if(!btn)return;
+        sec.querySelectorAll('.time-chip').forEach(c=>c.classList.remove('active'));
+        btn.classList.add('active');
+        _loadArtists(btn.dataset.tarange);
+      });
+      _loadArtists('medium_term');
+    })();
+  }
 
   // ── PHASE 9 QID-009: User Playlist Carousels (async)
   (async()=>{
