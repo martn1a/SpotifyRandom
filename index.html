@@ -793,15 +793,15 @@ const DB_NAME = 'albumdiscovery_db';
 const DB_VERSION = 6; // Phase 7B: removed lastfm_cache, radar_cache, custom_playlists
 
 const GENRE_CLUSTERS = [
-  {id:'electronic',label:'Electronic', icon:'⚡',kw:['electronic','techno','house','ambient','drum and bass','dnb','dubstep','trance','garage','jungle','breakbeat','idm','glitch','downtempo','synthwave','darkwave','edm','electronica','trip-hop','synth','rave','acid','chillout','dub','eurodance','electro','bass music','vaporwave','industrial','noise','minimal techno','tech house','deep house','progressive house']},
-  {id:'rock',      label:'Rock',        icon:'🎸',kw:['rock','alternative','grunge','post-rock','shoegaze','progressive','art rock','garage rock','britpop','jangle','psych','kraut','space rock','math rock','stoner rock','desert rock']},
-  {id:'punk',      label:'Punk / Indie',icon:'📻',kw:['punk','indie','hardcore','post-hardcore','noise rock','lo-fi','slacker','college rock','emo','screamo','post-punk','new wave','coldwave']},
-  {id:'metal',     label:'Metal',       icon:'🤘',kw:['metal','heavy metal','black metal','death metal','doom','thrash','sludge','speed metal','power metal','prog metal','deathcore','metalcore','symphonic metal','folk metal']},
-  {id:'hiphop',    label:'Hip-Hop / R&B',icon:'🎤',kw:['hip hop','hip-hop','rap','r&b','soul','neo-soul','funk','trap','grime','boom bap','urban','rhythm and blues','conscious','southern hip hop','east coast','west coast hip hop','drill']},
-  {id:'pop',       label:'Pop',         icon:'✨',kw:['pop','dream pop','chamber pop','baroque pop','electropop','hyperpop','bedroom pop','art pop','bubblegum','synth pop','j-pop','k-pop','dance pop','teen pop','sophisti-pop']},
-  {id:'jazz',      label:'Jazz / Blues',icon:'🎷',kw:['jazz','blues','swing','bebop','free jazz','latin jazz','soul jazz','gospel','boogie','ragtime','cool jazz','fusion','nu jazz']},
-  {id:'classical', label:'Classical',   icon:'🎻',kw:['classical','contemporary classical','chamber','orchestral','opera','choral','minimalism','neo-classical','neoclassical','baroque','romantic','impressionist','avant-garde','new music']},
-  {id:'folk',      label:'Folk / World',icon:'🌍',kw:['folk','country','americana','bluegrass','world','reggae','afrobeat','latin','bossa','celtic','singer-songwriter','acoustic','roots','tropicalia','cumbia','salsa','flamenco','afropop','dancehall','calypso','ska','roots reggae','dub reggae']},
+  {id:'electronic',label:'Electronic', icon:'⚡',kw:['electronic','techno','house','ambient','drum and bass','dnb','dubstep','trance','garage','jungle','breakbeat','idm','glitch','downtempo','synthwave','darkwave','edm','electronica','trip-hop','synth','rave','acid','chillout','dub','eurodance','electro','bass music','vaporwave','industrial','noise','minimal techno','tech house','deep house','progressive house','elektronisch','tanzmusik','elektronische musik']},
+  {id:'rock',      label:'Rock',        icon:'🎸',kw:['rock','alternative','grunge','post-rock','shoegaze','progressive','art rock','garage rock','britpop','jangle','psych','kraut','space rock','math rock','stoner rock','desert rock','rockmusik','deutschrock','gitarrenmusik']},
+  {id:'punk',      label:'Punk / Indie',icon:'📻',kw:['punk','indie','hardcore','post-hardcore','noise rock','lo-fi','slacker','college rock','emo','screamo','post-punk','new wave','coldwave','indiemusik','punkrock']},
+  {id:'metal',     label:'Metal',       icon:'🤘',kw:['metal','heavy metal','black metal','death metal','doom','thrash','sludge','speed metal','power metal','prog metal','deathcore','metalcore','symphonic metal','folk metal','schwermetall']},
+  {id:'hiphop',    label:'Hip-Hop / R&B',icon:'🎤',kw:['hip hop','hip-hop','rap','r&b','soul','neo-soul','funk','trap','grime','boom bap','urban','rhythm and blues','conscious','southern hip hop','east coast','west coast hip hop','drill','deutschrap','hiphop','rapmusik']},
+  {id:'pop',       label:'Pop',         icon:'✨',kw:['pop','dream pop','chamber pop','baroque pop','electropop','hyperpop','bedroom pop','art pop','bubblegum','synth pop','j-pop','k-pop','dance pop','teen pop','sophisti-pop','popmusik','schlager','deutschpop']},
+  {id:'jazz',      label:'Jazz / Blues',icon:'🎷',kw:['jazz','blues','swing','bebop','free jazz','latin jazz','soul jazz','gospel','boogie','ragtime','cool jazz','fusion','nu jazz','jazzmusik','bluesmusik','jazzklassiker']},
+  {id:'classical', label:'Classical',   icon:'🎻',kw:['classical','contemporary classical','chamber','orchestral','opera','choral','minimalism','neo-classical','neoclassical','baroque','romantic','impressionist','avant-garde','new music','klassik','klassisch','kammermusik','klassisches klavier','konzert','sinfonie','sinfonisch','oper','chor','orchester','barock','romantik','zeitgenossisch','neue musik','klaviermusik','streichermusik','kammerjazz']},
+  {id:'folk',      label:'Folk / World',icon:'🌍',kw:['folk','country','americana','bluegrass','world','reggae','afrobeat','latin','bossa','celtic','singer-songwriter','acoustic','roots','tropicalia','cumbia','salsa','flamenco','afropop','dancehall','calypso','ska','roots reggae','dub reggae','volksmusik','weltmusik','folkmusik','liedermacher','akustik']},
 ];
 function clusterOf(g){const gl=g.toLowerCase();for(const c of GENRE_CLUSTERS)if(c.kw.some(k=>gl.includes(k)))return c.id;return'other';}
 
@@ -957,6 +957,54 @@ const SpotifyAPI={
   async addToQueue(uri){const tok=await Auth.getToken();const res=await fetch(`https://api.spotify.com/v1/me/player/queue?uri=${encodeURIComponent(uri)}`,{method:'POST',headers:{Authorization:'Bearer '+tok}});if(res.status===404)throw new Error('No active Spotify device. Start playing something first.');if(res.status===429)throw new Error('Rate limited. Enable Browser client mode for safer queuing.');if(!res.ok&&res.status!==204)throw new Error(`Queue error ${res.status}`);},
   async getCurrentTrack(){try{const d=await this.get('https://api.spotify.com/v1/me/player');if(!d||!d.item)return null;return{name:d.item.name,artist:d.item.artists?.map(a=>a.name).join(', ')||'',artUrl:d.item.album?.images?.[2]?.url||null,isPlaying:d.is_playing};}catch(e){return null;}},
   async getProfile(){try{return await this.get('https://api.spotify.com/v1/me');}catch(e){return null;}},
+};
+
+// ── MusicBrainz Genre Enrichment (Phase 8) ───────────────────────
+const MusicBrainz={
+  _base:'https://musicbrainz.org/ws/2',
+  _headers:{'Accept':'application/json','User-Agent':'AlbumDiscovery/1.0 (https://martn1a.github.io/SpotifyRandom/)'},
+  async fetchArtistGenres(artistName){
+    try{
+      const q=encodeURIComponent(`artist:"${artistName}"`);
+      const r=await fetch(`${this._base}/artist?query=${q}&limit=1&fmt=json`,{headers:this._headers});
+      if(!r.ok)return[];
+      const d=await r.json();
+      const artist=d.artists?.[0];if(!artist)return[];
+      const tags=(artist.tags||[]).sort((a,b)=>b.count-a.count).slice(0,8).map(t=>t.name.toLowerCase());
+      return tags;
+    }catch(e){return[];}
+  },
+  async enrichLibrary(onProg){
+    const toEnrich=allAlbums.filter(a=>!(a._genres?.length));
+    if(!toEnrich.length)return 0;
+    // Deduplicate by artist
+    const artistMap=new Map();
+    for(const a of toEnrich)for(const ar of(a.artists||[]))if(ar.name&&!artistMap.has(ar.name))artistMap.set(ar.name,ar.name);
+    const artistNames=[...artistMap.keys()];
+    const db=await DB.getDb();
+    let done=0,enriched=0;
+    for(const name of artistNames){
+      const genres=await this.fetchArtistGenres(name);
+      if(genres.length){
+        // Apply to all albums by this artist
+        for(const a of allAlbums){
+          if((a.artists||[]).some(ar=>ar.name===name)&&!(a._genres?.length)){
+            a._genres=genres;enriched++;
+          }
+        }
+        // Cache result — use name as key prefixed to avoid collision
+        db.put('artist_cache',{id:'mb_'+name,genres,cachedAt:Date.now()}).catch(()=>{});
+      }
+      done++;onProg(done,artistNames.length,enriched);
+      await sleep(1100); // MusicBrainz: max 1 req/s
+    }
+    // Persist enriched library
+    if(enriched>0){
+      allGenres=[...new Set([...allGenres,...allAlbums.flatMap(a=>a._genres||[])])].sort();
+      await Cache.saveLibrary();
+    }
+    return enriched;
+  },
 };
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 const esc=s=>String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
@@ -1647,6 +1695,10 @@ async function renderProfileTab(panel){
         <button class="btn btn-sm btn-primary" id="p4ResyncBtn">↻ Sync</button>
       </div>
       <div class="settings-row">
+        <div><div class="settings-row-label">Enrich genres</div><div class="settings-row-sub">Fill missing genres via MusicBrainz</div></div>
+        <button class="btn btn-sm" id="p4EnrichBtn">🎵 Enrich</button>
+      </div>
+      <div class="settings-row">
         <div><div class="settings-row-label">Clear all data</div><div class="settings-row-sub">Library, history, cache</div></div>
         <button class="btn btn-sm btn-danger" id="p4ClearAllBtn">✕ Reset</button>
       </div>
@@ -1684,6 +1736,26 @@ async function renderProfileTab(panel){
     catch(e){_toast('Cache clear failed.',true);}
   });
   panel.querySelector('#p4ResyncBtn').addEventListener('click',()=>{switchTab('picker');handleRefresh();});
+  panel.querySelector('#p4EnrichBtn').addEventListener('click',async()=>{
+    const btn=panel.querySelector('#p4EnrichBtn');
+    const missing=allAlbums.filter(a=>!(a._genres?.length)).length;
+    if(!missing){_toast('All albums already have genres.');return;}
+    if(!confirm(`Enrich genres for ${missing} albums via MusicBrainz?\nThis takes ~${Math.ceil(missing/60)} min and runs in the background.`))return;
+    btn.disabled=true;
+    const prog=document.createElement('div');
+    prog.style.cssText='font-size:11px;color:var(--text-dim);margin-top:4px;text-align:right';
+    btn.parentElement.appendChild(prog);
+    try{
+      const enriched=await MusicBrainz.enrichLibrary((done,total,found)=>{
+        btn.textContent=`${done}/${total}`;
+        prog.textContent=`${found} genres found`;
+      });
+      _toast(enriched>0?`✅ Enriched ${enriched} albums!`:'No new genres found.');
+    }catch(e){_toast('Enrichment failed: '+e.message,true);}
+    prog.remove();
+    btn.disabled=false;btn.textContent='🎵 Enrich';
+    delete panel.dataset.rendered;renderProfileTab(panel);
+  });
   panel.querySelector('#p4ClearAllBtn').addEventListener('click',async()=>{
     if(!confirm('Delete ALL data — library, history, and caches? This cannot be undone.'))return;
     await Cache.clearAll();await HistoryProvider.clear();
