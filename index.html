@@ -836,7 +836,8 @@ const DELAY_BROWSER_MS = 5000;
 const HISTORY_MAX_AGE_DAYS = 30;
 const BLOCKLIST_KW = ['instrumental','remix','edit','live','reprise','version'];
 const DB_NAME = 'albumdiscovery_db';
-const DB_VERSION = 9; // Phase 10 QID-011/012: favorites store added
+const DB_VERSION = 10; // Phase 11 QID-017: enriched_library store added
+const ENRICHED_LIB_TTL = 24*60*60*1000; // 24h — same as PLAYLIST_CACHE_TTL
 
 const GENRE_CLUSTERS = [
   {id:'electronic',label:'Electronic', icon:'⚡',kw:['electronic','techno','house','ambient','drum and bass','dnb','dubstep','trance','garage','jungle','breakbeat','idm','glitch','downtempo','synthwave','darkwave','edm','electronica','trip-hop','synth','rave','acid','chillout','dub','eurodance','electro','bass music','vaporwave','industrial','noise','minimal techno','tech house','deep house','progressive house','elektronisch','tanzmusik','elektronische musik']},
@@ -869,6 +870,7 @@ const DB=(()=>{
       if(!db.objectStoreNames.contains('playlists_cache'))     db.createObjectStore('playlists_cache'); // Phase 9 QID-009
       if(!db.objectStoreNames.contains('playlist_tracks_cache'))db.createObjectStore('playlist_tracks_cache'); // Phase 9 QID-009
       if(!db.objectStoreNames.contains('favorites'))           db.createObjectStore('favorites',{keyPath:'id'}); // Phase 10 QID-012
+      if(!db.objectStoreNames.contains('enriched_library'))    db.createObjectStore('enriched_library'); // Phase 11 QID-017
       // Phase 7B migration: remove deprecated stores
       if(db.objectStoreNames.contains('lastfm_cache'))   db.deleteObjectStore('lastfm_cache');
       if(db.objectStoreNames.contains('radar_cache'))    db.deleteObjectStore('radar_cache');
@@ -1007,7 +1009,72 @@ const PlaylistCache={
 };
 
 // ═══════════════════════════════════════════════════════════════════
-// SECTION 5 — AUTH MODULE (PKCE)
+// SECTION 4C — ENRICHED LIBRARY (QID-017)
+// ═══════════════════════════════════════════════════════════════════
+const EnrichedLibrary={
+  // Build merged pool: library albums + own playlist albums, deduplicated by id.
+  // Playlist albums get _genres via artist_cache fallback (QID-015 inline).
+  // Only runs if useEnrichedLibrary is true.
+  async build(){
+    const db=await DB.getDb();
+    // Collect all playlist albums from selected playlists
+    const selectedIds=await PlaylistCache.getSelectedIds();
+    const plAlbumMap=new Map();
+    for(const pid of selectedIds){
+      const albums=await PlaylistCache.getAlbums(pid)||[];
+      for(const a of albums){
+        if(!plAlbumMap.has(a.id)){
+          // Mark source — playlist-only unless also in library
+          plAlbumMap.set(a.id,{...a,_inLibrary:false,_source:'playlist'});
+        }
+      }
+    }
+    // Enrich playlist album genres from artist_cache (QID-015 inline)
+    const cachedArtists=await db.getAll('artist_cache');
+    const artistGenreMap=new Map(cachedArtists.map(e=>[e.id,e.genres||[]]));
+    for(const a of plAlbumMap.values()){
+      if(!(a._genres||[]).length){
+        const merged=new Set();
+        for(const ar of(a.artists||[])){
+          if(ar.id&&artistGenreMap.has(ar.id))for(const g of artistGenreMap.get(ar.id))merged.add(g);
+        }
+        a._genres=[...merged];
+        a._genres_source='artist';
+      }
+    }
+    // Merge with library (library wins on duplicates — keeps _inLibrary:true + genres)
+    const merged=new Map(allAlbums.map(a=>[a.id,{...a,_inLibrary:true,_source:'library'}]));
+    for(const[id,a]of plAlbumMap)if(!merged.has(id))merged.set(id,a);
+    const result=[...merged.values()];
+    // Persist
+    await db.put('enriched_library',{cachedAt:Date.now(),albums:result.map(slimAlbum)},'main').catch(()=>{});
+    return result;
+  },
+  async get(){
+    try{
+      const db=await DB.getDb();
+      const r=await db.get('enriched_library','main');
+      if(!r?.albums?.length)return null;
+      if(Date.now()-r.cachedAt>ENRICHED_LIB_TTL)return null;
+      return r.albums;
+    }catch(e){return null;}
+  },
+  async invalidate(){
+    try{const db=await DB.getDb();await db.delete('enriched_library','main');}catch(e){}
+  },
+  // Get the active pool for picker/filters based on state
+  async getPool(){
+    if(!state.useEnrichedLibrary)return allAlbums;
+    const src=state.enrichedSource||'all';
+    let enriched=await this.get();
+    if(!enriched)enriched=await this.build();
+    if(src==='library')return enriched.filter(a=>a._source==='library'||a._inLibrary);
+    if(src==='playlists')return enriched.filter(a=>a._source==='playlist'&&!a._inLibrary);
+    return enriched; // 'all'
+  },
+};
+
+
 // ═══════════════════════════════════════════════════════════════════
 const Auth={
   isLoggedIn(){return!!localStorage.getItem('spotify_refresh_token');},
@@ -1265,13 +1332,16 @@ const state={
   expandedClusters:new Set(),
   libFilter:'',albumCount:1,browserMode:false,
   filters:{decades:[],decadesExcl:[],excludeKW:false,minDur:0,maxDur:200,genres:[],clusters:[],minAgeMonths:0,avoidRecent:true,weightUnheard:true,queueHistory:'any',radarSource:'all',pickerSource:'library'},
+  // QID-017: Enriched Library
+  useEnrichedLibrary:false,
+  enrichedSource:'all', // 'all' | 'library' | 'playlists'
   // QID-011/012: See All modal state
   _badgeToggles:{heavyRotation:true,newAlbum:true,trending:true,favorite:true},
   _samFilters:{},
 };
 
-function saveSession(){try{sessionStorage.setItem('ad_s',JSON.stringify({f:state.filters,ac:state.albumCount,as:state.albumSort,ap:state.activePreset,fo:state.filterOpen,fs:state.filterSections,bm:state.browserMode}));}catch(e){}}
-function restoreSession(){try{const r=sessionStorage.getItem('ad_s');if(!r)return;const s=JSON.parse(r);if(s.f)Object.assign(state.filters,s.f);if(s.ac)state.albumCount=s.ac;if(s.as)state.albumSort=s.as;if(s.ap!==undefined)state.activePreset=s.ap;if(s.fo!==undefined)state.filterOpen=s.fo;if(s.fs)Object.assign(state.filterSections,s.fs);if(s.bm!==undefined)state.browserMode=s.bm;}catch(e){}}
+function saveSession(){try{sessionStorage.setItem('ad_s',JSON.stringify({f:state.filters,ac:state.albumCount,as:state.albumSort,ap:state.activePreset,fo:state.filterOpen,fs:state.filterSections,bm:state.browserMode,uel:state.useEnrichedLibrary,es:state.enrichedSource}));}catch(e){}}
+function restoreSession(){try{const r=sessionStorage.getItem('ad_s');if(!r)return;const s=JSON.parse(r);if(s.f)Object.assign(state.filters,s.f);if(s.ac)state.albumCount=s.ac;if(s.as)state.albumSort=s.as;if(s.ap!==undefined)state.activePreset=s.ap;if(s.fo!==undefined)state.filterOpen=s.fo;if(s.fs)Object.assign(state.filterSections,s.fs);if(s.bm!==undefined)state.browserMode=s.bm;if(s.uel!==undefined)state.useEnrichedLibrary=s.uel;if(s.es)state.enrichedSource=s.es;}catch(e){}}
 
 function applyPreset(name){
   const rst=()=>Object.assign(state.filters,{decades:[],decadesExcl:[],genres:[],clusters:[],excludeKW:false,minAgeMonths:0,avoidRecent:false,weightUnheard:false,minDur:0,maxDur:200,queueHistory:'any'});
@@ -1413,7 +1483,9 @@ function buildPickerHTML(){
   const countHTML=`<div class="section"><div class="count-row"><span class="count-lbl">Albums</span><div class="count-btns">${[1,2,5,10,20].map(n=>`<button class="count-btn${state.albumCount===n?' active':''}" data-count="${n}">${n}</button>`).join('')}</div></div></div>`;
   const filtersHTML=`<div class="card section"><div class="clps-trg" id="filtersTrg"><div style="display:flex;align-items:center;gap:8px"><span style="font-family:var(--font-h);font-size:15px;font-weight:600">Filters</span>${fCount>0?`<span style="background:var(--blue);color:#fff;font-size:10px;font-weight:700;padding:2px 7px;border-radius:var(--r-f)">${fCount}</span>`:''}</div><span class="clps-arr${state.filterOpen?' open':''}">▼</span></div><div class="clps-body${state.filterOpen?' open':''}" id="filtersBody"><div class="clps-inner">${buildFiltersInner()}</div></div></div>`;
   const ps=state.filters.pickerSource||'library';
-  const pickerSourceHTML=`<div class="section"><div class="lbl" style="margin-bottom:8px">Quelle</div><div class="picker-src-btns"><button class="picker-src-btn${ps==='library'?' active':''}" data-src="library">🗂 Bibliothek</button><button class="picker-src-btn${ps==='playlists'?' active':''}" data-src="playlists">🎵 Playlists</button><button class="picker-src-btn${ps==='both'?' active':''}" data-src="both">🔀 Beides</button></div></div>`;
+  const pickerSourceHTML=state.useEnrichedLibrary
+    ? `<div class="section"><div class="lbl" style="margin-bottom:6px">Quelle</div><div style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><span style="font-size:12px;background:var(--blue-glow);border:1px solid var(--blue);color:var(--blue);padding:3px 9px;border-radius:var(--r-f);font-weight:600">✦ Enriched Library aktiv</span></div><div class="picker-src-btns"><button class="picker-src-btn${state.enrichedSource==='all'?' active':''}" data-enriched-src="all">🔀 Alles</button><button class="picker-src-btn${state.enrichedSource==='library'?' active':''}" data-enriched-src="library">🗂 Bibliothek</button><button class="picker-src-btn${state.enrichedSource==='playlists'?' active':''}" data-enriched-src="playlists">🎵 Nur Playlists</button></div></div>`
+    : `<div class="section"><div class="lbl" style="margin-bottom:8px">Quelle</div><div class="picker-src-btns"><button class="picker-src-btn${ps==='library'?' active':''}" data-src="library">🗂 Bibliothek</button><button class="picker-src-btn${ps==='playlists'?' active':''}" data-src="playlists">🎵 Playlists</button><button class="picker-src-btn${ps==='both'?' active':''}" data-src="both">🔀 Beides</button></div></div>`;
   const cvgHTML=cvg.total?buildCoverageHTML(cvg):'';
   const statsHTML=`<div class="stats-info">${filtered.length} of ${allAlbums.length} albums match · ${syncLbl}${state.genresLoading?` · <span id="genreProgressWrap">Loading genres…</span>`:''}</div>`;
   const pickBtn=`<button class="btn btn-primary btn-full" id="queueBtn" ${state.isWorking?'disabled':''} style="height:52px;font-size:14px;font-weight:700;font-family:var(--font-h);border-radius:var(--r-xl);margin-bottom:12px">${state.isWorking&&state.phase!=='queuing'?'<span class="spinner" style="width:18px;height:18px;border-width:2px"></span> Picking…':'🎲 Pick Albums'}</button>`;
@@ -1574,6 +1646,13 @@ function attachPickerEvents(panel){
     panel.querySelectorAll('.picker-src-btn').forEach(x=>x.classList.toggle('active',x.dataset.src===fa.pickerSource));
     saveSession();
   }));
+  // QID-017: enriched source buttons
+  panel.querySelectorAll('.picker-src-btn[data-enriched-src]').forEach(b=>b.addEventListener('click',()=>{
+    state.enrichedSource=b.dataset.enrichedSrc;
+    panel.querySelectorAll('.picker-src-btn[data-enriched-src]').forEach(x=>x.classList.toggle('active',x.dataset.enrichedSrc===state.enrichedSource));
+    EnrichedLibrary.invalidate().catch(()=>{});
+    saveSession();
+  }));
   panel.querySelector('#cvgTrg')?.addEventListener('click',()=>{state.coverageOpen=!state.coverageOpen;panel.querySelector('#cvgBody')?.classList.toggle('open',state.coverageOpen);panel.querySelector('#cvgTrg .clps-arr')?.classList.toggle('open',state.coverageOpen);});
   panel.querySelectorAll('[data-cvgfilter]').forEach(b=>b.addEventListener('click',()=>{state.coverageFilter=b.dataset.cvgfilter;handlePick();}));
 
@@ -1595,32 +1674,38 @@ async function handlePick(){
   if(state.isWorking||!allAlbums.length)return;
   state.isWorking=true;renderPickerContent();
 
-  // QID-009: build base pool according to pickerSource
-  const src=state.filters.pickerSource||'library';
-  let basePool=allAlbums;
-  if(src==='playlists'||src==='both'){
-    const selectedIds=await PlaylistCache.getSelectedIds();
-    if(!selectedIds.length){
-      _toast('Keine Playlists hinterlegt. Bitte zuerst im Profil auswählen.',true);
-      state.isWorking=false;renderPickerContent();return;
-    }
-    const plAlbumMap=new Map();
-    for(const pid of selectedIds){
-      const albums=await PlaylistCache.getAlbums(pid)||[];
-      for(const a of albums)if(!plAlbumMap.has(a.id))plAlbumMap.set(a.id,a);
-    }
-    const plAlbums=[...plAlbumMap.values()];
-    if(src==='playlists'){
-      basePool=plAlbums;
-    }else{
-      // both: merge, deduplicate by id
-      const merged=new Map(allAlbums.map(a=>[a.id,a]));
-      for(const a of plAlbums)if(!merged.has(a.id))merged.set(a.id,a);
-      basePool=[...merged.values()];
-    }
-    if(!basePool.length){
-      _toast('Playlist-Alben konnten nicht geladen werden. Bitte Playlists neu laden.',true);
-      state.isWorking=false;renderPickerContent();return;
+  // QID-017: use enriched pool when active; else QID-009 pickerSource logic
+  let basePool;
+  if(state.useEnrichedLibrary){
+    try{basePool=await EnrichedLibrary.getPool();}
+    catch(e){basePool=allAlbums;}
+  } else {
+    // QID-009: build base pool according to pickerSource
+    const src=state.filters.pickerSource||'library';
+    basePool=allAlbums;
+    if(src==='playlists'||src==='both'){
+      const selectedIds=await PlaylistCache.getSelectedIds();
+      if(!selectedIds.length){
+        _toast('Keine Playlists hinterlegt. Bitte zuerst im Profil auswählen.',true);
+        state.isWorking=false;renderPickerContent();return;
+      }
+      const plAlbumMap=new Map();
+      for(const pid of selectedIds){
+        const albums=await PlaylistCache.getAlbums(pid)||[];
+        for(const a of albums)if(!plAlbumMap.has(a.id))plAlbumMap.set(a.id,a);
+      }
+      const plAlbums=[...plAlbumMap.values()];
+      if(src==='playlists'){
+        basePool=plAlbums;
+      }else{
+        const merged=new Map(allAlbums.map(a=>[a.id,a]));
+        for(const a of plAlbums)if(!merged.has(a.id))merged.set(a.id,a);
+        basePool=[...merged.values()];
+      }
+      if(!basePool.length){
+        _toast('Playlist-Alben konnten nicht geladen werden. Bitte Playlists neu laden.',true);
+        state.isWorking=false;renderPickerContent();return;
+      }
     }
   }
 
@@ -1634,21 +1719,27 @@ async function handlePick(){
 }
 
 async function rerollAlbum(idx){
-  // QID-010: async, pickerSource-aware (mirrors handlePick pool logic)
+  // QID-010: async, pickerSource-aware. QID-017: enriched pool when active.
   if(state.isWorking)return;
-  const src=state.filters.pickerSource||'library';
-  let basePool=allAlbums;
-  if(src==='playlists'||src==='both'){
-    const selectedIds=await PlaylistCache.getSelectedIds();
-    if(selectedIds.length){
-      const plAlbumMap=new Map();
-      for(const pid of selectedIds){
-        const albums=await PlaylistCache.getAlbums(pid)||[];
-        for(const a of albums)if(!plAlbumMap.has(a.id))plAlbumMap.set(a.id,a);
+  let basePool;
+  if(state.useEnrichedLibrary){
+    try{basePool=await EnrichedLibrary.getPool();}
+    catch(e){basePool=allAlbums;}
+  } else {
+    const src=state.filters.pickerSource||'library';
+    basePool=allAlbums;
+    if(src==='playlists'||src==='both'){
+      const selectedIds=await PlaylistCache.getSelectedIds();
+      if(selectedIds.length){
+        const plAlbumMap=new Map();
+        for(const pid of selectedIds){
+          const albums=await PlaylistCache.getAlbums(pid)||[];
+          for(const a of albums)if(!plAlbumMap.has(a.id))plAlbumMap.set(a.id,a);
+        }
+        const plAlbums=[...plAlbumMap.values()];
+        if(src==='playlists'){basePool=plAlbums.length?plAlbums:allAlbums;}
+        else{const merged=new Map(allAlbums.map(a=>[a.id,a]));for(const a of plAlbums)if(!merged.has(a.id))merged.set(a.id,a);basePool=[...merged.values()];}
       }
-      const plAlbums=[...plAlbumMap.values()];
-      if(src==='playlists'){basePool=plAlbums.length?plAlbums:allAlbums;}
-      else{const merged=new Map(allAlbums.map(a=>[a.id,a]));for(const a of plAlbums)if(!merged.has(a.id))merged.set(a.id,a);basePool=[...merged.values()];}
     }
   }
   const pool=applyFilters(basePool).filter(a=>!state.selectedAlbums.includes(a));if(!pool.length)return;
@@ -1987,6 +2078,7 @@ async function renderProfileTab(panel){
         cb.addEventListener('change',async()=>{
           const allChecked=[...wrap.querySelectorAll('input[data-pl-id]:checked')].map(x=>x.dataset.plId);
           await PlaylistCache.saveSelectedIds(allChecked);
+          EnrichedLibrary.invalidate().catch(()=>{}); // QID-017: rebuild enriched pool on next use
           // Update HomeLayout for each playlist
           for(const pl of playlists){
             const isSelected=allChecked.includes(pl.id);
@@ -2032,6 +2124,50 @@ async function renderProfileTab(panel){
     } else {
       wrap.querySelector('#p4LoadPlaylists')?.addEventListener('click',()=>renderPlaylistPicker(true));
     }
+  })();
+
+  // ── QID-017: Enriched Library ─────────────────────────────────
+  (()=>{
+    const elDiv=document.createElement('div');elDiv.className='p4-section';
+    const srcVisible=state.useEnrichedLibrary;
+    elDiv.innerHTML=`<div class="p4-section-title">Enriched Library</div>
+      <div class="card" style="overflow:hidden">
+        <div class="settings-row">
+          <div>
+            <div class="settings-row-label">Use Enriched Library</div>
+            <div class="settings-row-sub">Merge your saved albums + playlist albums into one pool</div>
+          </div>
+          <label class="tgl-sw"><input type="checkbox" id="p4EnrichedToggle"${state.useEnrichedLibrary?' checked':''}><span class="tgl-track"></span></label>
+        </div>
+        <div id="p4EnrichedSourceRow" style="display:${srcVisible?'flex':'none'}">
+          <div class="settings-row" style="flex:1">
+            <div>
+              <div class="settings-row-label">Pool source</div>
+              <div class="settings-row-sub">Which albums to include when picking</div>
+            </div>
+            <select class="settings-input" id="p4EnrichedSource" style="width:130px;padding:6px 10px">
+              <option value="all"${state.enrichedSource==='all'?' selected':''}>All albums</option>
+              <option value="library"${state.enrichedSource==='library'?' selected':''}>Library only</option>
+              <option value="playlists"${state.enrichedSource==='playlists'?' selected':''}>Playlists only</option>
+            </select>
+          </div>
+        </div>
+      </div>`;
+    panel.appendChild(elDiv);
+    elDiv.querySelector('#p4EnrichedToggle').addEventListener('change',async e=>{
+      state.useEnrichedLibrary=e.target.checked;
+      saveSession();
+      elDiv.querySelector('#p4EnrichedSourceRow').style.display=state.useEnrichedLibrary?'flex':'none';
+      if(state.useEnrichedLibrary)await EnrichedLibrary.invalidate(); // force rebuild next use
+      _toast(state.useEnrichedLibrary?'Enriched Library aktiviert':'Nur Bibliothek aktiv');
+      renderPickerContent();
+    });
+    elDiv.querySelector('#p4EnrichedSource').addEventListener('change',e=>{
+      state.enrichedSource=e.target.value;
+      saveSession();
+      EnrichedLibrary.invalidate().catch(()=>{});
+      renderPickerContent();
+    });
   })();
 
   // ── History management ────────────────────────────────────────
@@ -3288,7 +3424,7 @@ function renderHomeDashboard(panel){
       // Try cache first
       let albums=await PlaylistCache.getAlbums(plId);
       if(!albums){
-        try{albums=await SpotifyAPI.fetchPlaylistItems(plId);await PlaylistCache.saveAlbums(plId,albums);}
+        try{albums=await SpotifyAPI.fetchPlaylistItems(plId);await PlaylistCache.saveAlbums(plId,albums);EnrichedLibrary.invalidate().catch(()=>{});}
         catch(e){continue;}
       }
       if(!albums.length)continue;
