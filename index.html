@@ -747,6 +747,45 @@
     .lib-sh-radio-row{display:flex;align-items:center;gap:10px;cursor:pointer}
     .lib-sh-radio-row input{accent-color:var(--blue);width:16px;height:16px;flex-shrink:0;cursor:pointer}
     .lib-sh-radio-row span{font-size:13px;color:var(--text)}
+
+    /* QID-011: See All Modal — Genre-Clustered Grid View */
+    .sam-bg{position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:200;display:flex;flex-direction:column;animation:fadein .18s ease}
+    .sam-sheet{position:absolute;inset:0;display:flex;flex-direction:column;background:var(--bg);overflow:hidden}
+    .sam-hdr{display:flex;align-items:center;gap:10px;padding:14px 16px 12px;border-bottom:1px solid var(--border);flex-shrink:0;background:var(--surface)}
+    .sam-hdr-icon{font-size:20px;flex-shrink:0}
+    .sam-hdr-title{font-family:var(--font-h);font-size:17px;font-weight:700;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .sam-hdr-count{font-size:12px;color:var(--text-dim);white-space:nowrap;flex-shrink:0}
+    .sam-close{border:none;background:none;color:var(--text-dim);font-size:20px;cursor:pointer;padding:4px 8px;line-height:1;flex-shrink:0;transition:color .12s}
+    .sam-close:hover{color:var(--text)}
+    .sam-filters{display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid var(--border);overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;flex-shrink:0;background:var(--surface)}
+    .sam-filters::-webkit-scrollbar{display:none}
+    .sam-filter-chip{border:1px solid var(--border2);border-radius:var(--r-f);padding:6px 12px;background:none;font-size:12px;font-weight:500;color:var(--text-dim);cursor:pointer;font-family:var(--font-b);white-space:nowrap;transition:all .12s;min-height:34px;flex-shrink:0}
+    .sam-filter-chip.active{border-color:var(--blue);color:var(--blue);background:var(--blue-glow)}
+    .sam-badge-toggles{display:flex;align-items:center;gap:6px;padding:8px 14px;border-bottom:1px solid var(--border);overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;flex-shrink:0;background:var(--surface)}
+    .sam-badge-toggles::-webkit-scrollbar{display:none}
+    .sam-badge-chip{border:1px solid var(--border);border-radius:var(--r-f);padding:5px 10px;background:none;font-size:11px;font-weight:600;color:var(--text-dim);cursor:pointer;font-family:var(--font-b);white-space:nowrap;transition:all .12s;min-height:30px;flex-shrink:0}
+    .sam-badge-chip.active{border-color:var(--warm);color:var(--warm);background:rgba(212,165,116,.1)}
+    .sam-badge-label{font-size:10px;color:var(--text-dim);flex-shrink:0;font-weight:600;text-transform:uppercase;letter-spacing:1.2px}
+    .sam-body{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior-y:contain;padding:0 0 24px}
+    .sam-cluster-hdr{padding:16px 14px 8px;font-family:var(--font-h);font-size:13px;font-weight:700;color:var(--text-mid);text-transform:uppercase;letter-spacing:1.4px;position:sticky;top:0;background:rgba(30,30,30,.96);backdrop-filter:blur(12px);z-index:5;display:flex;align-items:center;gap:8px}
+    .sam-cluster-hdr-count{font-size:11px;color:var(--text-dim);font-weight:400;text-transform:none;letter-spacing:0}
+    .sam-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:4px 10px 10px}
+    @media(min-width:540px){.sam-grid{grid-template-columns:repeat(4,1fr)}}
+    .sam-item{cursor:pointer;border-radius:var(--r-md);overflow:hidden;background:var(--surface2);transition:transform .12s,opacity .12s;position:relative}
+    .sam-item:active{transform:scale(.94);opacity:.85}
+    .sam-art-wrap{position:relative;aspect-ratio:1;background:var(--surface3);overflow:hidden}
+    .sam-art{width:100%;height:100%;object-fit:cover;display:block}
+    .sam-art-ph{width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:28px;background:var(--surface3)}
+    .sam-name{font-size:11px;font-weight:600;padding:5px 7px 2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;line-height:1.3}
+    .sam-artist{font-size:10px;color:var(--text-dim);padding:0 7px 6px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    /* QID-012: Context Badges overlay on album art */
+    .sam-badges{position:absolute;bottom:4px;left:4px;display:flex;flex-direction:column;align-items:flex-start;gap:2px;pointer-events:none}
+    .sam-badge{font-size:9px;font-weight:700;padding:2px 5px;border-radius:3px;background:rgba(0,0,0,.72);backdrop-filter:blur(4px);color:#fff;white-space:nowrap;line-height:1.4;letter-spacing:.2px}
+    .sam-badge.heavy{background:rgba(245,158,11,.85);color:#1a1a1a}
+    .sam-badge.new{background:rgba(74,144,217,.85)}
+    .sam-badge.trending{background:rgba(239,68,68,.85)}
+    .sam-badge.related{background:rgba(167,139,250,.85);color:#fff}
+    .sam-empty{text-align:center;padding:48px 20px;color:var(--text-dim);font-size:13px}
   </style>
 </head>
 <body>
@@ -797,7 +836,7 @@ const DELAY_BROWSER_MS = 5000;
 const HISTORY_MAX_AGE_DAYS = 30;
 const BLOCKLIST_KW = ['instrumental','remix','edit','live','reprise','version'];
 const DB_NAME = 'albumdiscovery_db';
-const DB_VERSION = 8; // Phase 9 QID-009: added playlists_cache, playlist_tracks_cache stores
+const DB_VERSION = 9; // Phase 10 QID-011/012: favorites store added
 
 const GENRE_CLUSTERS = [
   {id:'electronic',label:'Electronic', icon:'⚡',kw:['electronic','techno','house','ambient','drum and bass','dnb','dubstep','trance','garage','jungle','breakbeat','idm','glitch','downtempo','synthwave','darkwave','edm','electronica','trip-hop','synth','rave','acid','chillout','dub','eurodance','electro','bass music','vaporwave','industrial','noise','minimal techno','tech house','deep house','progressive house','elektronisch','tanzmusik','elektronische musik']},
@@ -829,6 +868,7 @@ const DB=(()=>{
       if(!db.objectStoreNames.contains('homeLayout'))  db.createObjectStore('homeLayout'); // Phase 8 QID-004
       if(!db.objectStoreNames.contains('playlists_cache'))     db.createObjectStore('playlists_cache'); // Phase 9 QID-009
       if(!db.objectStoreNames.contains('playlist_tracks_cache'))db.createObjectStore('playlist_tracks_cache'); // Phase 9 QID-009
+      if(!db.objectStoreNames.contains('favorites'))           db.createObjectStore('favorites',{keyPath:'id'}); // Phase 10 QID-012
       // Phase 7B migration: remove deprecated stores
       if(db.objectStoreNames.contains('lastfm_cache'))   db.deleteObjectStore('lastfm_cache');
       if(db.objectStoreNames.contains('radar_cache'))    db.deleteObjectStore('radar_cache');
@@ -1225,6 +1265,9 @@ const state={
   expandedClusters:new Set(),
   libFilter:'',albumCount:1,browserMode:false,
   filters:{decades:[],decadesExcl:[],excludeKW:false,minDur:0,maxDur:200,genres:[],clusters:[],minAgeMonths:0,avoidRecent:true,weightUnheard:true,queueHistory:'any',radarSource:'all',pickerSource:'library'},
+  // QID-011/012: See All modal state
+  _badgeToggles:{heavyRotation:true,newAlbum:true,trending:true,favorite:true},
+  _samFilters:{},
 };
 
 function saveSession(){try{sessionStorage.setItem('ad_s',JSON.stringify({f:state.filters,ac:state.albumCount,as:state.albumSort,ap:state.activePreset,fo:state.filterOpen,fs:state.filterSections,bm:state.browserMode}));}catch(e){}}
@@ -1591,8 +1634,24 @@ async function handlePick(){
 }
 
 async function rerollAlbum(idx){
+  // QID-010: async, pickerSource-aware (mirrors handlePick pool logic)
   if(state.isWorking)return;
-  const pool=applyFilters(allAlbums).filter(a=>!state.selectedAlbums.includes(a));if(!pool.length)return;
+  const src=state.filters.pickerSource||'library';
+  let basePool=allAlbums;
+  if(src==='playlists'||src==='both'){
+    const selectedIds=await PlaylistCache.getSelectedIds();
+    if(selectedIds.length){
+      const plAlbumMap=new Map();
+      for(const pid of selectedIds){
+        const albums=await PlaylistCache.getAlbums(pid)||[];
+        for(const a of albums)if(!plAlbumMap.has(a.id))plAlbumMap.set(a.id,a);
+      }
+      const plAlbums=[...plAlbumMap.values()];
+      if(src==='playlists'){basePool=plAlbums.length?plAlbums:allAlbums;}
+      else{const merged=new Map(allAlbums.map(a=>[a.id,a]));for(const a of plAlbums)if(!merged.has(a.id))merged.set(a.id,a);basePool=[...merged.values()];}
+    }
+  }
+  const pool=applyFilters(basePool).filter(a=>!state.selectedAlbums.includes(a));if(!pool.length)return;
   const[rep]=state.filters.weightUnheard?weightedPick(pool,1):plainPick(pool,1);
   const item=document.querySelector(`.album-item[data-idx="${idx}"]`);
   if(item){item.classList.add('swipe-exit');await sleep(200);}
@@ -2211,11 +2270,15 @@ function _carCard(a, badge){
   </div>`;
 }
 
-/** Helper: attach click handlers to .car-card elements in a container */
-function _attachCarouselClicks(container){
+/** Helper: attach click handlers to .car-card elements in a container
+ *  @param {HTMLElement} container
+ *  @param {Array} [extraAlbums]  — additional album pool (e.g. playlist albums not in allAlbums)
+ */
+function _attachCarouselClicks(container, extraAlbums=[]){
+  const extraMap=new Map(extraAlbums.map(a=>[a.id,a]));
   container.querySelectorAll('.car-card[data-carid]').forEach(card=>{
     card.addEventListener('click',()=>{
-      const a=allAlbums.find(x=>x.id===card.dataset.carid);
+      const a=allAlbums.find(x=>x.id===card.dataset.carid)||extraMap.get(card.dataset.carid);
       if(a)openAlbumDetail(a);
     });
   });
@@ -2281,24 +2344,39 @@ function renderTopAlbumsSection(container){
     {id:'appAll',label:'App All'},
   ];
   let activeRange='app30d';
+  let currentResults=[];
   wrap.innerHTML=`
-    <div class="dash-section-hdr">
-      <span class="dash-section-title">Top Albums</span>
-    </div>
-    <div class="time-chips" id="homeTimeChips">
-      ${chips.map(c=>`<button class="time-chip${c.id===activeRange?' active':''}" data-range="${c.id}">${c.label}</button>`).join('')}
+    <div class="car-section-hdr">
+      <span class="car-section-title" id="topAlbumsTitle">🏆 Top Albums</span>
+      <div class="time-chips" id="homeTimeChips">
+        ${chips.map(c=>`<button class="time-chip${c.id===activeRange?' active':''}" data-range="${c.id}">${c.label}</button>`).join('')}
+      </div>
     </div>
     <div id="homeTopCarousel"><div class="carousel-empty">Loading…</div></div>`;
   container.appendChild(wrap);
+
+  function _updateSeeAll(){
+    const titleEl=wrap.querySelector('#topAlbumsTitle');if(!titleEl)return;
+    const albums=currentResults.map(r=>r.album);
+    // Remove old see-all span
+    titleEl.querySelector('.car-see-all')?.remove();
+    if(albums.length>1){
+      const sa=document.createElement('span');sa.className='car-see-all';sa.textContent='See All ›';
+      sa.addEventListener('click',()=>openCarouselSeeAllModal('top-albums','Top Albums',albums,'🏆'));
+      titleEl.appendChild(sa);
+    }
+  }
 
   async function loadRange(range){
     const track=wrap.querySelector('#homeTopCarousel');
     track.innerHTML='<div class="carousel-empty">Loading…</div>';
     try{
       const results=await getTopAlbums(range);
-      if(!results.length){track.innerHTML='<div class="carousel-empty">No listening data yet — queue some albums in the Picker!</div>';return;}
+      currentResults=results;
+      if(!results.length){track.innerHTML='<div class="carousel-empty">No listening data yet — queue some albums in the Picker!</div>';_updateSeeAll();return;}
       track.innerHTML=`<div class="carousel-track">${results.map(({album,playCount})=>_carCard(album,playCount>1?`×${playCount}`:null)).join('')}</div>`;
       _attachCarouselClicks(track);
+      _updateSeeAll();
     }catch(e){track.innerHTML=`<div class="carousel-empty">Couldn't load top albums</div>`;}
   }
 
@@ -2408,6 +2486,186 @@ function openPlaylistModal(title, albums, icon='🎵'){
   const onKey=e=>{if(e.key==='Escape'){bg.remove();document.removeEventListener('keydown',onKey);}};
   document.addEventListener('keydown',onKey);
   bg.addEventListener('remove',()=>document.removeEventListener('keydown',onKey),{once:true});
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// SECTION 11.5 — QID-011: See All Modal + QID-012: Context Badges
+// ═══════════════════════════════════════════════════════════════════
+
+/** QID-012: Broad genre label for clustering in See All grid */
+const SAM_GENRE_MAP=[
+  {label:'Electronic',kw:['electronic','techno','house','ambient','drum and bass','dnb','dubstep','trance','edm','electronica','trip-hop','synthwave','industrial','idm','glitch','downtempo','rave','chillout','vaporwave']},
+  {label:'Rock',      kw:['rock','alternative','grunge','post-rock','shoegaze','progressive','art rock','garage rock','britpop','psych','kraut','math rock','stoner']},
+  {label:'Punk / Indie',kw:['punk','indie','hardcore','post-hardcore','lo-fi','emo','screamo','post-punk','new wave','coldwave','slacker']},
+  {label:'Metal',     kw:['metal','heavy metal','black metal','death metal','doom','thrash','sludge','deathcore','metalcore','symphonic metal']},
+  {label:'Hip-Hop / R&B',kw:['hip hop','hip-hop','rap','r&b','soul','neo-soul','funk','trap','grime','boom bap','drill','rhythm and blues']},
+  {label:'Pop',       kw:['pop','dream pop','chamber pop','electropop','hyperpop','bedroom pop','art pop','synth pop','j-pop','k-pop','dance pop']},
+  {label:'Jazz / Blues',kw:['jazz','blues','swing','bebop','free jazz','latin jazz','soul jazz','gospel','fusion','nu jazz','boogie']},
+  {label:'Classical', kw:['classical','chamber','orchestral','opera','choral','minimalism','neo-classical','baroque','romantic','avant-garde','new music']},
+  {label:'Folk / World',kw:['folk','country','americana','bluegrass','world','reggae','afrobeat','latin','bossa','celtic','singer-songwriter','acoustic','roots','tropicalia','cumbia','salsa','flamenco']},
+];
+function _samGenreLabel(album){
+  const gs=(album._genres||[]).map(g=>g.toLowerCase());
+  for(const {label,kw} of SAM_GENRE_MAP){if(gs.some(g=>kw.some(k=>g.includes(k))))return label;}
+  return'Other';
+}
+
+/** QID-012: Compute context badges for an album.
+ *  @param {object} album
+ *  @param {string|null} relatedArtistName  — only for "Because You Played" carousel
+ *  @param {object} badgeToggles            — {heavyRotation, newAlbum, trending, favorite}
+ *  @param {Set} heavyIds                   — album IDs in heavy rotation (≥3× last 7d)
+ *  @param {Set} trendingIds                — top-10 album IDs this week
+ *  @param {Set} favoriteIds                — album IDs in favorites store
+ *  @returns {Array<{cls,label}>}
+ */
+function _computeBadges(album, relatedArtistName, badgeToggles, heavyIds, trendingIds, favoriteIds){
+  const badges=[];
+  // "Related to Artist" — only for Because You Played, single artist
+  if(relatedArtistName&&(album.artists||[]).length===1){
+    const name=relatedArtistName.length>18?relatedArtistName.slice(0,16)+'…':relatedArtistName;
+    badges.push({cls:'related',label:`🎵 ${name}`});
+  }
+  if(badgeToggles.heavyRotation&&heavyIds.has(album.id))badges.push({cls:'heavy',label:'⭐ Heavy'});
+  if(badgeToggles.newAlbum&&album._added_at&&Date.now()-new Date(album._added_at).getTime()<30*86400000)badges.push({cls:'new',label:'📅 New'});
+  if(badgeToggles.trending&&trendingIds.has(album.id))badges.push({cls:'trending',label:'🔥 Trending'});
+  if(badgeToggles.favorite&&favoriteIds.has(album.id))badges.push({cls:'related',label:'❤️ Fave'});
+  return badges.slice(0,2); // max 2 badges
+}
+
+/** QID-011: Open See All grid modal for a carousel.
+ *  @param {string} carouselId    — unique id (e.g. 'forgotten-gems')
+ *  @param {string} title         — display title
+ *  @param {Array}  albums        — full album pool
+ *  @param {string} [icon]        — emoji icon
+ *  @param {string|null} [relatedArtistName] — for "Because You Played" badge only
+ */
+async function openCarouselSeeAllModal(carouselId, title, albums, icon='🎵', relatedArtistName=null){
+  // Remove existing
+  document.querySelector('.sam-bg')?.remove();
+
+  // ── Badge toggle defaults (persisted in state) ──
+  const bt=state._badgeToggles;
+
+  // ── Decade filter state per carousel ──
+  if(!state._samFilters[carouselId])state._samFilters[carouselId]={decade:null};
+  const sf=state._samFilters[carouselId];
+
+  // ── Pre-compute badge data sets ──
+  const hm=HistoryProvider.getMap();
+  const now=Date.now();
+  const week7=now-7*86400000;
+  // Heavy rotation: ≥3× in last 7d — use historyCache which stores last queuedAt per album
+  // We check count by iterating — historyCache is Map<id,lastQueuedAt>, so we approximate
+  // by marking albums that appear in the map AND were queued within 7d multiple times
+  // (exact count not stored — we use "queued in last 7 days" as proxy for heavy)
+  const heavyIds=new Set();
+  const trendingCounts=new Map();
+  for(const[id,ts]of hm){if(ts>week7){heavyIds.add(id);trendingCounts.set(id,(trendingCounts.get(id)||0)+1);}}
+  // trending = top-10 by count in last 7d
+  const trendingIds=new Set([...trendingCounts.entries()].sort((a,b)=>b[1]-a[1]).slice(0,10).map(([id])=>id));
+  // favorites — store exists but QID-007 not yet active; return empty set gracefully
+  const favoriteIds=new Set();
+  try{const db=await DB.getDb();const favs=await db.getAll('favorites');for(const f of favs)favoriteIds.add(f.id);}catch(e){}
+
+  // ── Build modal ──
+  const bg=document.createElement('div');bg.className='sam-bg';
+  const sheet=document.createElement('div');sheet.className='sam-sheet';
+
+  // Header
+  const hdr=document.createElement('div');hdr.className='sam-hdr';
+  hdr.innerHTML=`<span class="sam-hdr-icon">${esc(icon)}</span><span class="sam-hdr-title">${esc(title)}</span><span class="sam-hdr-count" id="samCount"></span><button class="sam-close" id="samClose">✕</button>`;
+  sheet.appendChild(hdr);
+
+  // Decade filter chips
+  const ALL_DEC=['pre-70s','70s','80s','90s','00s','10s','20s'];
+  const usedDecades=new Set(albums.map(a=>decadeOf(releaseYear(a))).filter(Boolean));
+  const decFilters=document.createElement('div');decFilters.className='sam-filters';
+  decFilters.innerHTML=`<button class="sam-filter-chip${!sf.decade?' active':''}" data-samdec="">All</button>`+
+    ALL_DEC.filter(d=>usedDecades.has(d)).map(d=>`<button class="sam-filter-chip${sf.decade===d?' active':''}" data-samdec="${d}">${d}</button>`).join('');
+  sheet.appendChild(decFilters);
+
+  // Badge toggles bar
+  const badgeBar=document.createElement('div');badgeBar.className='sam-badge-toggles';
+  badgeBar.innerHTML=`<span class="sam-badge-label">Badges:</span>`+
+    [['heavyRotation','⭐ Heavy'],['newAlbum','📅 New'],['trending','🔥 Trending'],['favorite','❤️ Fave']].map(
+      ([k,l])=>`<button class="sam-badge-chip${bt[k]?' active':''}" data-badgekey="${k}">${l}</button>`
+    ).join('');
+  sheet.appendChild(badgeBar);
+
+  // Body
+  const body=document.createElement('div');body.className='sam-body';
+  sheet.appendChild(body);
+  bg.appendChild(sheet);
+  document.body.appendChild(bg);
+
+  // ── Render grid ──
+  function _render(){
+    // Apply decade filter
+    let pool=sf.decade?albums.filter(a=>decadeOf(releaseYear(a))===sf.decade):albums;
+    hdr.querySelector('#samCount').textContent=`${pool.length} albums`;
+
+    // Group by broad genre
+    const clusters=new Map();
+    for(const a of pool){
+      const lbl=_samGenreLabel(a);
+      if(!clusters.has(lbl))clusters.set(lbl,[]);
+      clusters.get(lbl).push(a);
+    }
+    // Sort clusters: largest first, "Other" always last
+    const sorted=[...clusters.entries()].sort((a,b)=>{
+      if(a[0]==='Other')return 1;if(b[0]==='Other')return-1;
+      return b[1].length-a[1].length;
+    });
+
+    body.innerHTML='';
+    if(!pool.length){body.innerHTML=`<div class="sam-empty">No albums match this filter.</div>`;return;}
+
+    for(const [clusterLabel, clusterAlbums] of sorted){
+      // Cluster header
+      const ch=document.createElement('div');ch.className='sam-cluster-hdr';
+      ch.innerHTML=`${esc(clusterLabel)} <span class="sam-cluster-hdr-count">${clusterAlbums.length}</span>`;
+      body.appendChild(ch);
+
+      // Grid
+      const grid=document.createElement('div');grid.className='sam-grid';
+      for(const a of clusterAlbums){
+        const art=getArt(a,'md')||getArt(a,'lg');
+        const artist=(a.artists||[]).map(x=>x.name).join(', ');
+        const badges=_computeBadges(a,relatedArtistName,bt,heavyIds,trendingIds,favoriteIds);
+        const badgesHTML=badges.length?`<div class="sam-badges">${badges.map(b=>`<span class="sam-badge ${b.cls}">${esc(b.label)}</span>`).join('')}</div>`:'';
+
+        const item=document.createElement('div');item.className='sam-item';
+        item.innerHTML=`<div class="sam-art-wrap">${art?`<img class="sam-art" src="${esc(art)}" alt="" loading="lazy">`:`<div class="sam-art-ph">🎵</div>`}${badgesHTML}</div><div class="sam-name">${esc(a.name)}</div><div class="sam-artist">${esc(artist)}</div>`;
+        item.addEventListener('click',()=>openAlbumDetail(a));
+        grid.appendChild(item);
+      }
+      body.appendChild(grid);
+    }
+  }
+
+  _render();
+
+  // ── Events ──
+  hdr.querySelector('#samClose').addEventListener('click',()=>bg.remove());
+  bg.addEventListener('click',e=>{if(e.target===bg)bg.remove();});
+
+  decFilters.addEventListener('click',e=>{
+    const btn=e.target.closest('[data-samdec]');if(!btn)return;
+    sf.decade=btn.dataset.samdec||null;
+    decFilters.querySelectorAll('[data-samdec]').forEach(b=>b.classList.toggle('active',b.dataset.samdec===(sf.decade||'')));
+    _render();
+  });
+
+  badgeBar.addEventListener('click',e=>{
+    const btn=e.target.closest('[data-badgekey]');if(!btn)return;
+    const k=btn.dataset.badgekey;bt[k]=!bt[k];
+    btn.classList.toggle('active',bt[k]);
+    _render();
+  });
+
+  const onKey=e=>{if(e.key==='Escape'){bg.remove();document.removeEventListener('keydown',onKey);}};
+  document.addEventListener('keydown',onKey);
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -2656,9 +2914,9 @@ function renderHomeDashboard(panel){
     const gemSection=document.createElement('div');
     gemSection.className='dash-section';
     const gemHdr=document.createElement('div');gemHdr.className='car-section-hdr';
-    gemHdr.innerHTML=`<span class="car-section-title" id="gemsTitle">💎 Forgotten Gems<span class="car-see-all">See All ›</span></span><span class="car-section-sub">${gems.length} unheard</span>`;
+    gemHdr.innerHTML=`<span class="car-section-title" id="gemsTitle">💎 Forgotten Gems${gems.length>1?'<span class="car-see-all">See All ›</span>':''}</span><span class="car-section-sub">${gems.length} unheard</span>`;
     gemSection.appendChild(gemHdr);
-    gemHdr.querySelector('#gemsTitle').addEventListener('click',()=>openPlaylistModal('Forgotten Gems',gems,'💎'));
+    if(gems.length>1)gemHdr.querySelector('#gemsTitle').addEventListener('click',()=>openCarouselSeeAllModal('forgotten-gems','Forgotten Gems',gems,'💎'));
     const track=document.createElement('div');track.className='carousel-wrap';
     const sixMonthsAgo=Date.now()-6*30*86400000;
     track.innerHTML=`<div class="carousel-track">${gems.map(a=>{
@@ -2681,9 +2939,9 @@ function renderHomeDashboard(panel){
       hrSection.className = 'heavy-rot-section';
       // PHASE 6B: clickable header → full playlist modal
       const hrHdr=document.createElement('div');hrHdr.className='car-section-hdr';
-      hrHdr.innerHTML=`<span class="car-section-title" id="hrTitle"><span class="heavy-rot-icon">🔥</span>Your Heavy Rotation<span class="car-see-all">See All ›</span></span>`;
+      hrHdr.innerHTML=`<span class="car-section-title" id="hrTitle"><span class="heavy-rot-icon">🔥</span>Your Heavy Rotation${hotAlbums.length>1?'<span class="car-see-all">See All ›</span>':''}</span>`;
       hrSection.appendChild(hrHdr);
-      hrHdr.querySelector('#hrTitle').addEventListener('click',()=>openPlaylistModal('Heavy Rotation',hotAlbums.map(h=>h.album),'🔥'));
+      if(hotAlbums.length>1)hrHdr.querySelector('#hrTitle').addEventListener('click',()=>openCarouselSeeAllModal('heavy-rotation','Heavy Rotation',hotAlbums.map(h=>h.album),'🔥'));
       
       const carousel = document.createElement('div');
       carousel.className = 'heavy-rot-carousel';
@@ -2746,9 +3004,9 @@ function renderHomeDashboard(panel){
       lrSection.className = 'library-radio-container';
       // PHASE 6B: clickable header
       const lrHdr=document.createElement('div');lrHdr.className='car-section-hdr';
-      lrHdr.innerHTML=`<span class="car-section-title" id="lrTitle"><span style="font-size:18px">📻</span>Library Radio<span class="car-see-all">See All ›</span></span>`;
+      lrHdr.innerHTML=`<span class="car-section-title" id="lrTitle"><span style="font-size:18px">📻</span>Library Radio${radioAlbums.length>1?'<span class="car-see-all">See All ›</span>':''}</span>`;
       lrSection.appendChild(lrHdr);
-      lrHdr.querySelector('#lrTitle').addEventListener('click',()=>openPlaylistModal('Library Radio',radioAlbums.map(r=>r.album),'📻'));
+      if(radioAlbums.length>1)lrHdr.querySelector('#lrTitle').addEventListener('click',()=>openCarouselSeeAllModal('library-radio','Library Radio',radioAlbums.map(r=>r.album),'📻'));
       
       const carousel = document.createElement('div');
       carousel.className = 'library-radio-carousel';
@@ -2835,9 +3093,9 @@ function renderHomeDashboard(panel){
   if(newAlbums.length&&HomeLayout.get('new-in-library')){
     // PHASE 6B: shuffle, show 20
     const displayNew=shuffleArray(newAlbums).slice(0,20);
-    const newHdr=`<div class="car-section-hdr"><span class="car-section-title" id="newInLibTitle">📥 New in Library<span class="car-see-all">See All ›</span></span><span class="car-section-sub">${newAlbums.length} in 30 days</span></div>`;
+    const newHdr=`<div class="car-section-hdr"><span class="car-section-title" id="newInLibTitle">📥 New in Library${newAlbums.length>1?'<span class="car-see-all">See All ›</span>':''}</span><span class="car-section-sub">${newAlbums.length} in 30 days</span></div>`;
     newSection.innerHTML=`${newHdr}<div class="carousel-wrap"><div class="carousel-track">${displayNew.map(a=>{const daysAgo=Math.floor((Date.now()-new Date(a._added_at).getTime())/86400000);return _carCard(a,daysAgo===0?'Today':daysAgo===1?'Yesterday':`${daysAgo}d ago`);}).join('')}</div></div>`;
-    newSection.querySelector('#newInLibTitle').addEventListener('click',()=>openPlaylistModal('New in Library',newAlbums,'📥'));
+    if(newAlbums.length>1)newSection.querySelector('#newInLibTitle').addEventListener('click',()=>openCarouselSeeAllModal('new-in-library','New in Library',newAlbums,'📥'));
     _attachCarouselClicks(newSection);
     panel.appendChild(newSection);
   }
@@ -2848,9 +3106,9 @@ function renderHomeDashboard(panel){
     // PHASE 6B: shuffle, show 20
     const displayRediscover=shuffleArray(rediscover).slice(0,20);
     const redSection=document.createElement('div');redSection.className='dash-section';
-    redSection.innerHTML=`<div class="car-section-hdr"><span class="car-section-title" id="rediscoverTitle">🕰️ Rediscover<span class="car-see-all">See All ›</span></span><span class="car-section-sub">${rediscover.length} albums waiting</span></div>
+    redSection.innerHTML=`<div class="car-section-hdr"><span class="car-section-title" id="rediscoverTitle">🕰️ Rediscover${rediscover.length>1?'<span class="car-see-all">See All ›</span>':''}</span><span class="car-section-sub">${rediscover.length} albums waiting</span></div>
       <div class="carousel-wrap"><div class="carousel-track">${displayRediscover.map(a=>{const lh=hm.get(a.id);const days=Math.round((now-lh)/86400000);const badge=days>365?`${Math.round(days/365)}yr ago`:`${days}d ago`;return _carCard(a,badge);}).join('')}</div></div>`;
-    redSection.querySelector('#rediscoverTitle').addEventListener('click',()=>openPlaylistModal('Rediscover',rediscover,'🕰️'));
+    if(rediscover.length>1)redSection.querySelector('#rediscoverTitle').addEventListener('click',()=>openCarouselSeeAllModal('rediscover','Rediscover',rediscover,'🕰️'));
     _attachCarouselClicks(redSection);
     panel.appendChild(redSection);
   }
@@ -2864,9 +3122,9 @@ function renderHomeDashboard(panel){
     const today=new Date();
     const fmt=today.toLocaleDateString('en-US',{month:'long',day:'numeric'});
     const otdHdr=document.createElement('div');otdHdr.className='car-section-hdr';
-    otdHdr.innerHTML=`<span class="car-section-title" id="otdTitle">📅 On This Day<span class="car-see-all">See All ›</span></span><span class="car-section-sub">${fmt} · ${otdAlbums.length} release${otdAlbums.length>1?'s':''}</span>`;
+    otdHdr.innerHTML=`<span class="car-section-title" id="otdTitle">📅 On This Day${otdAlbums.length>1?'<span class="car-see-all">See All ›</span>':''}</span><span class="car-section-sub">${fmt} · ${otdAlbums.length} release${otdAlbums.length>1?'s':''}</span>`;
     otdSection.appendChild(otdHdr);
-    otdHdr.querySelector('#otdTitle').addEventListener('click',()=>openPlaylistModal('On This Day',otdAlbums,'📅'));
+    if(otdAlbums.length>1)otdHdr.querySelector('#otdTitle').addEventListener('click',()=>openCarouselSeeAllModal('on-this-day','On This Day',otdAlbums,'📅'));
     const track=document.createElement('div');track.className='carousel-wrap';
     const yr=today.getFullYear();
     track.innerHTML=`<div class="carousel-track">${shuffleArray(otdAlbums).map(a=>{
@@ -2927,9 +3185,9 @@ function renderHomeDashboard(panel){
     if(!bypAlbums.length)return;
     const sec=document.createElement('div');sec.className='dash-section';
     const hdr=document.createElement('div');hdr.className='car-section-hdr';
-    hdr.innerHTML=`<span class="car-section-title" id="bypTitle">🎵 Because You Played<span class="car-see-all">See All ›</span></span><span class="car-section-sub">${esc(refName)}</span>`;
+    hdr.innerHTML=`<span class="car-section-title" id="bypTitle">🎵 Because You Played${bypAlbums.length>1?'<span class="car-see-all">See All ›</span>':''}</span><span class="car-section-sub">${esc(refName)}</span>`;
     sec.appendChild(hdr);
-    hdr.querySelector('#bypTitle').addEventListener('click',()=>openPlaylistModal('Because You Played',bypAlbums,'🎵'));
+    if(bypAlbums.length>1)hdr.querySelector('#bypTitle').addEventListener('click',()=>openCarouselSeeAllModal('because-you-played','Because You Played',bypAlbums,'🎵',refName));
     const wrap=document.createElement('div');wrap.className='carousel-wrap';
     wrap.innerHTML=`<div class="carousel-track">${bypAlbums.map(a=>_carCard(a,null)).join('')}</div>`;
     sec.appendChild(wrap);
@@ -2946,9 +3204,9 @@ function renderHomeDashboard(panel){
     const display=saAlbums.slice(0,10);
     const sec=document.createElement('div');sec.className='dash-section';
     const hdr=document.createElement('div');hdr.className='car-section-hdr';
-    hdr.innerHTML=`<span class="car-section-title" id="saTitle">🎨 More by ${esc(artistName)}<span class="car-see-all">See All ›</span></span><span class="car-section-sub">${saAlbums.length} unheard</span>`;
+    hdr.innerHTML=`<span class="car-section-title" id="saTitle">🎨 More by ${esc(artistName)}${saAlbums.length>1?'<span class="car-see-all">See All ›</span>':''}</span><span class="car-section-sub">${saAlbums.length} unheard</span>`;
     sec.appendChild(hdr);
-    hdr.querySelector('#saTitle').addEventListener('click',()=>openPlaylistModal('More by '+artistName,saAlbums,'🎨'));
+    if(saAlbums.length>1)hdr.querySelector('#saTitle').addEventListener('click',()=>openCarouselSeeAllModal('same-artist','More by '+artistName,saAlbums,'🎨'));
     const wrap=document.createElement('div');wrap.className='carousel-wrap';
     wrap.innerHTML=`<div class="carousel-track">${display.map(a=>_carCard(a,releaseYear(a)||null)).join('')}</div>`;
     sec.appendChild(wrap);
@@ -2966,9 +3224,9 @@ function renderHomeDashboard(panel){
     const lastYear=now.getFullYear()-1;
     const sec=document.createElement('div');sec.className='dash-section';
     const hdr=document.createElement('div');hdr.className='car-section-hdr';
-    hdr.innerHTML=`<span class="car-section-title" id="atlyTitle">📅 ${monthName} Last Year<span class="car-see-all">See All ›</span></span><span class="car-section-sub">Added in ${monthName} ${lastYear}</span>`;
+    hdr.innerHTML=`<span class="car-section-title" id="atlyTitle">📅 ${monthName} Last Year${atly.length>1?'<span class="car-see-all">See All ›</span>':''}</span><span class="car-section-sub">Added in ${monthName} ${lastYear}</span>`;
     sec.appendChild(hdr);
-    hdr.querySelector('#atlyTitle').addEventListener('click',()=>openPlaylistModal(`${monthName} ${lastYear}`,atly,'📅'));
+    if(atly.length>1)hdr.querySelector('#atlyTitle').addEventListener('click',()=>openCarouselSeeAllModal('added-last-year',`${monthName} ${lastYear}`,atly,'📅'));
     const wrap=document.createElement('div');wrap.className='carousel-wrap';
     wrap.innerHTML=`<div class="carousel-track">${atly.map(a=>_carCard(a,lastYear)).join('')}</div>`;
     sec.appendChild(wrap);
@@ -2981,10 +3239,12 @@ function renderHomeDashboard(panel){
     if(!HomeLayout.get('decade-roulette'))return;
     const decades=loadDecadeRoulette();
     if(!decades.length)return;
+    const allDecadeAlbums=decades.flatMap(({decade,albums})=>albums.map(a=>({...a,_decadeBadge:decade})));
     const sec=document.createElement('div');sec.className='dash-section';
     const hdr=document.createElement('div');hdr.className='car-section-hdr';
-    hdr.innerHTML=`<span class="car-section-title">🔀 Decade Roulette</span><span class="car-section-sub">${decades.length} decades</span>`;
+    hdr.innerHTML=`<span class="car-section-title" id="drTitle">🔀 Decade Roulette${allDecadeAlbums.length>1?'<span class="car-see-all">See All ›</span>':''}</span><span class="car-section-sub">${decades.length} decades</span>`;
     sec.appendChild(hdr);
+    if(allDecadeAlbums.length>1)hdr.querySelector('#drTitle').addEventListener('click',()=>openCarouselSeeAllModal('decade-roulette','Decade Roulette',allDecadeAlbums,'🔀'));
     const wrap=document.createElement('div');wrap.className='carousel-wrap';
     const cards=decades.flatMap(({decade,albums})=>
       albums.map(a=>_carCard(a,decade))
@@ -3006,9 +3266,9 @@ function renderHomeDashboard(panel){
     if(!allMissing.length)return;
     const sec=document.createElement('div');sec.className='dash-section';
     const hdr=document.createElement('div');hdr.className='car-section-hdr';
-    hdr.innerHTML=`<span class="car-section-title" id="aheTitle">🎯 Almost There<span class="car-see-all">See All ›</span></span><span class="car-section-sub">Complete these artists</span>`;
+    hdr.innerHTML=`<span class="car-section-title" id="aheTitle">🎯 Almost There${allMissing.length>1?'<span class="car-see-all">See All ›</span>':''}</span><span class="car-section-sub">Complete these artists</span>`;
     sec.appendChild(hdr);
-    hdr.querySelector('#aheTitle').addEventListener('click',()=>openPlaylistModal('Almost There',allMissing,'🎯'));
+    if(allMissing.length>1)hdr.querySelector('#aheTitle').addEventListener('click',()=>openCarouselSeeAllModal('almost-there','Almost There',allMissing,'🎯'));
     const wrap=document.createElement('div');wrap.className='carousel-wrap';
     wrap.innerHTML=`<div class="carousel-track">${allMissing.map(a=>_carCard(a,a._aheBadge)).join('')}</div>`;
     sec.appendChild(wrap);
@@ -3040,9 +3300,9 @@ function renderHomeDashboard(panel){
       const sec=document.createElement('div');sec.className='dash-section';
       const titleId='plCar_'+plId;
       const hdr=document.createElement('div');hdr.className='car-section-hdr';
-      hdr.innerHTML=`<span class="car-section-title" id="${titleId}">🎵 ${esc(plName)}<span class="car-see-all">See All ›</span></span><span class="car-section-sub">${albums.length} albums</span>`;
+      hdr.innerHTML=`<span class="car-section-title" id="${titleId}">🎵 ${esc(plName)}${albums.length>1?'<span class="car-see-all">See All ›</span>':''}</span><span class="car-section-sub">${albums.length} albums</span>`;
       sec.appendChild(hdr);
-      hdr.querySelector('#'+titleId).addEventListener('click',()=>openPlaylistModal(plName,albums,'🎵'));
+      if(albums.length>1)hdr.querySelector('#'+titleId).addEventListener('click',()=>openCarouselSeeAllModal('playlist-'+plId,plName,albums,'🎵'));
       const wrap=document.createElement('div');wrap.className='carousel-wrap';
       wrap.innerHTML=`<div class="carousel-track">${display.map(a=>_carCard(a,releaseYear(a)||null)).join('')}</div>`;
       sec.appendChild(wrap);
