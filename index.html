@@ -790,7 +790,7 @@ const DELAY_BROWSER_MS = 5000;
 const HISTORY_MAX_AGE_DAYS = 30;
 const BLOCKLIST_KW = ['instrumental','remix','edit','live','reprise','version'];
 const DB_NAME = 'albumdiscovery_db';
-const DB_VERSION = 7; // Phase 8: added homeLayout store
+const DB_VERSION = 8; // Phase 9 QID-009: added playlists_cache, playlist_tracks_cache stores
 
 const GENRE_CLUSTERS = [
   {id:'electronic',label:'Electronic', icon:'⚡',kw:['electronic','techno','house','ambient','drum and bass','dnb','dubstep','trance','garage','jungle','breakbeat','idm','glitch','downtempo','synthwave','darkwave','edm','electronica','trip-hop','synth','rave','acid','chillout','dub','eurodance','electro','bass music','vaporwave','industrial','noise','minimal techno','tech house','deep house','progressive house','elektronisch','tanzmusik','elektronische musik']},
@@ -820,6 +820,8 @@ const DB=(()=>{
       if(!db.objectStoreNames.contains('genre_index'))db.createObjectStore('genre_index');      // PHASE 2
       if(!db.objectStoreNames.contains('listen_later'))db.createObjectStore('listen_later',{keyPath:'id'}); // PHASE 4
       if(!db.objectStoreNames.contains('homeLayout'))  db.createObjectStore('homeLayout'); // Phase 8 QID-004
+      if(!db.objectStoreNames.contains('playlists_cache'))     db.createObjectStore('playlists_cache'); // Phase 9 QID-009
+      if(!db.objectStoreNames.contains('playlist_tracks_cache'))db.createObjectStore('playlist_tracks_cache'); // Phase 9 QID-009
       // Phase 7B migration: remove deprecated stores
       if(db.objectStoreNames.contains('lastfm_cache'))   db.deleteObjectStore('lastfm_cache');
       if(db.objectStoreNames.contains('radar_cache'))    db.deleteObjectStore('radar_cache');
@@ -923,6 +925,41 @@ function slimAlbum(a){return{id:a.id,name:a.name,release_date:a.release_date,_ad
 function getArt(a,sz){const imgs=a.images||[];if(!imgs.length)return null;if(sz==='lg')return imgs[0]?.url;if(sz==='sm')return imgs[imgs.length-1]?.url;return imgs[1]?.url||imgs[0]?.url;}
 
 // ═══════════════════════════════════════════════════════════════════
+// SECTION 4B — PLAYLIST CACHE (QID-009)
+// ═══════════════════════════════════════════════════════════════════
+const PLAYLIST_CACHE_TTL=24*60*60*1000; // 24h
+const PlaylistCache={
+  async getPlaylists(){
+    try{const db=await DB.getDb();const r=await db.get('playlists_cache','main');if(!r)return null;if(Date.now()-r.cachedAt>PLAYLIST_CACHE_TTL)return null;return r.playlists;}
+    catch(e){return null;}
+  },
+  async savePlaylists(playlists){
+    try{const db=await DB.getDb();await db.put('playlists_cache',{cachedAt:Date.now(),playlists},'main');}
+    catch(e){}
+  },
+  async getAlbums(playlistId){
+    try{const db=await DB.getDb();const r=await db.get('playlist_tracks_cache',playlistId);if(!r)return null;if(Date.now()-r.cachedAt>PLAYLIST_CACHE_TTL)return null;return r.albums;}
+    catch(e){return null;}
+  },
+  async saveAlbums(playlistId,albums){
+    try{const db=await DB.getDb();await db.put('playlist_tracks_cache',{cachedAt:Date.now(),albums},playlistId);}
+    catch(e){}
+  },
+  async getSelectedIds(){
+    try{const db=await DB.getDb();const r=await db.get('settings','prefs');return r?.selected_playlists||[];}
+    catch(e){return[];}
+  },
+  async saveSelectedIds(ids){
+    try{
+      const db=await DB.getDb();
+      const r=await db.get('settings','prefs')||{};
+      r.selected_playlists=ids;
+      await db.put('settings',r,'prefs');
+    }catch(e){}
+  },
+};
+
+// ═══════════════════════════════════════════════════════════════════
 // SECTION 5 — AUTH MODULE (PKCE)
 // ═══════════════════════════════════════════════════════════════════
 const Auth={
@@ -967,6 +1004,55 @@ const SpotifyAPI={
   async addToQueue(uri){const tok=await Auth.getToken();const res=await fetch(`https://api.spotify.com/v1/me/player/queue?uri=${encodeURIComponent(uri)}`,{method:'POST',headers:{Authorization:'Bearer '+tok}});if(res.status===404)throw new Error('No active Spotify device. Start playing something first.');if(res.status===429)throw new Error('Rate limited. Enable Browser client mode for safer queuing.');if(!res.ok&&res.status!==204)throw new Error(`Queue error ${res.status}`);},
   async getCurrentTrack(){try{const d=await this.get('https://api.spotify.com/v1/me/player');if(!d||!d.item)return null;return{name:d.item.name,artist:d.item.artists?.map(a=>a.name).join(', ')||'',artUrl:d.item.album?.images?.[2]?.url||null,isPlaying:d.is_playing};}catch(e){return null;}},
   async getProfile(){try{return await this.get('https://api.spotify.com/v1/me');}catch(e){return null;}},
+  // ── QID-009: Playlist API (Feb 2026: /items endpoint, owner filter) ──
+  async fetchUserPlaylists(){
+    // GET /me/playlists — still available Feb 2026
+    // Filter to owner.id === current user to ensure /items returns tracks
+    const me=await this.getProfile();
+    const userId=me?.id||null;
+    const playlists=[];
+    let url='https://api.spotify.com/v1/me/playlists?limit=50';
+    while(url){
+      const d=await this.get(url);
+      for(const pl of(d.items||[])){
+        if(userId&&pl.owner?.id!==userId)continue; // only own playlists
+        playlists.push({id:pl.id,name:pl.name,imageUrl:pl.images?.[0]?.url||null,trackCount:pl.tracks?.total||0});
+      }
+      url=d.next||null;
+    }
+    return{playlists,userId};
+  },
+  async fetchPlaylistItems(playlistId){
+    // GET /playlists/{id}/items — Feb 2026 new endpoint (replaces /tracks)
+    // Response: items.items[].item.album — extract unique album objects
+    const albumMap=new Map();
+    let url=`https://api.spotify.com/v1/playlists/${encodeURIComponent(playlistId)}/items?limit=50`;
+    while(url){
+      const d=await this.get(url);
+      for(const entry of(d.items||[])){
+        const track=entry.item; // Feb 2026: renamed from .track → .item
+        if(!track||track.type!=='track')continue;
+        const album=track.album;
+        if(!album?.id)continue;
+        if(!albumMap.has(album.id)){
+          // Slim the album object to match app format
+          albumMap.set(album.id,{
+            id:album.id,
+            name:album.name,
+            release_date:album.release_date||'',
+            artists:(album.artists||[]).map(ar=>({id:ar.id,name:ar.name})),
+            images:(album.images||[]).slice(0,3),
+            tracks:{total:album.total_tracks||0,items:[],next:null},
+            _genres:[],
+            _inLibrary:false,
+            _added_at:null,
+          });
+        }
+      }
+      url=d.next||null;
+    }
+    return[...albumMap.values()];
+  },
 };
 
 // ── MusicBrainz Genre Enrichment (Phase 8) ───────────────────────
@@ -1735,6 +1821,95 @@ async function renderProfileTab(panel){
         _toast(e.target.checked?'Carousel aktiviert':'Carousel ausgeblendet');
       });
     });
+  })();
+
+  // ── QID-009: Playlist Carousels ───────────────────────────────
+  (async()=>{
+    const plDiv=document.createElement('div');plDiv.className='p4-section';
+    plDiv.innerHTML=`<div class="p4-section-title">Playlist Carousels</div>
+      <div class="card" style="overflow:hidden" id="plCardsWrap">
+        <div class="settings-row" style="justify-content:center;padding:16px">
+          <button class="btn btn-primary btn-sm" id="p4LoadPlaylists">Playlists laden</button>
+        </div>
+      </div>`;
+    panel.appendChild(plDiv);
+
+    const wrap=plDiv.querySelector('#plCardsWrap');
+
+    async function renderPlaylistPicker(forceRefresh){
+      let playlists=forceRefresh?null:await PlaylistCache.getPlaylists();
+      const loadBtn=wrap.querySelector('#p4LoadPlaylists');
+      if(loadBtn){loadBtn.disabled=true;loadBtn.textContent='Lädt…';}
+      if(!playlists){
+        try{
+          const res=await SpotifyAPI.fetchUserPlaylists();
+          playlists=res.playlists;
+          await PlaylistCache.savePlaylists(playlists);
+        }catch(e){
+          _toast('Playlists konnten nicht geladen werden: '+e.message,true);
+          if(loadBtn){loadBtn.disabled=false;loadBtn.textContent='Playlists laden';}
+          return;
+        }
+      }
+      const selectedIds=await PlaylistCache.getSelectedIds();
+      // Rebuild wrap content
+      wrap.innerHTML='';
+      if(!playlists.length){
+        wrap.innerHTML=`<div class="settings-row"><div class="settings-row-sub" style="padding:14px">Keine eigenen Playlists gefunden.</div></div>`;
+        return;
+      }
+      // Counter row
+      const countRow=document.createElement('div');
+      countRow.className='settings-row';countRow.style.cssText='padding:10px 16px;justify-content:space-between';
+      countRow.innerHTML=`<span style="font-size:12px;color:var(--text-mid)" id="plSelCount">${selectedIds.length} / 5 ausgewählt</span><button class="btn btn-sm" id="p4ReloadPl" style="font-size:11px">↻ Neu laden</button>`;
+      wrap.appendChild(countRow);
+
+      for(const pl of playlists){
+        const checked=selectedIds.includes(pl.id);
+        const disabled=!checked&&selectedIds.length>=5;
+        const row=document.createElement('label');
+        row.className='settings-row';row.style.cssText='gap:12px;cursor:pointer;min-height:52px';
+        row.innerHTML=`
+          ${pl.imageUrl?`<img src="${esc(pl.imageUrl)}" alt="" style="width:40px;height:40px;border-radius:6px;object-fit:cover;flex-shrink:0">`:`<div style="width:40px;height:40px;border-radius:6px;background:var(--surface3);display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0">🎵</div>`}
+          <div style="flex:1;min-width:0"><div class="settings-row-label" style="font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(pl.name)}</div><div class="settings-row-sub">${pl.trackCount} Tracks</div></div>
+          <input type="checkbox" data-pl-id="${esc(pl.id)}"${checked?' checked':''}${disabled?' disabled':''} style="width:18px;height:18px;flex-shrink:0;accent-color:var(--blue)">`;
+        wrap.appendChild(row);
+      }
+
+      // Events
+      wrap.querySelectorAll('input[data-pl-id]').forEach(cb=>{
+        cb.addEventListener('change',async()=>{
+          const allChecked=[...wrap.querySelectorAll('input[data-pl-id]:checked')].map(x=>x.dataset.plId);
+          await PlaylistCache.saveSelectedIds(allChecked);
+          // Update HomeLayout for each playlist
+          for(const pl of playlists){
+            const isSelected=allChecked.includes(pl.id);
+            const entry=HomeLayout._cache?.find(x=>x.id==='playlist-'+pl.id);
+            if(!entry&&isSelected){
+              HomeLayout._cache=HomeLayout._cache||[];
+              HomeLayout._cache.push({id:'playlist-'+pl.id,label:'🎵 '+pl.name,visible:true});
+            }else if(entry){entry.visible=isSelected;}
+          }
+          try{const db=await DB.getDb();await db.put('homeLayout',HomeLayout._cache||[],'config');}catch(e){}
+          // Update disabled state
+          const newSelected=[...wrap.querySelectorAll('input[data-pl-id]:checked')].map(x=>x.dataset.plId);
+          wrap.querySelectorAll('input[data-pl-id]').forEach(x=>{
+            if(!x.checked)x.disabled=newSelected.length>=5;
+          });
+          const cnt=wrap.querySelector('#plSelCount');if(cnt)cnt.textContent=`${newSelected.length} / 5 ausgewählt`;
+          _toast(cb.checked?'Playlist hinzugefügt':'Playlist entfernt');
+        });
+      });
+      wrap.querySelector('#p4ReloadPl')?.addEventListener('click',()=>renderPlaylistPicker(true));
+    }
+
+    // Check if playlists already cached → auto-render
+    const cached=await PlaylistCache.getPlaylists();
+    if(cached){
+      await renderPlaylistPicker(false);
+    } else {
+      wrap.querySelector('#p4LoadPlaylists')?.addEventListener('click',()=>renderPlaylistPicker(true));
+    }
   })();
 
   // ── History management ────────────────────────────────────────
@@ -2780,6 +2955,38 @@ function renderHomeDashboard(panel){
 
   // ── Top Albums (async, renders itself)
   if(HomeLayout.get('top-albums'))renderTopAlbumsSection(panel);
+
+  // ── PHASE 9 QID-009: User Playlist Carousels (async)
+  (async()=>{
+    const selectedIds=await PlaylistCache.getSelectedIds();
+    if(!selectedIds.length)return;
+    for(const plId of selectedIds.slice(0,5)){
+      if(!HomeLayout.get('playlist-'+plId))continue;
+      // Try cache first
+      let albums=await PlaylistCache.getAlbums(plId);
+      if(!albums){
+        try{albums=await SpotifyAPI.fetchPlaylistItems(plId);await PlaylistCache.saveAlbums(plId,albums);}
+        catch(e){continue;}
+      }
+      if(!albums.length)continue;
+      // Get playlist name from playlists cache
+      const allPl=await PlaylistCache.getPlaylists()||[];
+      const plMeta=allPl.find(p=>p.id===plId);
+      const plName=plMeta?.name||'Playlist';
+      const display=shuffleArray(albums).slice(0,10);
+      const sec=document.createElement('div');sec.className='dash-section';
+      const titleId='plCar_'+plId;
+      const hdr=document.createElement('div');hdr.className='car-section-hdr';
+      hdr.innerHTML=`<span class="car-section-title" id="${titleId}">🎵 ${esc(plName)}<span class="car-see-all">See All ›</span></span><span class="car-section-sub">${albums.length} albums</span>`;
+      sec.appendChild(hdr);
+      hdr.querySelector('#'+titleId).addEventListener('click',()=>openPlaylistModal(plName,albums,'🎵'));
+      const wrap=document.createElement('div');wrap.className='carousel-wrap';
+      wrap.innerHTML=`<div class="carousel-track">${display.map(a=>_carCard(a,releaseYear(a)||null)).join('')}</div>`;
+      sec.appendChild(wrap);
+      _attachCarouselClicks(sec);
+      panel.appendChild(sec);
+    }
+  })();
 }
 
 // ── Library state
