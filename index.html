@@ -346,6 +346,9 @@
     @keyframes burnTextSlide{0%{opacity:0;transform:translateX(-50%) translateY(10px)}15%{opacity:1;transform:translateX(-50%) translateY(0)}80%{opacity:1;transform:translateX(-50%) translateY(0)}100%{opacity:0;transform:translateX(-50%) translateY(-8px)}}
     .burn-float-emoji{position:fixed;font-size:36px;z-index:1000;pointer-events:none;animation:burnFloat 1.1s ease-out forwards}
     .burn-toast-text{position:fixed;background:rgba(217,83,74,.18);border:1px solid rgba(217,83,74,.4);color:#f87171;padding:8px 18px;border-radius:var(--r-f);font-size:13px;font-weight:600;white-space:nowrap;z-index:999;pointer-events:none;backdrop-filter:blur(8px);animation:burnTextSlide 2.2s ease forwards}
+    /* Phase 12 QID-026: Home Refresh Button */
+    @keyframes spin{to{transform:rotate(360deg)}}
+    #homeRefreshBtn:disabled{animation:spin .8s linear infinite;opacity:.6}
     .load-center{display:flex;flex-direction:column;align-items:center;gap:14px;padding:40px 20px;text-align:center}
     .load-center p{font-size:13px;color:var(--text-dim)}
     /* Placeholder tabs */
@@ -744,8 +747,8 @@
       position:sticky;top:-16px;z-index:30;
       background:rgba(30,30,30,.97);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);
       border-bottom:1px solid var(--border)}
-    .brw-tab{flex:0 0 auto;border:1px solid var(--border);border-radius:var(--r-f);padding:8px 14px;
-      background:none;font-size:12px;font-weight:500;color:var(--text-dim);cursor:pointer;
+    .brw-tab{flex:0 0 auto;border:1px solid var(--border);border-radius:var(--r-f);padding:8px 10px;
+      background:none;font-size:11px;font-weight:500;color:var(--text-dim);cursor:pointer;
       font-family:var(--font-b);transition:all .12s;white-space:nowrap;min-height:36px}
     .brw-tab.active{border-color:var(--blue);color:var(--blue);background:var(--blue-glow)}
     .brw-hdr-right{margin-left:auto;flex-shrink:0}
@@ -1148,22 +1151,27 @@ const TopAlbumsCache={
   },
 };
 
+// QID-026 Phase 12: TopArtistsCache — 0 API-Calls, lokal aus History + allAlbums
 const TopArtistsCache={
-  async get(timeRange){
-    try{const db=await DB.getDb();const r=await db.get('top_artists',timeRange);if(!r)return null;if(Date.now()-r.updatedAt>TOP_ARTISTS_TTL)return null;return r.artists;}catch(e){return null;}
+  // timeRange: 'short_term' (4w) | 'medium_term' (6m) | 'long_term' (all)
+  getLocal(timeRange){
+    const hm=HistoryProvider.getMap();
+    const now=Date.now();
+    const cutoff=timeRange==='short_term'?now-28*86400000:timeRange==='medium_term'?now-180*86400000:0;
+    // Count plays per artist from history
+    const artistCount=new Map();
+    for(const[id,queuedAt]of hm){
+      if(cutoff&&queuedAt<cutoff)continue;
+      const a=allAlbums.find(x=>x.id===id);if(!a)continue;
+      for(const ar of(a.artists||[])){
+        const prev=artistCount.get(ar.id)||{id:ar.id,name:ar.name,genres:ar._genres||[],count:0};
+        prev.count++;
+        artistCount.set(ar.id,prev);
+      }
+    }
+    return[...artistCount.values()].sort((a,b)=>b.count-a.count).slice(0,20);
   },
-  async save(timeRange,artists){
-    try{const db=await DB.getDb();await db.put('top_artists',{timeRange,artists,updatedAt:Date.now()},timeRange);}catch(e){}
-  },
-  async fetchAndCache(timeRange){
-    const cached=await this.get(timeRange);if(cached)return cached;
-    try{
-      const data=await SpotifyAPI.get(`https://api.spotify.com/v1/me/top/artists?limit=20&time_range=${timeRange}`);
-      const artists=(data.items||[]).map(ar=>({id:ar.id,name:ar.name,genres:ar.genres||[],images:ar.images||[],popularity:ar.popularity||0}));
-      await this.save(timeRange,artists);
-      return artists;
-    }catch(e){return[];}
-  },
+  async fetchAndCache(timeRange){return this.getLocal(timeRange);},
 };
 
 // ═══════════════════════════════════════════════════════════════════
@@ -1368,12 +1376,22 @@ function applyFilters(albums){
   const ri=state.filters.avoidRecent?HistoryProvider.getRecentIds():null;
   const hm=(state.filters.queueHistory&&state.filters.queueHistory!=='any')?HistoryProvider.getMap():null;
   const now=Date.now();
-  // Phase 7B: only 'all' and 'library' remain as source options
   let pool=albums;
   const rsrc=state.filters.radarSource||'all';
-  if(rsrc==='library'){
-    pool=albums.filter(a=>a._inLibrary!==false);
+  if(rsrc==='library'){pool=albums.filter(a=>a._inLibrary!==false);}
+
+  // QID-008: Most Queued filter — restrict pool to top N by play count
+  const mq=state.filters.mostQueued||'off';
+  if(mq!=='off'){
+    const fullHm=HistoryProvider.getMap();
+    const cutoff=mq==='7d'?now-7*86400000:mq==='30d'?now-30*86400000:0;
+    const counts=new Map();
+    for(const[id,ts]of fullHm){if(!cutoff||ts>cutoff)counts.set(id,(counts.get(id)||0)+1);}
+    const sorted=[...counts.entries()].sort((a,b)=>b[1]-a[1]).map(([id])=>id);
+    const topIds=new Set(sorted.slice(0,50));
+    pool=pool.filter(a=>topIds.has(a.id));
   }
+
   return pool.filter(a=>{
     const d=decadeOf(releaseYear(a));
     if(state.filters.decades.length>0&&!state.filters.decades.includes(d))return false;
@@ -1469,19 +1487,19 @@ const state={
   coverageOpen:false,filterOpen:false,filterSections:{decade:false,genre:false,added:false,content:false,duration:false,source:false},
   expandedClusters:new Set(),
   libFilter:'',albumCount:1,browserMode:false,
-  filters:{decades:[],decadesExcl:[],excludeKW:false,minDur:0,maxDur:200,genres:[],clusters:[],minAgeMonths:0,avoidRecent:true,weightUnheard:true,queueHistory:'any',radarSource:'all',pickerSource:'library'},
+  filters:{decades:[],decadesExcl:[],excludeKW:false,minDur:0,maxDur:200,genres:[],clusters:[],minAgeMonths:0,avoidRecent:true,weightUnheard:true,queueHistory:'any',radarSource:'all',pickerSource:'library',mostQueued:'off'},
   // QID-017: Enriched Library
   useEnrichedLibrary:false,
   enrichedSource:'all', // 'all' | 'library' | 'playlists'
   // QID-013: Burn Mode
   burnMode:false,
   // QID-011/012: See All modal state
-  _badgeToggles:{heavyRotation:true,newAlbum:true,trending:true,favorite:true,hiddenGem:true,justAdded:true},
+  _badgeToggles:{heavyRotation:true,newAlbum:true,trending:true,favorite:true,hiddenGem:true,justAdded:true,repeat:true,playlist:true},
   _samFilters:{},
 };
 
-function saveSession(){try{sessionStorage.setItem('ad_s',JSON.stringify({f:state.filters,ac:state.albumCount,as:state.albumSort,ap:state.activePreset,fo:state.filterOpen,fs:state.filterSections,bm:state.browserMode,uel:state.useEnrichedLibrary,es:state.enrichedSource,burn:state.burnMode}));}catch(e){}}
-function restoreSession(){try{const r=sessionStorage.getItem('ad_s');if(!r)return;const s=JSON.parse(r);if(s.f)Object.assign(state.filters,s.f);if(s.ac)state.albumCount=s.ac;if(s.as)state.albumSort=s.as;if(s.ap!==undefined)state.activePreset=s.ap;if(s.fo!==undefined)state.filterOpen=s.fo;if(s.fs)Object.assign(state.filterSections,s.fs);if(s.bm!==undefined)state.browserMode=s.bm;if(s.uel!==undefined)state.useEnrichedLibrary=s.uel;if(s.es)state.enrichedSource=s.es;if(s.burn!==undefined)state.burnMode=s.burn;}catch(e){}}
+function saveSession(){try{sessionStorage.setItem('ad_s',JSON.stringify({f:state.filters,ac:state.albumCount,as:state.albumSort,ap:state.activePreset,fo:state.filterOpen,fs:state.filterSections,bm:state.browserMode,uel:state.useEnrichedLibrary,es:state.enrichedSource,burn:state.burnMode,mq:state.filters.mostQueued}));}catch(e){}}
+function restoreSession(){try{const r=sessionStorage.getItem('ad_s');if(!r)return;const s=JSON.parse(r);if(s.f)Object.assign(state.filters,s.f);if(s.ac)state.albumCount=s.ac;if(s.as)state.albumSort=s.as;if(s.ap!==undefined)state.activePreset=s.ap;if(s.fo!==undefined)state.filterOpen=s.fo;if(s.fs)Object.assign(state.filterSections,s.fs);if(s.bm!==undefined)state.browserMode=s.bm;if(s.uel!==undefined)state.useEnrichedLibrary=s.uel;if(s.es)state.enrichedSource=s.es;if(s.burn!==undefined)state.burnMode=s.burn;if(s.mq)state.filters.mostQueued=s.mq;}catch(e){}}
 
 function applyPreset(name){
   const rst=()=>Object.assign(state.filters,{decades:[],decadesExcl:[],genres:[],clusters:[],excludeKW:false,minAgeMonths:0,avoidRecent:false,weightUnheard:false,minDur:0,maxDur:200,queueHistory:'any'});
@@ -1547,7 +1565,7 @@ function renderOnb(){return`<div id="screen-onb"><div class="onb-icon">🎵</div
 function renderShell(){return`
   <header id="appHdr">
     <div class="logo">Album<span>Discovery</span></div>
-    <div class="hdr-right"><div class="hdr-badge" id="hdrBadge"></div><button class="btn btn-sm" id="syncBtn" style="display:none">↻ Sync</button><button class="btn btn-sm" id="logoutBtn">Logout</button></div>
+    <div class="hdr-right"><div class="hdr-badge" id="hdrBadge"></div><button class="btn btn-sm" id="homeRefreshBtn" style="display:none" title="Refresh Home">🔄</button><button class="btn btn-sm" id="syncBtn" style="display:none">↻ Sync</button><button class="btn btn-sm" id="logoutBtn">Logout</button></div>
   </header>
   <div id="tabContent">
     <div id="tab-home"     class="tab-panel"        data-tab="home"></div>
@@ -1563,7 +1581,7 @@ function renderShell(){return`
   <nav id="tabBar">
     <button class="tab-btn" data-tab="home">    <span class="tab-icon">⌂</span><span>Home</span></button>
     <button class="tab-btn active" data-tab="picker"><span class="tab-icon">🎲</span><span>Picker</span></button>
-    <button class="tab-btn" data-tab="browser"><span class="tab-icon">🔍</span><span>Browser</span></button>
+    <button class="tab-btn" data-tab="browser"><span class="tab-icon">📚</span><span>Library</span></button>
     <button class="tab-btn" data-tab="profile"> <span class="tab-icon">◉</span><span>Profile</span></button>
   </nav>`;}
 
@@ -1571,12 +1589,43 @@ function attachShellEvents(){
   document.querySelectorAll('.tab-btn[data-tab]').forEach(b=>b.addEventListener('click',()=>switchTab(b.dataset.tab)));
   document.getElementById('logoutBtn').addEventListener('click',()=>{if(confirm('Log out? Library cache and history are preserved.'))Auth.logout();});
   document.getElementById('syncBtn').addEventListener('click',()=>handleRefresh());
+  // QID-026: Home Refresh Button
+  document.getElementById('homeRefreshBtn')?.addEventListener('click',async()=>{
+    const btn=document.getElementById('homeRefreshBtn');
+    if(!btn||btn.dataset.refreshing)return;
+    btn.dataset.refreshing='1';btn.textContent='⏳';btn.disabled=true;
+    try{
+      // Re-fetch playlists + playlist albums in background
+      const freshPl=await SpotifyAPI.fetchUserPlaylists();
+      if(freshPl?.length){
+        await PlaylistCache.savePlaylists(freshPl);
+        const selectedIds=await PlaylistCache.getSelectedIds();
+        for(const pid of selectedIds.slice(0,5)){
+          try{
+            await new Promise(r=>setTimeout(r,340));
+            const albs=await SpotifyAPI.fetchPlaylistItems(pid);
+            await PlaylistCache.saveAlbums(pid,albs);
+          }catch(e){console.warn('Refresh playlist failed',pid,e);}
+        }
+      }
+      // Invalidate enriched library so next pick is fresh
+      EnrichedLibrary.invalidate().catch(()=>{});
+      // Re-render Home
+      const panel=document.getElementById('tab-home');
+      if(panel)renderHomeDashboard(panel);
+      _toast('Home refreshed');
+    }catch(e){_toast('Refresh failed: '+e.message,true);}
+    btn.textContent='🔄';btn.disabled=false;delete btn.dataset.refreshing;
+  });
 }
 
 function switchTab(name){
   if(state.activeTab===name)return;state.activeTab=name;
   document.querySelectorAll('.tab-btn').forEach(b=>b.classList.toggle('active',b.dataset.tab===name));
   document.querySelectorAll('.tab-panel').forEach(p=>p.classList.toggle('active',p.dataset.tab===name));
+  // QID-026: Refresh-Button nur auf Home zeigen
+  const refreshBtn=document.getElementById('homeRefreshBtn');
+  if(refreshBtn)refreshBtn.style.display=(name==='home'&&Auth.isLoggedIn()&&allAlbums.length)?'':'none';
   renderActiveTab();
 }
 
@@ -1667,30 +1716,16 @@ function buildFiltersInner(){
       <div class="tgl-row" style="padding-bottom:10px"><div class="tgl-info"><div class="tgl-title">Prefer unheard albums</div><div class="tgl-sub">Weighted: unheard 10×, forgotten 5×, recent 1×</div></div><label class="tgl-sw"><input type="checkbox" id="weightUnheardToggle"${fa.weightUnheard?' checked':''}><span class="tgl-track"></span></label></div>
       <div class="tgl-row"><div class="tgl-info"><div class="tgl-title">Exclude remixes &amp; edits</div><div class="tgl-sub">Filter: ${BLOCKLIST_KW.join(', ')}</div></div><label class="tgl-sw"><input type="checkbox" id="kwFilterToggle"${fa.excludeKW?' checked':''}><span class="tgl-track"></span></label></div>
       <p class="lbl" style="margin-top:14px;margin-bottom:8px">Queue History</p>
-      <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:6px">${qhChips}</div>`),
+      <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:6px">${qhChips}</div>
+      <p class="lbl" style="margin-top:14px;margin-bottom:8px">Most Queued</p>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px">
+        ${[['off','Off'],['7d','7 Days'],['30d','30 Days'],['all','All Time']].map(([v,l])=>`<button class="age-chip${(fa.mostQueued||'off')===v?' active':''}" data-mq="${v}">${l}</button>`).join('')}
+      </div>`),
     mkSub('duration','Duration',state.filterSections.duration,`
       <p style="font-size:11px;color:var(--text-dim);margin-bottom:8px">Min: <b style="color:var(--text)" id="minDurVal">${fa.minDur}</b> min</p>
       <input type="range" id="minDur" min="0" max="200" value="${fa.minDur}" style="margin-bottom:14px">
       <p style="font-size:11px;color:var(--text-dim);margin-bottom:8px">Max: <b style="color:var(--text)" id="maxDurVal">${fa.maxDur}</b> min</p>
       <input type="range" id="maxDur" min="0" max="200" value="${fa.maxDur}">`),
-    mkSub('source','Source',state.filterSections.source||false,(()=>{
-      // Start async load but return placeholder
-      (async()=>{
-        const el=document.querySelector('[data-source-filter]');
-        if(!el)return;
-        const cur=state.filters.radarSource||'all';
-        const sourceOptions=[['all','All Albums'],['library','Library Only']];
-        el.innerHTML=`<div style="display:flex;flex-direction:column;gap:10px">
-          ${sourceOptions.map(([v,l])=>
-            `<label style="display:flex;align-items:center;gap:10px;cursor:pointer">
-              <input type="radio" name="radarSource" value="${v}" ${cur===v?'checked':''} style="accent-color:var(--blue);width:16px;height:16px">
-              <span style="font-size:13px;color:var(--text)">${l}</span>
-            </label>`).join('')}
-        </div>`;
-        el.querySelectorAll('input[name="radarSource"]').forEach(r=>r.addEventListener('change',e=>{state.filters.radarSource=e.target.value;state.activePreset=null;saveSession();}));
-      })();
-      return`<div data-source-filter style="display:flex;flex-direction:column;gap:10px"><div style="color:var(--text-dim);font-size:12px">Loading…</div></div>`;
-    })()),
   ].join('');
 }
 
@@ -1776,6 +1811,12 @@ function attachPickerEvents(panel){
   if(gs)gs.addEventListener('input',()=>{const q=gs.value.trim().toLowerCase();const res=panel.querySelector('#genreResults');if(!res)return;if(!q){res.innerHTML='';return;}const m=allGenres.filter(g=>g.toLowerCase().includes(q)).slice(0,30);res.innerHTML=m.map(g=>`<button class="gsr-chip${fa.genres.includes(g)?' sel':''}" data-genre="${esc(g)}">${esc(g)}</button>`).join('');res.querySelectorAll('.gsr-chip[data-genre]').forEach(b=>b.addEventListener('click',()=>{const g=b.dataset.genre;const i=fa.genres.indexOf(g);if(i>=0)fa.genres.splice(i,1);else fa.genres.push(g);b.classList.toggle('sel',fa.genres.includes(g));state.activePreset=null;saveSession();renderPickerContent();}));});
   panel.querySelectorAll('[data-remove-genre]').forEach(b=>b.addEventListener('click',()=>{fa.genres=fa.genres.filter(g=>g!==b.dataset.removeGenre);state.activePreset=null;saveSession();renderPickerContent();}));
   ['avoidRecentToggle','weightUnheardToggle','kwFilterToggle','browserModeToggle'].forEach(id=>{panel.querySelector('#'+id)?.addEventListener('change',e=>{if(id==='avoidRecentToggle')fa.avoidRecent=e.target.checked;if(id==='weightUnheardToggle')fa.weightUnheard=e.target.checked;if(id==='kwFilterToggle')fa.excludeKW=e.target.checked;if(id==='browserModeToggle')state.browserMode=e.target.checked;state.activePreset=null;saveSession();});});
+  // QID-008: Most Queued chips
+  panel.querySelectorAll('[data-mq]').forEach(b=>b.addEventListener('click',()=>{
+    fa.mostQueued=b.dataset.mq;
+    panel.querySelectorAll('[data-mq]').forEach(x=>x.classList.toggle('active',x.dataset.mq===fa.mostQueued));
+    state.activePreset=null;saveSession();
+  }));
   // QID-013: Burn Mode events
   panel.querySelector('#burnModeToggle')?.addEventListener('change',async e=>{
     state.burnMode=e.target.checked;
@@ -1929,12 +1970,24 @@ async function handleQueue(){
   state.isWorking=true;state.phase='queuing';renderPickerContent();
   const delay=state.browserMode?DELAY_BROWSER_MS:DELAY_DESKTOP_MS;
   try{
-    for(const album of state.selectedAlbums){
+    for(let album of state.selectedAlbums){
       const el=document.getElementById('queueStatus');if(el)el.textContent=`Queueing "${album.name}"…`;
+      // QID-023: Playlist-Alben haben leere tracks.items — on-demand fetch
+      if(!(album.tracks?.items?.length)&&!(album.tracks?.next)){
+        try{
+          if(el)el.textContent=`Loading tracks for "${album.name}"…`;
+          const full=await SpotifyAPI.get(`https://api.spotify.com/v1/albums/${encodeURIComponent(album.id)}`);
+          if(full?.id){
+            // Merge track data into album, cache in enriched_library
+            album={...album,tracks:{total:full.tracks?.total||0,items:(full.tracks?.items||[]).map(t=>({uri:t.uri,duration_ms:t.duration_ms})),next:full.tracks?.next||null}};
+            try{const db=await DB.getDb();const ex=await db.get('enriched_library','main');if(ex?.albums){const idx=ex.albums.findIndex(a=>a.id===album.id);if(idx>=0)ex.albums[idx]=slimAlbum(album);else ex.albums.push(slimAlbum(album));await db.put('enriched_library',ex,'main');}}catch(ce){console.warn('Cache update failed',ce);}
+          }
+        }catch(fe){console.warn('QID-023: full album fetch failed',album.id,fe);}
+      }
       const tracks=await SpotifyAPI.getAlbumTracks(album);
       for(const t of tracks){await SpotifyAPI.addToQueue(t.uri);await sleep(delay);}
       await HistoryProvider.log(album.id,album.name);
-      if(state.burnMode){await BurnMode.burn(album.id,album.name);_burnToast(album.name);} // QID-013
+      if(state.burnMode){await BurnMode.burn(album.id,album.name);_burnToast(album.name);}
     }
     state.phase='done';
   }catch(err){const el=document.getElementById('queueStatus');if(el)el.textContent=err.message;state.phase='error';}
@@ -1976,7 +2029,7 @@ function renderHomeTab(panel){
 // SECTION 13 — BROWSER TAB  (Phase 7B: Cover-List + Dynamic Filters)
 // ═══════════════════════════════════════════════════════════════════
 // ── Browser sub-view state ────────────────────────────────────────
-const libViewState={activeView:'browse'}; // 'browse' | 'listenlater'
+const libViewState={activeView:'browse'}; // 'browse' | 'listenlater' | 'favorites'
 
 function renderBrowserTab(panel){
   // Build header bar once
@@ -1984,7 +2037,8 @@ function renderBrowserTab(panel){
     const hdr=document.createElement('div');hdr.className='brw-header';
     hdr.innerHTML=`
       <button class="brw-tab${libViewState.activeView==='browse'?' active':''}" data-brwview="browse">📚 Browse</button>
-      <button class="brw-tab${libViewState.activeView==='listenlater'?' active':''}" data-brwview="listenlater">🕐 Listen Later</button>
+      <button class="brw-tab${libViewState.activeView==='listenlater'?' active':''}" data-brwview="listenlater">🕐 Later</button>
+      <button class="brw-tab${libViewState.activeView==='favorites'?' active':''}" data-brwview="favorites">❤️ Faves</button>
       <div class="brw-hdr-right">
         <button class="lib-filter-btn" id="brwFilterBtn">⚙ Filter</button>
       </div>`;
@@ -2013,6 +2067,7 @@ function renderLibraryView(panel){
   panel.appendChild(vc);
   if(libViewState.activeView==='browse') renderLibraryGenreNav(vc);
   else if(libViewState.activeView==='listenlater') renderListenLaterView(vc);
+  else if(libViewState.activeView==='favorites') renderFavoritesView(vc);
 }
 
 function openAlbumDetail(album){
@@ -2022,7 +2077,7 @@ function openAlbumDetail(album){
   const lh=HistoryProvider.getMap().get(album.id);const heard=lh?`Last queued ${formatAge(Date.now()-lh)}`:'Never queued';
   const modal=document.createElement('div');modal.className='modal-bg';
   const firstArtist=(album.artists||[])[0];
-  modal.innerHTML=`<div class="modal"><div class="modal-handle"></div><div class="modal-body">${art?`<img class="modal-art" src="${esc(art)}" alt="">`:`<div class="modal-art-ph">🎵</div>`}<div class="modal-title">${esc(album.name)}</div><div class="modal-artist">${esc(artist)}</div><div class="modal-meta">${yr?yr+' · ':''}${trk} tracks · ${dur} min${genres?' · '+esc(genres):''}<br><span style="color:var(--blue)">${heard}</span></div><div class="modal-actions"><button class="btn btn-primary" id="mdlQueue">▶ Queue Album</button><div class="modal-actions-row2"><button class="btn" id="mdlSaveLater">🕐 Save for Later</button>${firstArtist?.id?`<button class="btn" id="mdlArtistDive">🎤 Artist</button>`:''}<button class="btn" id="mdlClose">Close</button></div></div></div></div>`;
+  modal.innerHTML=`<div class="modal"><div class="modal-handle"></div><div class="modal-body">${art?`<img class="modal-art" src="${esc(art)}" alt="">`:`<div class="modal-art-ph">🎵</div>`}<div class="modal-title">${esc(album.name)}</div><div class="modal-artist">${esc(artist)}</div><div class="modal-meta">${yr?yr+' · ':''}${trk} tracks · ${dur} min${genres?' · '+esc(genres):''}<br><span style="color:var(--blue)">${heard}</span></div><div class="modal-actions"><button class="btn btn-primary" id="mdlQueue">▶ Queue Album</button><div class="modal-actions-row2"><button class="btn" id="mdlSaveLater">🕐 Save for Later</button><button class="btn" id="mdlFave">❤️ Favorite</button>${firstArtist?.id?`<button class="btn" id="mdlArtistDive">🎤 Artist</button>`:''}<button class="btn" id="mdlClose">Close</button></div></div></div></div>`;
   document.body.appendChild(modal);
   modal.addEventListener('click',e=>{if(e.target===modal)modal.remove();});
   modal.querySelector('#mdlClose').addEventListener('click',()=>modal.remove());
@@ -2038,16 +2093,37 @@ function openAlbumDetail(album){
   modal.querySelector('#mdlSaveLater').addEventListener('click',async()=>{
     const btn=modal.querySelector('#mdlSaveLater');btn.disabled=true;
     const alreadyIn=await ListenLater.has(album.id);
-    if(alreadyIn){await ListenLater.remove(album.id);btn.textContent='🕐 Saved (tap to remove)';btn.textContent='Removed';_toast('Removed from Listen Later.');}
+    if(alreadyIn){await ListenLater.remove(album.id);btn.textContent='Removed';_toast('Removed from Listen Later.');}
     else{await ListenLater.add(album);btn.textContent='✓ Saved!';_toast(`"${album.name}" saved for later.`);}
     setTimeout(()=>modal.remove(),1000);
   });
   // Check if already in listen later
   ListenLater.has(album.id).then(has=>{const b=modal.querySelector('#mdlSaveLater');if(b&&has)b.textContent='✓ Already saved';});
+  // QID-007: Favorites toggle
+  modal.querySelector('#mdlFave').addEventListener('click',async()=>{
+    const btn=modal.querySelector('#mdlFave');btn.disabled=true;
+    const isFave=await Favorites.toggle(album);
+    btn.textContent=isFave?'❤️ Favorited':'🤍 Removed';
+    _toast(isFave?`❤️ Added to Favorites`:`Removed from Favorites`);
+    setTimeout(()=>modal.remove(),900);
+  });
+  Favorites.has(album.id).then(has=>{const b=modal.querySelector('#mdlFave');if(b&&has)b.textContent='❤️ Favorited';});
   modal.querySelector('#mdlQueue').addEventListener('click',async()=>{
     const btn=modal.querySelector('#mdlQueue');btn.disabled=true;btn.textContent='Queueing…';
-    try{const delay=state.browserMode?DELAY_BROWSER_MS:DELAY_DESKTOP_MS;const tracks=await SpotifyAPI.getAlbumTracks(album);for(const t of tracks){await SpotifyAPI.addToQueue(t.uri);await sleep(delay);}await HistoryProvider.log(album.id,album.name);if(state.burnMode){await BurnMode.burn(album.id,album.name);_burnToast(album.name);}btn.textContent='✓ Queued!';setTimeout(()=>modal.remove(),1500);}
-    catch(err){btn.disabled=false;btn.textContent='▶ Queue Album';alert(err.message);}
+    try{
+      const delay=state.browserMode?DELAY_BROWSER_MS:DELAY_DESKTOP_MS;
+      // QID-023: on-demand fetch wenn tracks leer (Playlist-Album)
+      let qAlbum=album;
+      if(!(qAlbum.tracks?.items?.length)&&!(qAlbum.tracks?.next)){
+        btn.textContent='Loading tracks…';
+        try{const full=await SpotifyAPI.get(`https://api.spotify.com/v1/albums/${encodeURIComponent(qAlbum.id)}`);if(full?.id)qAlbum={...qAlbum,tracks:{total:full.tracks?.total||0,items:(full.tracks?.items||[]).map(t=>({uri:t.uri,duration_ms:t.duration_ms})),next:full.tracks?.next||null}};}catch(fe){console.warn('QID-023 modal fetch failed',fe);}
+      }
+      const tracks=await SpotifyAPI.getAlbumTracks(qAlbum);
+      for(const t of tracks){await SpotifyAPI.addToQueue(t.uri);await sleep(delay);}
+      await HistoryProvider.log(qAlbum.id,qAlbum.name);
+      if(state.burnMode){await BurnMode.burn(qAlbum.id,qAlbum.name);_burnToast(qAlbum.name);}
+      btn.textContent='✓ Queued!';setTimeout(()=>modal.remove(),1500);
+    }    catch(err){btn.disabled=false;btn.textContent='▶ Queue Album';alert(err.message);}
   });
 }
 
@@ -2082,6 +2158,27 @@ const ListenLater={
   },
   async remove(id){try{const db=await DB.getDb();await db.delete('listen_later',id);}catch(e){}},
   async has(id){try{const db=await DB.getDb();return!!(await db.get('listen_later',id));}catch(e){return false;}},
+};
+
+// QID-007: Favorites — IDB store `favorites` active since DB_VERSION 9
+const Favorites={
+  async getAll(){try{const db=await DB.getDb();return await db.getAll('favorites');}catch(e){return[];}},
+  async add(album){
+    try{
+      const db=await DB.getDb();
+      const art=getArt(album,'sm')||getArt(album,'md')||null;
+      const artist=(album.artists||[]).map(a=>a.name).join(', ');
+      await db.put('favorites',{id:album.id,name:album.name,artist,art,addedAt:Date.now(),albumRef:album});
+    }catch(e){console.warn('Favorites.add failed',e);}
+  },
+  async remove(id){try{const db=await DB.getDb();await db.delete('favorites',id);}catch(e){}},
+  async has(id){try{const db=await DB.getDb();return!!(await db.get('favorites',id));}catch(e){return false;}},
+  async toggle(album){
+    const has=await this.has(album.id);
+    if(has){await this.remove(album.id);return false;}
+    else{await this.add(album);return true;}
+  },
+  async getIds(){try{const db=await DB.getDb();const all=await db.getAll('favorites');return new Set(all.map(f=>f.id));}catch(e){return new Set();}},
 };
 
 async function renderProfileTab(panel){
@@ -2574,8 +2671,49 @@ async function migrateFromLegacy(){
   if(Auth.isLoggedIn()){
     await Promise.all([Cache.loadLibrary(),HistoryProvider.load(),HomeLayout.load(),BurnMode.load()]);
     restoreSession();
-    // Show sync button if library loaded
-    if(allAlbums.length){const syncBtn=document.getElementById('syncBtn');if(syncBtn)syncBtn.style.display='';}
+    if(allAlbums.length){
+      const syncBtn=document.getElementById('syncBtn');if(syncBtn)syncBtn.style.display='';
+      // QID-026: Refresh-Button einblenden wenn auf Home-Tab
+      if(state.activeTab==='home'){const rb=document.getElementById('homeRefreshBtn');if(rb)rb.style.display='';}
+    }
+
+    // QID-026: Background-Sync — Playlists + TopAlbums nachladen (non-blocking, Rate-limit 3 req/sec)
+    (async()=>{
+      try{
+        // Playlists: nur wenn kein frischer Cache
+        const cachedPl=await PlaylistCache.getPlaylists();
+        const plTTL=24*60*60*1000;
+        if(!cachedPl||(Date.now()-(cachedPl[0]?._cachedAt||0))>plTTL){
+          const freshPl=await SpotifyAPI.fetchUserPlaylists();
+          if(freshPl?.length){
+            await PlaylistCache.savePlaylists(freshPl);
+            // Fetch albums für selektierte Playlists — max 3 req/sec
+            const selectedIds=await PlaylistCache.getSelectedIds();
+            for(const pid of selectedIds.slice(0,5)){
+              const ex=await PlaylistCache.getAlbums(pid);
+              if(!ex){
+                try{
+                  await new Promise(r=>setTimeout(r,340)); // ~3 req/sec
+                  const albs=await SpotifyAPI.fetchPlaylistItems(pid);
+                  await PlaylistCache.saveAlbums(pid,albs);
+                  EnrichedLibrary.invalidate().catch(()=>{});
+                }catch(e){console.warn('Playlist bg-sync failed',pid,e);}
+              }
+            }
+          }
+        }
+        // TopAlbums: nur wenn TTL abgelaufen (TTL = TOP_ALBUMS_TTL, 7 Tage)
+        for(const tRange of['short_term','medium_term','long_term']){
+          const cached=await TopAlbumsCache.get(tRange);
+          if(!cached){
+            try{
+              await new Promise(r=>setTimeout(r,340));
+              await TopAlbumsCache.fetchAndCache(tRange);
+            }catch(e){console.warn('TopAlbums bg-sync failed',tRange,e);}
+          }
+        }
+      }catch(e){console.warn('Background sync error',e);}
+    })();
   }
 
   render();
@@ -2846,31 +2984,33 @@ function _samGenreLabel(album){
   return'Other';
 }
 
-/** QID-012: Compute context badges for an album.
+/** QID-012/032: Compute context badges for an album.
  *  @param {object} album
- *  @param {string|null} relatedArtistName  — only for "Because You Played" carousel
- *  @param {object} badgeToggles            — {heavyRotation, newAlbum, trending, favorite}
- *  @param {Set} heavyIds                   — album IDs in heavy rotation (≥3× last 7d)
- *  @param {Set} trendingIds                — top-10 album IDs this week
- *  @param {Set} favoriteIds                — album IDs in favorites store
+ *  @param {string|null} relatedArtistName
+ *  @param {object} badgeToggles  — {heavyRotation,newAlbum,justAdded,trending,favorite,hiddenGem,repeat,playlist}
+ *  @param {Set} heavyIds
+ *  @param {Set} trendingIds
+ *  @param {Set} favoriteIds
+ *  @param {Set} hiddenGemIds
+ *  @param {Set} repeatIds        — albums queued >2× in last 7d
  *  @returns {Array<{cls,label}>}
  */
-function _computeBadges(album, relatedArtistName, badgeToggles, heavyIds, trendingIds, favoriteIds, hiddenGemIds){
+function _computeBadges(album, relatedArtistName, badgeToggles, heavyIds, trendingIds, favoriteIds, hiddenGemIds, repeatIds=new Set()){
   const badges=[];
-  // "Related to Artist" — only for Because You Played, single artist
   if(relatedArtistName&&(album.artists||[]).length===1){
     const name=relatedArtistName.length>18?relatedArtistName.slice(0,16)+'…':relatedArtistName;
     badges.push({cls:'related',label:`🎵 ${name}`});
   }
   if(badgeToggles.heavyRotation&&heavyIds.has(album.id))badges.push({cls:'heavy',label:'⭐ Heavy'});
-  // QID-014: Just Added — added within 7 days
+  if(badgeToggles.trending&&trendingIds.has(album.id))badges.push({cls:'trending',label:'🔥 Trending'});
+  if(badgeToggles.repeat&&repeatIds.has(album.id))badges.push({cls:'trending',label:'🔁 Repeat'});
+  if(badgeToggles.favorite&&favoriteIds.has(album.id))badges.push({cls:'related',label:'❤️ Fave'});
+  if(badgeToggles.hiddenGem&&hiddenGemIds&&hiddenGemIds.has(album.id))badges.push({cls:'hiddengem',label:'💎 Hidden Gem'});
   if(badgeToggles.justAdded&&album._added_at&&Date.now()-new Date(album._added_at).getTime()<7*86400000)badges.push({cls:'new',label:'🆕 Just Added'});
   else if(badgeToggles.newAlbum&&album._added_at&&Date.now()-new Date(album._added_at).getTime()<30*86400000)badges.push({cls:'new',label:'📅 New'});
-  if(badgeToggles.trending&&trendingIds.has(album.id))badges.push({cls:'trending',label:'🔥 Trending'});
-  if(badgeToggles.favorite&&favoriteIds.has(album.id))badges.push({cls:'related',label:'❤️ Fave'});
-  // QID-014: Hidden Gem — in library but rarely played (< 3 times in history)
-  if(badgeToggles.hiddenGem&&hiddenGemIds&&hiddenGemIds.has(album.id))badges.push({cls:'hiddengem',label:'💎 Hidden Gem'});
-  return badges.slice(0,3); // QID-013: max 3 badges (was 2)
+  // QID-032: Playlist badge — album from playlist source only
+  if(badgeToggles.playlist&&album._inLibrary===false)badges.push({cls:'related',label:'🎵 Playlist'});
+  return badges.slice(0,3);
 }
 
 /** QID-011: Open See All grid modal for a carousel.
@@ -2896,41 +3036,50 @@ async function openCarouselSeeAllModal(carouselId, title, albums, icon='🎵', r
   // ── Badge toggle defaults (persisted in state) ──
   const bt=state._badgeToggles;
 
-  // ── Decade filter state per carousel ──
+  // ── Filter + Sort state per carousel ──
   if(!state._samFilters[carouselId])state._samFilters[carouselId]={decade:null};
   const sf=state._samFilters[carouselId];
+  if(!sf.sortBy)sf.sortBy='none'; // QID-034: none | badge
 
   // ── Pre-compute badge data sets ──
   const hm=HistoryProvider.getMap();
   const now=Date.now();
   const week7=now-7*86400000;
-  // Heavy rotation: ≥3× in last 7d — use historyCache which stores last queuedAt per album
-  // We check count by iterating — historyCache is Map<id,lastQueuedAt>, so we approximate
-  // by marking albums that appear in the map AND were queued within 7d multiple times
-  // (exact count not stored — we use "queued in last 7 days" as proxy for heavy)
   const heavyIds=new Set();
   const trendingCounts=new Map();
-  for(const[id,ts]of hm){if(ts>week7){heavyIds.add(id);trendingCounts.set(id,(trendingCounts.get(id)||0)+1);}}
-  // trending = top-10 by count in last 7d
+  const repeatCounts=new Map();
+  for(const[id,ts]of hm){
+    if(ts>week7){
+      heavyIds.add(id);
+      trendingCounts.set(id,(trendingCounts.get(id)||0)+1);
+      repeatCounts.set(id,(repeatCounts.get(id)||0)+1);
+    }
+  }
   const trendingIds=new Set([...trendingCounts.entries()].sort((a,b)=>b[1]-a[1]).slice(0,10).map(([id])=>id));
-  // favorites — store exists but QID-007 not yet active; return empty set gracefully
+  // QID-032: Repeat — queued >2× in last 7d
+  const repeatIds=new Set([...repeatCounts.entries()].filter(([,c])=>c>2).map(([id])=>id));
+  // QID-007: favorites now active
   const favoriteIds=new Set();
   try{const db=await DB.getDb();const favs=await db.getAll('favorites');for(const f of favs)favoriteIds.add(f.id);}catch(e){}
-  // QID-014: Hidden Gem — in library, queued < 3 times total
   const hiddenGemIds=new Set();
   const playCounts=new Map();for(const[id]of hm)playCounts.set(id,(playCounts.get(id)||0)+1);
   for(const a of albums){if(a._inLibrary!==false&&(!playCounts.has(a.id)||(playCounts.get(a.id)||0)<3))hiddenGemIds.add(a.id);}
+
+  // Badge priority for sort (QID-034)
+  const BADGE_PRIORITY={'⭐ Heavy':7,'🔥 Trending':6,'🔁 Repeat':5,'❤️ Fave':4,'💎 Hidden Gem':3,'🆕 Just Added':2,'📅 New':1,'🎵 Playlist':1};
+  function _badgePriority(a){
+    const bs=_computeBadges(a,relatedArtistName,bt,heavyIds,trendingIds,favoriteIds,hiddenGemIds,repeatIds);
+    return bs.length?(BADGE_PRIORITY[bs[0].label]||0):0;
+  }
 
   // ── Build modal ──
   const bg=document.createElement('div');bg.className='sam-bg';
   const sheet=document.createElement('div');sheet.className='sam-sheet';
 
-  // Header
   const hdr=document.createElement('div');hdr.className='sam-hdr';
   hdr.innerHTML=`<span class="sam-hdr-icon">${esc(icon)}</span><span class="sam-hdr-title">${esc(title)}</span><span class="sam-hdr-count" id="samCount"></span><button class="sam-close" id="samClose">✕</button>`;
   sheet.appendChild(hdr);
 
-  // QID-013: Burn Mode hint banner
   if(state.burnMode){
     const burnBanner=document.createElement('div');
     burnBanner.style.cssText='padding:7px 16px;background:rgba(217,83,74,.1);border-bottom:1px solid rgba(217,83,74,.25);font-size:12px;color:#f87171;display:flex;align-items:center;gap:6px;flex-shrink:0';
@@ -2938,7 +3087,6 @@ async function openCarouselSeeAllModal(carouselId, title, albums, icon='🎵', r
     sheet.appendChild(burnBanner);
   }
 
-  // Decade filter chips
   const ALL_DEC=['pre-70s','70s','80s','90s','00s','10s','20s'];
   const usedDecades=new Set(albums.map(a=>decadeOf(releaseYear(a))).filter(Boolean));
   const decFilters=document.createElement('div');decFilters.className='sam-filters';
@@ -2946,10 +3094,10 @@ async function openCarouselSeeAllModal(carouselId, title, albums, icon='🎵', r
     ALL_DEC.filter(d=>usedDecades.has(d)).map(d=>`<button class="sam-filter-chip${sf.decade===d?' active':''}" data-samdec="${d}">${d}</button>`).join('');
   sheet.appendChild(decFilters);
 
-  // Badge toggles bar — QID-014: added Hidden Gem + Just Added
+  // QID-032: all 8 badge toggles
   const badgeBar=document.createElement('div');badgeBar.className='sam-badge-toggles';
   badgeBar.innerHTML=`<span class="sam-badge-label">Badges:</span>`+
-    [['heavyRotation','⭐ Heavy'],['newAlbum','📅 New'],['justAdded','🆕 Just Added'],['trending','🔥 Trending'],['favorite','❤️ Fave'],['hiddenGem','💎 Hidden Gem']].map(
+    [['heavyRotation','⭐ Heavy'],['trending','🔥 Trending'],['repeat','🔁 Repeat'],['favorite','❤️ Fave'],['hiddenGem','💎 Gem'],['justAdded','🆕 New'],['newAlbum','📅 30d'],['playlist','🎵 Playlist']].map(
       ([k,l])=>`<button class="sam-badge-chip${bt[k]?' active':''}" data-badgekey="${k}">${l}</button>`
     ).join('');
   sheet.appendChild(badgeBar);
@@ -2964,10 +3112,9 @@ async function openCarouselSeeAllModal(carouselId, title, albums, icon='🎵', r
   if(!sf.grouping)sf.grouping='genre';
   if(!sf.artistFilter)sf.artistFilter='';
 
-  // Build artist list from albums (for dropdown)
   const allArtistNames=[...new Set(albums.flatMap(a=>(a.artists||[]).map(ar=>ar.name)))].sort();
 
-  // Grouping + Artist dropdowns row
+  // QID-032/034: Grouping + Artist + Sort dropdowns
   const ctrlRow=document.createElement('div');ctrlRow.className='sam-ctrl-row';
   ctrlRow.innerHTML=`
     <select class="sam-ctrl-sel" id="samGrouping">
@@ -2976,20 +3123,27 @@ async function openCarouselSeeAllModal(carouselId, title, albums, icon='🎵', r
       <option value="artist"${sf.grouping==='artist'?' selected':''}>Group: Artist</option>
       <option value="year"${sf.grouping==='year'?' selected':''}>Group: Year</option>
     </select>
+    <select class="sam-ctrl-sel" id="samSort">
+      <option value="none"${sf.sortBy==='none'?' selected':''}>Sort: Default</option>
+      <option value="badge"${sf.sortBy==='badge'?' selected':''}>Sort: By Badge</option>
+      <option value="az"${sf.sortBy==='az'?' selected':''}>Sort: A–Z</option>
+      <option value="year"${sf.sortBy==='year'?' selected':''}>Sort: Newest</option>
+    </select>
     <select class="sam-ctrl-sel" id="samArtistFilter" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis">
       <option value="">All Artists</option>
       ${allArtistNames.map(n=>`<option value="${esc(n)}"${sf.artistFilter===n?' selected':''}>${esc(n)}</option>`).join('')}
     </select>`;
   sheet.appendChild(ctrlRow);
 
-  // ── Render grid ──
   function _render(){
-    // Apply decade filter + artist filter
     let pool=sf.decade?albums.filter(a=>decadeOf(releaseYear(a))===sf.decade):albums;
     if(sf.artistFilter)pool=pool.filter(a=>(a.artists||[]).some(ar=>ar.name===sf.artistFilter));
+    // QID-034: sort
+    if(sf.sortBy==='badge')pool=[...pool].sort((a,b)=>_badgePriority(b)-_badgePriority(a));
+    else if(sf.sortBy==='az')pool=[...pool].sort((a,b)=>(a.name||'').localeCompare(b.name||''));
+    else if(sf.sortBy==='year')pool=[...pool].sort((a,b)=>(b.release_date||'').localeCompare(a.release_date||''));
     hdr.querySelector('#samCount').textContent=`${pool.length} albums`;
 
-    // Grouping logic — QID-016
     let groups=new Map();
     if(sf.grouping==='genre'){
       for(const a of pool){const lbl=_samGenreLabel(a);if(!groups.has(lbl))groups.set(lbl,[]);groups.get(lbl).push(a);}
@@ -3003,7 +3157,7 @@ async function openCarouselSeeAllModal(carouselId, title, albums, icon='🎵', r
     } else if(sf.grouping==='artist'){
       for(const a of pool){const n=(a.artists||[])[0]?.name||'Unknown';if(!groups.has(n))groups.set(n,[]);groups.get(n).push(a);}
       groups=new Map([...groups.entries()].sort((a,b)=>b[1].length-a[1].length));
-    } else { // year
+    } else {
       for(const a of pool){const y=String(releaseYear(a)||'Unknown');if(!groups.has(y))groups.set(y,[]);groups.get(y).push(a);}
       groups=new Map([...groups.entries()].sort((a,b)=>Number(b[0])-Number(a[0])));
     }
@@ -3015,13 +3169,11 @@ async function openCarouselSeeAllModal(carouselId, title, albums, icon='🎵', r
       const ch=document.createElement('div');ch.className='sam-cluster-hdr';
       ch.innerHTML=`${esc(groupLabel)} <span class="sam-cluster-hdr-count">${groupAlbums.length}</span>`;
       body.appendChild(ch);
-
-      // QID-016: 2-col grid
       const grid=document.createElement('div');grid.className='sam-grid sam-grid-2col';
       for(const a of groupAlbums){
         const art=getArt(a,'md')||getArt(a,'lg');
         const artist=(a.artists||[]).map(x=>x.name).join(', ');
-        const badges=_computeBadges(a,relatedArtistName,bt,heavyIds,trendingIds,favoriteIds,hiddenGemIds);
+        const badges=_computeBadges(a,relatedArtistName,bt,heavyIds,trendingIds,favoriteIds,hiddenGemIds,repeatIds);
         const badgesHTML=badges.length?`<div class="sam-badges">${badges.map(b=>`<span class="sam-badge ${b.cls}">${esc(b.label)}</span>`).join('')}</div>`:'';
         const item=document.createElement('div');item.className='sam-item';
         item.innerHTML=`<div class="sam-art-wrap">${art?`<img class="sam-art" src="${esc(art)}" alt="" loading="lazy">`:`<div class="sam-art-ph">🎵</div>`}${badgesHTML}</div><div class="sam-name">${esc(a.name)}</div><div class="sam-artist">${esc(artist)}</div>`;
@@ -3052,8 +3204,9 @@ async function openCarouselSeeAllModal(carouselId, title, albums, icon='🎵', r
     _render();
   });
 
-  // QID-016: Grouping + Artist filter
+  // QID-016: Grouping + Artist + Sort filter
   ctrlRow.querySelector('#samGrouping').addEventListener('change',e=>{sf.grouping=e.target.value;_render();});
+  ctrlRow.querySelector('#samSort').addEventListener('change',e=>{sf.sortBy=e.target.value;_render();});
   ctrlRow.querySelector('#samArtistFilter').addEventListener('change',e=>{sf.artistFilter=e.target.value;_render();});
 
   const onKey=e=>{if(e.key==='Escape'){bg.remove();document.removeEventListener('keydown',onKey);}};
@@ -3293,6 +3446,12 @@ function loadAlmostHeardEverything(){
   return result.slice(0,5);
 }
 
+/** QID-025: Filter burned albums from pool if BurnMode active */
+function _burnFilter(albums){
+  if(!state.burnMode)return albums;
+  return albums.filter(a=>!BurnMode.isBurned(a.id));
+}
+
 function renderHomeDashboard(panel){
   if(!allAlbums.length){
     panel.innerHTML=`<div class="ph-card" style="margin-top:20px">
@@ -3305,9 +3464,10 @@ function renderHomeDashboard(panel){
 
   const cvg=getCovStats();
   const uniqueArtists=new Set(allAlbums.flatMap(a=>(a.artists||[]).map(ar=>ar.id))).size;
-  const newAlbums=getNewInLibrary(30);
-  const rediscover=getRediscoverAlbums(90);
-  const randomPick=allAlbums[Math.floor(Math.random()*allAlbums.length)];
+  const newAlbums=_burnFilter(getNewInLibrary(30));
+  const rediscover=_burnFilter(getRediscoverAlbums(90));
+  const _pickPool=state.burnMode?allAlbums.filter(a=>!BurnMode.isBurned(a.id)):allAlbums;
+  const randomPick=_pickPool[Math.floor(Math.random()*_pickPool.length)]||allAlbums[0];
 
   // Build freshness bar widths
   const total=cvg.total||1;
@@ -3390,7 +3550,7 @@ function renderHomeDashboard(panel){
   // ── PHASE 7A: Forgotten Gems Carousel
   (async()=>{
     if(!HomeLayout.get('forgotten-gems'))return;
-    const gems=loadForgottenGems();
+    const gems=_burnFilter(loadForgottenGems());
     if(gems.length<3)return;
     const hm=HistoryProvider.getMap();
     const gemSection=document.createElement('div');
@@ -3415,7 +3575,7 @@ function renderHomeDashboard(panel){
   // ── PHASE 6A: Heavy Rotation Section
   (async()=>{
     if(!HomeLayout.get('heavy-rotation'))return;
-    const hotAlbums = await getHeavyRotation(30, 10);
+    const hotAlbums = (await getHeavyRotation(30, 10)).filter(h=>!state.burnMode||!BurnMode.isBurned(h.album.id));
     if (hotAlbums.length > 0) {
       const hrSection = document.createElement('div');
       hrSection.className = 'heavy-rot-section';
@@ -3480,7 +3640,7 @@ function renderHomeDashboard(panel){
   // ── PHASE 6A: Library Radio Section
   (async()=>{
     if(!HomeLayout.get('library-radio'))return;
-    const radioAlbums = await getLibraryRadio(50);
+    const radioAlbums = (await getLibraryRadio(50)).filter(r=>!state.burnMode||!BurnMode.isBurned(r.album.id));
     if (radioAlbums.length > 0) {
       const lrSection = document.createElement('div');
       lrSection.className = 'library-radio-container';
@@ -3598,7 +3758,7 @@ function renderHomeDashboard(panel){
   // ── PHASE 7A: On This Day
   (()=>{
     if(!HomeLayout.get('on-this-day'))return;
-    const otdAlbums=loadOnThisDayAlbums();
+    const otdAlbums=_burnFilter(loadOnThisDayAlbums());
     if(!otdAlbums.length)return;
     const otdSection=document.createElement('div');otdSection.className='dash-section';
     const today=new Date();
@@ -3663,7 +3823,8 @@ function renderHomeDashboard(panel){
   // ── PHASE 8: Because You Played (QID-005)
   (()=>{
     if(!HomeLayout.get('because-you-played'))return;
-    const{albums:bypAlbums,refName}=loadBecauseYouPlayed();
+    const{albums:bypAlbumsRaw,refName}=loadBecauseYouPlayed();
+    const bypAlbums=_burnFilter(bypAlbumsRaw);
     if(!bypAlbums.length)return;
     const sec=document.createElement('div');sec.className='dash-section';
     const hdr=document.createElement('div');hdr.className='car-section-hdr';
@@ -3681,7 +3842,8 @@ function renderHomeDashboard(panel){
   (()=>{
     if(!HomeLayout.get('same-artist'))return;
     if(!randomPick)return;
-    const{albums:saAlbums,artistName}=loadSameArtistAlbums(randomPick);
+    const{albums:saAlbumsRaw,artistName}=loadSameArtistAlbums(randomPick);
+    const saAlbums=_burnFilter(saAlbumsRaw);
     if(!saAlbums.length)return;
     const display=saAlbums.slice(0,10);
     const sec=document.createElement('div');sec.className='dash-section';
@@ -3699,7 +3861,7 @@ function renderHomeDashboard(panel){
   // ── PHASE 8: Added This Month, Last Year
   (()=>{
     if(!HomeLayout.get('added-last-year'))return;
-    const atly=loadAddedThisMonthLastYear();
+    const atly=_burnFilter(loadAddedThisMonthLastYear());
     if(atly.length<3)return;
     const now=new Date();
     const monthName=now.toLocaleDateString('en-US',{month:'long'});
@@ -3719,7 +3881,7 @@ function renderHomeDashboard(panel){
   // ── PHASE 8: Decade Roulette
   (()=>{
     if(!HomeLayout.get('decade-roulette'))return;
-    const decades=loadDecadeRoulette();
+    const decades=loadDecadeRoulette().map(({decade,albums})=>({decade,albums:_burnFilter(albums)})).filter(d=>d.albums.length>=2);
     if(!decades.length)return;
     const allDecadeAlbums=decades.flatMap(({decade,albums})=>albums.map(a=>({...a,_decadeBadge:decade})));
     const sec=document.createElement('div');sec.className='dash-section';
@@ -3740,7 +3902,7 @@ function renderHomeDashboard(panel){
   // ── PHASE 8: Almost Heard Everything
   (()=>{
     if(!HomeLayout.get('almost-there'))return;
-    const artists=loadAlmostHeardEverything();
+    const artists=loadAlmostHeardEverything().map(({missing,artistName,heardPct,total})=>({missing:_burnFilter(missing),artistName,heardPct,total})).filter(a=>a.missing.length>0);
     if(!artists.length)return;
     const allMissing=artists.flatMap(({missing,artistName,heardPct,total})=>
       missing.map(a=>({...a,_aheBadge:`${heardPct}% done`,_aheArtist:artistName}))
@@ -3768,27 +3930,23 @@ function renderHomeDashboard(panel){
       sec.innerHTML=`<div class="car-section-hdr"><span class="car-section-title">🎤 Top Artists</span><div class="time-chips" id="topArtistsChips"><button class="time-chip active" data-tarange="medium_term">6 mo</button><button class="time-chip" data-tarange="short_term">4 wk</button><button class="time-chip" data-tarange="long_term">All Time</button></div></div><div id="topArtistsCarousel"><div class="carousel-empty">Loading…</div></div>`;
       panel.appendChild(sec);
 
-      async function _loadArtists(timeRange){
+      // QID-026: lokal aus History — 0 API-Calls, kein Foto
+      function _loadArtists(timeRange){
         const carEl=sec.querySelector('#topArtistsCarousel');
-        carEl.innerHTML='<div class="carousel-empty">Loading…</div>';
-        try{
-          const artists=await TopArtistsCache.fetchAndCache(timeRange);
-          if(!artists.length){carEl.innerHTML='<div class="carousel-empty">No data yet — listen to more music on Spotify!</div>';return;}
-          const track=document.createElement('div');track.className='carousel-track';
-          for(const ar of artists){
-            const imgUrl=ar.images?.[1]?.url||ar.images?.[0]?.url||null;
-            const genreLbl=(ar.genres||[]).slice(0,2).join(' · ');
-            const card=document.createElement('div');card.className='car-card';
-            card.style.cssText='display:flex;flex-direction:column;align-items:center;gap:6px;padding:10px 6px;cursor:pointer;min-width:100px';
-            card.innerHTML=`${imgUrl?`<img src="${esc(imgUrl)}" alt="${esc(ar.name)}" style="width:72px;height:72px;border-radius:50%;object-fit:cover;border:2px solid var(--border2)">`:`<div style="width:72px;height:72px;border-radius:50%;background:var(--surface3);display:flex;align-items:center;justify-content:center;font-size:28px">🎤</div>`}<div style="font-size:12px;font-weight:600;text-align:center;max-width:90px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(ar.name)}</div>${genreLbl?`<div style="font-size:10px;color:var(--text-dim);text-align:center;max-width:90px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(genreLbl)}</div>`:''}`;
-            card.addEventListener('click',()=>openArtistDeepDive(ar.id,ar.name,imgUrl));
-            track.appendChild(card);
-          }
-          const wrap=document.createElement('div');wrap.className='carousel-wrap';
-          wrap.appendChild(track);
-          carEl.innerHTML='';
-          carEl.appendChild(wrap);
-        }catch(e){carEl.innerHTML=`<div class="carousel-empty">Couldn't load top artists</div>`;}
+        const artists=TopArtistsCache.getLocal(timeRange);
+        if(!artists.length){carEl.innerHTML='<div class="carousel-empty">Queue some albums to build your top artists!</div>';return;}
+        const track=document.createElement('div');track.className='carousel-track';
+        for(const ar of artists){
+          const initial=(ar.name||'?')[0].toUpperCase();
+          const genreLbl=(ar.genres||[]).slice(0,1).join('');
+          const card=document.createElement('div');card.className='car-card';
+          card.style.cssText='display:flex;flex-direction:column;align-items:center;gap:6px;padding:10px 6px;cursor:default;min-width:90px';
+          card.innerHTML=`<div style="width:64px;height:64px;border-radius:50%;background:var(--surface3);display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700;color:var(--text-mid);border:2px solid var(--border2)">${esc(initial)}</div><div style="font-size:12px;font-weight:600;text-align:center;max-width:84px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(ar.name)}</div><div style="font-size:10px;color:var(--text-dim)">×${ar.count}</div>`;
+          track.appendChild(card);
+        }
+        const wrap=document.createElement('div');wrap.className='carousel-wrap';
+        wrap.appendChild(track);
+        carEl.innerHTML='';carEl.appendChild(wrap);
       }
 
       sec.querySelector('#topArtistsChips').addEventListener('click',e=>{
@@ -3801,34 +3959,32 @@ function renderHomeDashboard(panel){
     })();
   }
 
-  // ── PHASE 9 QID-009: User Playlist Carousels (async)
+  // ── PHASE 9 QID-009 / QID-026: User Playlist Carousels — Cache-only, 0 API-Calls
   (async()=>{
     const selectedIds=await PlaylistCache.getSelectedIds();
     if(!selectedIds.length)return;
     for(const plId of selectedIds.slice(0,5)){
       if(!HomeLayout.get('playlist-'+plId))continue;
-      // Try cache first
-      let albums=await PlaylistCache.getAlbums(plId);
-      if(!albums){
-        try{albums=await SpotifyAPI.fetchPlaylistItems(plId);await PlaylistCache.saveAlbums(plId,albums);EnrichedLibrary.invalidate().catch(()=>{});}
-        catch(e){continue;}
-      }
-      if(!albums.length)continue;
-      // Get playlist name from playlists cache
+      // QID-026: cache-only — no API call if missing
+      const albums=await PlaylistCache.getAlbums(plId);
+      if(!albums||!albums.length)continue;
       const allPl=await PlaylistCache.getPlaylists()||[];
       const plMeta=allPl.find(p=>p.id===plId);
       const plName=plMeta?.name||'Playlist';
-      const display=shuffleArray(albums).slice(0,10);
+      // QID-025: filter burned
+      const pool=state.burnMode?albums.filter(a=>!BurnMode.isBurned(a.id)):albums;
+      if(!pool.length)continue;
+      const display=shuffleArray(pool).slice(0,10);
       const sec=document.createElement('div');sec.className='dash-section';
       const titleId='plCar_'+plId;
       const hdr=document.createElement('div');hdr.className='car-section-hdr';
-      hdr.innerHTML=`<span class="car-section-title" id="${titleId}">🎵 ${esc(plName)}${albums.length>1?'<span class="car-see-all">See All ›</span>':''}</span><span class="car-section-sub">${albums.length} albums</span>`;
+      hdr.innerHTML=`<span class="car-section-title" id="${titleId}">🎵 ${esc(plName)}${pool.length>1?'<span class="car-see-all">See All ›</span>':''}</span><span class="car-section-sub">${pool.length} albums</span>`;
       sec.appendChild(hdr);
-      if(albums.length>1)hdr.querySelector('#'+titleId).addEventListener('click',()=>openCarouselSeeAllModal('playlist-'+plId,plName,albums,'🎵'));
+      if(pool.length>1)hdr.querySelector('#'+titleId).addEventListener('click',()=>openCarouselSeeAllModal('playlist-'+plId,plName,pool,'🎵'));
       const wrap=document.createElement('div');wrap.className='carousel-wrap';
       wrap.innerHTML=`<div class="carousel-track">${display.map(a=>_carCard(a,releaseYear(a)||null)).join('')}</div>`;
       sec.appendChild(wrap);
-      _attachCarouselClicks(sec);
+      _attachCarouselClicks(sec,pool);
       panel.appendChild(sec);
     }
   })();
@@ -4333,6 +4489,69 @@ async function renderListenLaterView(container){
       const id=remBtn.dataset.llRemove;
       await ListenLater.remove(id);
       renderListenLaterView(container);
+    }
+  });
+}
+
+// QID-007: Favorites View — Section 13.5
+async function renderFavoritesView(container){
+  container.innerHTML='';
+  let items=[];
+  try{items=await Favorites.getAll();}catch(e){container.innerHTML='<div class="ll-empty"><div class="ll-empty-icon">⚠️</div><div class="ll-empty-title">Could not load favorites</div></div>';return;}
+  if(!items.length){
+    container.innerHTML='<div class="ll-empty"><div class="ll-empty-icon">❤️</div><div class="ll-empty-title">No favorites yet</div><div class="ll-empty-sub">Open any album and tap ❤️ Favorite to save it here.</div></div>';
+    return;
+  }
+  // Sort newest first
+  items.sort((a,b)=>b.addedAt-a.addedAt);
+  // Burn filter
+  if(state.burnMode)items=items.filter(i=>!BurnMode.isBurned(i.id));
+
+  const hdr=document.createElement('div');hdr.style.cssText='padding:12px 0 6px;font-size:12px;color:var(--text-dim)';
+  hdr.textContent=`${items.length} favorite${items.length!==1?'s':''}`;
+  container.appendChild(hdr);
+
+  const list=document.createElement('div');list.className='ll-list';
+  for(const item of items){
+    const album=item.albumRef||allAlbums.find(a=>a.id===item.id)||item;
+    const art=item.art||getArt(album,'sm')||null;
+    const row=document.createElement('div');row.className='ll-item';
+    row.innerHTML=`${art?`<img class="ll-art" src="${esc(art)}" alt="" loading="lazy">`:`<div class="ll-art-ph">🎵</div>`}
+      <div class="ll-info"><div class="ll-name">${esc(item.name)}</div><div class="ll-artist">${esc(item.artist||'')}</div></div>
+      <div class="ll-actions">
+        <button class="btn btn-sm btn-primary ll-play" data-favPlay="${esc(item.id)}">▶</button>
+        <button class="btn btn-sm btn-danger ll-rem" data-favRem="${esc(item.id)}">✕</button>
+      </div>`;
+    row.querySelector('.ll-info').addEventListener('click',()=>{if(album.id)openAlbumDetail(album);});
+    list.appendChild(row);
+  }
+  container.appendChild(list);
+
+  list.addEventListener('click',async e=>{
+    const playBtn=e.target.closest('[data-favPlay]');
+    const remBtn=e.target.closest('[data-favRem]');
+    if(playBtn){
+      const id=playBtn.dataset.favPlay;
+      const item=items.find(i=>i.id===id);
+      const album=item?.albumRef||allAlbums.find(a=>a.id===id)||item;
+      if(!album){_toast('Album not found — re-sync library.',true);return;}
+      playBtn.disabled=true;playBtn.textContent='…';
+      try{
+        const delay=state.browserMode?DELAY_BROWSER_MS:DELAY_DESKTOP_MS;
+        let qAlbum=album;
+        if(!(qAlbum.tracks?.items?.length)&&!(qAlbum.tracks?.next)){
+          try{const full=await SpotifyAPI.get(`https://api.spotify.com/v1/albums/${encodeURIComponent(id)}`);if(full?.id)qAlbum={...qAlbum,tracks:{total:full.tracks?.total||0,items:(full.tracks?.items||[]).map(t=>({uri:t.uri,duration_ms:t.duration_ms})),next:full.tracks?.next||null}};}catch(fe){}
+        }
+        const tracks=await SpotifyAPI.getAlbumTracks(qAlbum);
+        for(const t of tracks){await SpotifyAPI.addToQueue(t.uri);await sleep(delay);}
+        await HistoryProvider.log(id,item?.name||'');
+        playBtn.textContent='✓';_toast(`Queued "${item?.name||''}"`);
+      }catch(err){playBtn.disabled=false;playBtn.textContent='▶';_toast(err.message,true);}
+    }
+    if(remBtn){
+      const id=remBtn.dataset.favRem;
+      await Favorites.remove(id);
+      renderFavoritesView(container);
     }
   });
 }
