@@ -825,7 +825,21 @@
     .sam-badge.new{background:rgba(74,144,217,.85)}
     .sam-badge.trending{background:rgba(239,68,68,.85)}
     .sam-badge.related{background:rgba(167,139,250,.85);color:#fff}
+    .sam-badge.hiddengem{background:rgba(16,185,129,.85);color:#fff}
     .sam-empty{text-align:center;padding:48px 20px;color:var(--text-dim);font-size:13px}
+    /* Lens: Badge 2-row layout */
+    .sam-badge-2row{flex-wrap:wrap;overflow-x:visible;gap:5px 6px;padding:8px 14px}
+    .sam-badge-chips-wrap{display:flex;flex-wrap:wrap;gap:5px}
+    /* Lens: FAB filter button */
+    .lens-fab{position:absolute;bottom:20px;right:16px;width:52px;height:52px;border-radius:50%;
+      background:var(--blue);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;
+      box-shadow:0 4px 16px rgba(74,144,217,.45);z-index:10;transition:transform .15s,background .15s;
+      -webkit-tap-highlight-color:transparent}
+    .lens-fab:active{transform:scale(.9);background:var(--blue-dk)}
+    .lens-fab-icon{font-size:20px;color:#fff;line-height:1}
+    .lens-fab-badge{position:absolute;top:4px;right:4px;min-width:16px;height:16px;border-radius:8px;
+      background:var(--error);color:#fff;font-size:9px;font-weight:700;display:flex;align-items:center;
+      justify-content:center;padding:0 4px;line-height:1;border:2px solid var(--surface)}
   </style>
 </head>
 <body>
@@ -3013,33 +3027,132 @@ function _computeBadges(album, relatedArtistName, badgeToggles, heavyIds, trendi
   return badges.slice(0,3);
 }
 
-/** QID-011: Open See All grid modal for a carousel.
- *  @param {string} carouselId    — unique id (e.g. 'forgotten-gems')
- *  @param {string} title         — display title
- *  @param {Array}  albums        — full album pool
- *  @param {string} [icon]        — emoji icon
- *  @param {string|null} [relatedArtistName] — for "Because You Played" badge only
- */
-async function openCarouselSeeAllModal(carouselId, title, albums, icon='🎵', relatedArtistName=null){
-  // Remove existing
-  document.querySelector('.sam-bg')?.remove();
+/** Lens: per-carousel filter state (independent from libState) */
+const _lensFilters={};
+function _getLensFilter(carouselId){
+  if(!_lensFilters[carouselId])_lensFilters[carouselId]={
+    heardStatus:'all',   // 'all'|'unheard'|'heard'
+    addedWithin:'all',   // 'all'|'month'|'6months'|'year'
+    albumTypes:[],       // []|['album','single','compilation']
+    sortMode:'relevance',// 'relevance'|'badge'|'az'|'newest'|'oldest'|'mostplayed'|'lastplayed'
+    showBurned:'hide',   // 'hide'|'show'|'only'
+    activeBadges:[],     // [] = show all; non-empty = OR filter
+  };
+  return _lensFilters[carouselId];
+}
 
-  // QID-013: Filter out burned albums when Burn Mode is active
-  let burnHiddenCount=0;
-  if(state.burnMode){
-    await BurnMode.load();
-    const before=albums.length;
-    albums=albums.filter(a=>!BurnMode.isBurned(a.id));
-    burnHiddenCount=before-albums.length;
+/** Lens: Relevance Score — carousel-type-aware */
+function _lensRelevanceScore(album, carouselId, hm, playCounts, heavyIds, hiddenGemIds){
+  const now=Date.now();
+  const lastPlayed=hm.get(album.id)||0;
+  const daysSince=lastPlayed?(now-lastPlayed)/86400000:9999;
+  const plays=playCounts.get(album.id)||0;
+  const addedMs=album._added_at?new Date(album._added_at).getTime():0;
+  const daysSinceAdded=addedMs?(now-addedMs)/86400000:9999;
+
+  // Base score components
+  let recency   = Math.min(daysSince/365,3);          // 0–3, higher = not heard longer
+  let newness   = Math.max(0,1-(daysSinceAdded/180));  // 0–1, newer = higher
+  let badgeBonus= heavyIds.has(album.id)?0.5:hiddenGemIds.has(album.id)?0.8:0;
+
+  // Carousel-type weighting
+  if(carouselId==='forgotten-gems')   return recency*2 + badgeBonus + newness*0.2;
+  if(carouselId==='heavy-rotation')   return plays*0.5 + badgeBonus;
+  if(carouselId==='new-in-library')   return newness*3 + badgeBonus;
+  if(carouselId==='rediscover')       return recency*2.5;
+  if(carouselId.startsWith('playlist-')) return newness*2 + recency*0.5;
+  // Default: balanced
+  return recency + newness*0.5 + badgeBonus;
+}
+
+/** Lens Filter Sheet — opens from FAB, uses per-carousel lensFilter state */
+function _openLensSheet(lf, onClose){
+  document.querySelector('.lens-sheet-bg')?.remove();
+  const sheetBg=document.createElement('div');sheetBg.className='lib-sheet-bg lens-sheet-bg';
+  const sheet=document.createElement('div');sheet.className='lib-sheet';
+
+  function _countActive(){
+    let n=0;
+    if(lf.heardStatus!=='all')n++;
+    if(lf.addedWithin!=='all')n++;
+    if(lf.albumTypes.length)n++;
+    if(lf.showBurned!=='hide')n++;
+    if(lf.activeBadges.length)n++;
+    return n;
   }
 
-  // ── Badge toggle defaults (persisted in state) ──
-  const bt=state._badgeToggles;
+  function _build(){
+    const typeChips=['album','single','compilation'].map(t=>{
+      const lbl={album:'Album',single:'Single / EP',compilation:'Compilation'}[t];
+      return`<button class="lib-type-chip${lf.albumTypes.includes(t)?' active':''}" data-lt="${t}">${lbl}</button>`;
+    }).join('');
+    const sortChips=[['relevance','Relevance'],['badge','By Badge'],['newest','Newest First'],['oldest','Oldest First'],['az','A–Z'],['za','Z–A'],['mostplayed','Most Played'],['lastplayed','Last Played']].map(
+      ([v,l])=>`<button class="lib-sort-chip${lf.sortMode===v?' active':''}" data-ls="${v}">${l}</button>`).join('');
+    const heardHTML=[['all','Alle'],['unheard','🆕 Ungehört'],['heard','👂 Gehört']].map(
+      ([v,l])=>`<label class="lib-sh-radio-row"><input type="radio" name="lsheard" value="${v}"${lf.heardStatus===v?' checked':''}><span>${l}</span></label>`).join('');
+    const addedHTML=[['all','Alles'],['month','Letzter Monat'],['6months','Letzte 6 Monate'],['year','Letztes Jahr']].map(
+      ([v,l])=>`<label class="lib-sh-radio-row"><input type="radio" name="lsadded" value="${v}"${lf.addedWithin===v?' checked':''}><span>${l}</span></label>`).join('');
+    const burnedHTML=[['hide','Ausblenden'],['show','Anzeigen'],['only','Nur Burned']].map(
+      ([v,l])=>`<label class="lib-sh-radio-row"><input type="radio" name="lsburned" value="${v}"${lf.showBurned===v?' checked':''}><span>🔥 ${l}</span></label>`).join('');
 
-  // ── Filter + Sort state per carousel ──
-  if(!state._samFilters[carouselId])state._samFilters[carouselId]={decade:null};
-  const sf=state._samFilters[carouselId];
-  if(!sf.sortBy)sf.sortBy='none'; // QID-034: none | badge
+    sheet.innerHTML=`
+      <div class="lib-sheet-handle"></div>
+      <div class="lib-sheet-header">
+        <span class="lib-sheet-title">Lens Filter</span>
+        <button class="lib-sheet-reset" id="lsReset">Reset all</button>
+      </div>
+      <div class="lib-sheet-body">
+        <div class="lib-sh-sec"><div class="lib-sh-sec-title">👂 Gehört-Status</div><div class="lib-sh-radio-group">${heardHTML}</div></div>
+        <div class="lib-sh-sec"><div class="lib-sh-sec-title">🗓 Hinzugefügt</div><div class="lib-sh-radio-group">${addedHTML}</div></div>
+        <div class="lib-sh-sec"><div class="lib-sh-sec-title">📦 Typ</div><div class="lib-type-chips">${typeChips}</div></div>
+        <div class="lib-sh-sec"><div class="lib-sh-sec-title">🔥 Burned</div><div class="lib-sh-radio-group">${burnedHTML}</div></div>
+        <div class="lib-sh-sec"><div class="lib-sh-sec-title">↕ Sortierung</div><div class="lib-sort-chips">${sortChips}</div></div>
+      </div>`;
+    _attachSheetEv();
+  }
+
+  function _attachSheetEv(){
+    sheet.querySelector('#lsReset')?.addEventListener('click',()=>{
+      lf.heardStatus='all';lf.addedWithin='all';lf.albumTypes=[];lf.sortMode='relevance';lf.showBurned='hide';
+      _build();
+    });
+    sheet.querySelectorAll('[data-lt]').forEach(b=>b.addEventListener('click',()=>{
+      const t=b.dataset.lt;const i=lf.albumTypes.indexOf(t);
+      if(i>=0)lf.albumTypes.splice(i,1);else lf.albumTypes.push(t);
+      _build();
+    }));
+    sheet.querySelectorAll('[data-ls]').forEach(b=>b.addEventListener('click',()=>{lf.sortMode=b.dataset.ls;_build();}));
+    sheet.querySelectorAll('input[name=lsheard]').forEach(r=>r.addEventListener('change',()=>{lf.heardStatus=r.value;}));
+    sheet.querySelectorAll('input[name=lsadded]').forEach(r=>r.addEventListener('change',()=>{lf.addedWithin=r.value;}));
+    sheet.querySelectorAll('input[name=lsburned]').forEach(r=>r.addEventListener('change',()=>{lf.showBurned=r.value;}));
+  }
+
+  function _close(){
+    sheetBg.style.animation='fadein .18s ease reverse';
+    sheet.style.animation='slideup .18s cubic-bezier(.32,1,.56,1) reverse';
+    setTimeout(()=>{sheetBg.remove();onClose(_countActive());},180);
+  }
+
+  _build();
+  sheetBg.appendChild(sheet);
+  document.body.appendChild(sheetBg);
+  sheetBg.addEventListener('click',e=>{if(e.target===sheetBg)_close();});
+  const esc=e=>{if(e.key==='Escape'){_close();document.removeEventListener('keydown',esc);}};
+  document.addEventListener('keydown',esc);
+}
+
+/** QID-011 / Lens: Open See All grid modal for a carousel.
+ *  @param {string} carouselId
+ *  @param {string} title
+ *  @param {Array}  albums
+ *  @param {string} [icon]
+ *  @param {string|null} [relatedArtistName]
+ */
+async function openCarouselSeeAllModal(carouselId, title, albums, icon='🎵', relatedArtistName=null){
+  document.querySelector('.sam-bg')?.remove();
+
+  // Keep original pool intact; burn filtering handled by lensFilter.showBurned
+  const allAlbums_orig=[...albums];
 
   // ── Pre-compute badge data sets ──
   const hm=HistoryProvider.getMap();
@@ -3056,65 +3169,69 @@ async function openCarouselSeeAllModal(carouselId, title, albums, icon='🎵', r
     }
   }
   const trendingIds=new Set([...trendingCounts.entries()].sort((a,b)=>b[1]-a[1]).slice(0,10).map(([id])=>id));
-  // QID-032: Repeat — queued >2× in last 7d
   const repeatIds=new Set([...repeatCounts.entries()].filter(([,c])=>c>2).map(([id])=>id));
-  // QID-007: favorites now active
   const favoriteIds=new Set();
   try{const db=await DB.getDb();const favs=await db.getAll('favorites');for(const f of favs)favoriteIds.add(f.id);}catch(e){}
   const hiddenGemIds=new Set();
   const playCounts=new Map();for(const[id]of hm)playCounts.set(id,(playCounts.get(id)||0)+1);
-  for(const a of albums){if(a._inLibrary!==false&&(!playCounts.has(a.id)||(playCounts.get(a.id)||0)<3))hiddenGemIds.add(a.id);}
+  for(const a of allAlbums_orig){if(a._inLibrary!==false&&(!playCounts.has(a.id)||(playCounts.get(a.id)||0)<3))hiddenGemIds.add(a.id);}
 
-  // Badge priority for sort (QID-034)
+  // Badge priority for sort
   const BADGE_PRIORITY={'⭐ Heavy':7,'🔥 Trending':6,'🔁 Repeat':5,'❤️ Fave':4,'💎 Hidden Gem':3,'🆕 Just Added':2,'📅 New':1,'🎵 Playlist':1};
+  const bt=state._badgeToggles;
   function _badgePriority(a){
     const bs=_computeBadges(a,relatedArtistName,bt,heavyIds,trendingIds,favoriteIds,hiddenGemIds,repeatIds);
     return bs.length?(BADGE_PRIORITY[bs[0].label]||0):0;
   }
+  function _getBadgeKeys(a){
+    // Returns array of badge keys active on this album
+    const keys=[];
+    if(heavyIds.has(a.id))keys.push('heavyRotation');
+    if(trendingIds.has(a.id))keys.push('trending');
+    if(repeatIds.has(a.id))keys.push('repeat');
+    if(favoriteIds.has(a.id))keys.push('favorite');
+    if(hiddenGemIds.has(a.id))keys.push('hiddenGem');
+    if(a._added_at&&now-new Date(a._added_at).getTime()<7*86400000)keys.push('justAdded');
+    else if(a._added_at&&now-new Date(a._added_at).getTime()<30*86400000)keys.push('newAlbum');
+    if(a._inLibrary===false)keys.push('playlist');
+    return keys;
+  }
+
+  // ── Lens state ──
+  const lf=_getLensFilter(carouselId);
+  // _samFilters for grouping/artistFilter (persisted)
+  if(!state._samFilters[carouselId])state._samFilters[carouselId]={grouping:'genre',artistFilter:'',sortBy:'relevance'};
+  const sf=state._samFilters[carouselId];
 
   // ── Build modal ──
   const bg=document.createElement('div');bg.className='sam-bg';
   const sheet=document.createElement('div');sheet.className='sam-sheet';
 
+  // Header
   const hdr=document.createElement('div');hdr.className='sam-hdr';
   hdr.innerHTML=`<span class="sam-hdr-icon">${esc(icon)}</span><span class="sam-hdr-title">${esc(title)}</span><span class="sam-hdr-count" id="samCount"></span><button class="sam-close" id="samClose">✕</button>`;
   sheet.appendChild(hdr);
 
-  if(state.burnMode){
-    const burnBanner=document.createElement('div');
-    burnBanner.style.cssText='padding:7px 16px;background:rgba(217,83,74,.1);border-bottom:1px solid rgba(217,83,74,.25);font-size:12px;color:#f87171;display:flex;align-items:center;gap:6px;flex-shrink:0';
-    burnBanner.innerHTML=`🔥 Burn Mode aktiv${burnHiddenCount>0?` — <strong>${burnHiddenCount} album${burnHiddenCount!==1?'s':''} hidden</strong>`:''}`;
-    sheet.appendChild(burnBanner);
-  }
+  // Burn Mode info banner (only when burnMode active AND showBurned=hide)
+  const burnBannerWrap=document.createElement('div');burnBannerWrap.id='samBurnBanner';
+  sheet.appendChild(burnBannerWrap);
 
-  const ALL_DEC=['pre-70s','70s','80s','90s','00s','10s','20s'];
-  const usedDecades=new Set(albums.map(a=>decadeOf(releaseYear(a))).filter(Boolean));
-  const decFilters=document.createElement('div');decFilters.className='sam-filters';
-  decFilters.innerHTML=`<button class="sam-filter-chip${!sf.decade?' active':''}" data-samdec="">All</button>`+
-    ALL_DEC.filter(d=>usedDecades.has(d)).map(d=>`<button class="sam-filter-chip${sf.decade===d?' active':''}" data-samdec="${d}">${d}</button>`).join('');
-  sheet.appendChild(decFilters);
-
-  // QID-032: all 8 badge toggles
-  const badgeBar=document.createElement('div');badgeBar.className='sam-badge-toggles';
-  badgeBar.innerHTML=`<span class="sam-badge-label">Badges:</span>`+
-    [['heavyRotation','⭐ Heavy'],['trending','🔥 Trending'],['repeat','🔁 Repeat'],['favorite','❤️ Fave'],['hiddenGem','💎 Gem'],['justAdded','🆕 New'],['newAlbum','📅 30d'],['playlist','🎵 Playlist']].map(
-      ([k,l])=>`<button class="sam-badge-chip${bt[k]?' active':''}" data-badgekey="${k}">${l}</button>`
-    ).join('');
+  // Badge chips — 2 rows, default ALL OFF, OR-logic when any active
+  const BADGE_DEFS=[
+    ['heavyRotation','⭐ Heavy'],['trending','🔥 Trending'],['repeat','🔁 Repeat'],['favorite','❤️ Fave'],
+    ['hiddenGem','💎 Gem'],['justAdded','🆕 Just Added'],['newAlbum','📅 30d'],['playlist','🎵 Playlist'],
+  ];
+  const badgeBar=document.createElement('div');badgeBar.className='sam-badge-toggles sam-badge-2row';
+  badgeBar.innerHTML=`<span class="sam-badge-label">Badges:</span><div class="sam-badge-chips-wrap">${
+    BADGE_DEFS.map(([k,l])=>`<button class="sam-badge-chip${lf.activeBadges.includes(k)?' active':''}" data-lbadge="${k}">${l}</button>`).join('')
+  }</div>`;
   sheet.appendChild(badgeBar);
 
-  // Body
+  // Body + ctrl row
   const body=document.createElement('div');body.className='sam-body';
   sheet.appendChild(body);
-  bg.appendChild(sheet);
-  document.body.appendChild(bg);
 
-  // QID-016: Grouping + Artist filter state (persisted per carousel in _samFilters)
-  if(!sf.grouping)sf.grouping='genre';
-  if(!sf.artistFilter)sf.artistFilter='';
-
-  const allArtistNames=[...new Set(albums.flatMap(a=>(a.artists||[]).map(ar=>ar.name)))].sort();
-
-  // QID-032/034: Grouping + Artist + Sort dropdowns
+  const allArtistNames=[...new Set(allAlbums_orig.flatMap(a=>(a.artists||[]).map(ar=>ar.name)))].sort();
   const ctrlRow=document.createElement('div');ctrlRow.className='sam-ctrl-row';
   ctrlRow.innerHTML=`
     <select class="sam-ctrl-sel" id="samGrouping">
@@ -3122,39 +3239,122 @@ async function openCarouselSeeAllModal(carouselId, title, albums, icon='🎵', r
       <option value="decade"${sf.grouping==='decade'?' selected':''}>Group: Decade</option>
       <option value="artist"${sf.grouping==='artist'?' selected':''}>Group: Artist</option>
       <option value="year"${sf.grouping==='year'?' selected':''}>Group: Year</option>
+      <option value="none"${sf.grouping==='none'?' selected':''}>No Grouping</option>
     </select>
-    <select class="sam-ctrl-sel" id="samSort">
-      <option value="none"${sf.sortBy==='none'?' selected':''}>Sort: Default</option>
-      <option value="badge"${sf.sortBy==='badge'?' selected':''}>Sort: By Badge</option>
-      <option value="az"${sf.sortBy==='az'?' selected':''}>Sort: A–Z</option>
-      <option value="year"${sf.sortBy==='year'?' selected':''}>Sort: Newest</option>
-    </select>
-    <select class="sam-ctrl-sel" id="samArtistFilter" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis">
+    <select class="sam-ctrl-sel" id="samArtistFilter" style="flex:1;min-width:0">
       <option value="">All Artists</option>
       ${allArtistNames.map(n=>`<option value="${esc(n)}"${sf.artistFilter===n?' selected':''}>${esc(n)}</option>`).join('')}
     </select>`;
   sheet.appendChild(ctrlRow);
 
-  function _render(){
-    let pool=sf.decade?albums.filter(a=>decadeOf(releaseYear(a))===sf.decade):albums;
+  bg.appendChild(sheet);
+  document.body.appendChild(bg);
+
+  // ── FAB Filter Button ──
+  const fab=document.createElement('button');
+  fab.className='lens-fab';fab.id='lensFab';
+  fab.innerHTML='<span class="lens-fab-icon">⚙</span><span class="lens-fab-badge" id="lensFabBadge" style="display:none"></span>';
+  bg.appendChild(fab);
+
+  function _updateFabBadge(n){
+    const badge=fab.querySelector('#lensFabBadge');
+    if(!badge)return;
+    if(n>0){badge.textContent=n;badge.style.display='';}
+    else badge.style.display='none';
+  }
+  // Set initial badge count
+  (()=>{
+    let n=0;
+    if(lf.heardStatus!=='all')n++;if(lf.addedWithin!=='all')n++;if(lf.albumTypes.length)n++;if(lf.showBurned!=='hide')n++;if(lf.activeBadges.length)n++;
+    _updateFabBadge(n);
+  })();
+
+  // ── Apply all filters + sort → return pool ──
+  function _applyLensFilters(){
+    const burnedIds=BurnMode.getBurnedIds();
+    let pool=[...allAlbums_orig];
+
+    // Burn filter
+    if(lf.showBurned==='hide')pool=pool.filter(a=>!burnedIds.has(a.id));
+    else if(lf.showBurned==='only')pool=pool.filter(a=>burnedIds.has(a.id));
+
+    // Heard status
+    if(lf.heardStatus==='unheard')pool=pool.filter(a=>!hm.has(a.id));
+    else if(lf.heardStatus==='heard')pool=pool.filter(a=>hm.has(a.id));
+
+    // Added within
+    if(lf.addedWithin!=='all'){
+      const cuts={'month':30,'6months':180,'year':365};
+      const cutoff=now-(cuts[lf.addedWithin]||0)*86400000;
+      pool=pool.filter(a=>a._added_at&&new Date(a._added_at).getTime()>=cutoff);
+    }
+
+    // Type filter
+    if(lf.albumTypes.length)pool=pool.filter(a=>lf.albumTypes.includes(a.album_type||'album'));
+
+    // Badge filter (OR-logic, default = show all)
+    if(lf.activeBadges.length){
+      pool=pool.filter(a=>{
+        const keys=_getBadgeKeys(a);
+        return lf.activeBadges.some(b=>keys.includes(b));
+      });
+    }
+
+    // Artist filter
     if(sf.artistFilter)pool=pool.filter(a=>(a.artists||[]).some(ar=>ar.name===sf.artistFilter));
-    // QID-034: sort
-    if(sf.sortBy==='badge')pool=[...pool].sort((a,b)=>_badgePriority(b)-_badgePriority(a));
-    else if(sf.sortBy==='az')pool=[...pool].sort((a,b)=>(a.name||'').localeCompare(b.name||''));
-    else if(sf.sortBy==='year')pool=[...pool].sort((a,b)=>(b.release_date||'').localeCompare(a.release_date||''));
+
+    // Sort
+    const sm=lf.sortMode||'relevance';
+    if(sm==='relevance')pool=[...pool].sort((a,b)=>_lensRelevanceScore(b,carouselId,hm,playCounts,heavyIds,hiddenGemIds)-_lensRelevanceScore(a,carouselId,hm,playCounts,heavyIds,hiddenGemIds));
+    else if(sm==='badge')pool=[...pool].sort((a,b)=>_badgePriority(b)-_badgePriority(a));
+    else if(sm==='az')pool=[...pool].sort((a,b)=>(a.name||'').localeCompare(b.name||''));
+    else if(sm==='za')pool=[...pool].sort((a,b)=>(b.name||'').localeCompare(a.name||''));
+    else if(sm==='newest')pool=[...pool].sort((a,b)=>(b.release_date||'').localeCompare(a.release_date||''));
+    else if(sm==='oldest')pool=[...pool].sort((a,b)=>(a.release_date||'').localeCompare(b.release_date||''));
+    else if(sm==='mostplayed')pool=[...pool].sort((a,b)=>(playCounts.get(b.id)||0)-(playCounts.get(a.id)||0));
+    else if(sm==='lastplayed')pool=[...pool].sort((a,b)=>(hm.get(b.id)||0)-(hm.get(a.id)||0));
+
+    return pool;
+  }
+
+  function _render(){
+    const pool=_applyLensFilters();
     hdr.querySelector('#samCount').textContent=`${pool.length} albums`;
 
+    // Burn banner
+    const burnedIds=BurnMode.getBurnedIds();
+    const burnBanner=bg.querySelector('#samBurnBanner');
+    if(burnBanner){
+      const hidden=allAlbums_orig.filter(a=>burnedIds.has(a.id)).length;
+      if(state.burnMode&&hidden>0&&lf.showBurned==='hide'){
+        burnBanner.style.cssText='padding:7px 16px;background:rgba(217,83,74,.1);border-bottom:1px solid rgba(217,83,74,.25);font-size:12px;color:#f87171;display:flex;align-items:center;gap:6px;flex-shrink:0';
+        burnBanner.innerHTML=`🔥 Burn Mode — <strong>${hidden} album${hidden!==1?'s':''} hidden</strong>`;
+      } else burnBanner.style.display='none';
+    }
+
+    body.innerHTML='';
+    if(!pool.length){body.innerHTML=`<div class="sam-empty">No albums match this filter. <button class="btn btn-sm" id="samResetLens" style="margin-top:10px">Reset filters</button></div>`;
+      body.querySelector('#samResetLens')?.addEventListener('click',()=>{
+        lf.heardStatus='all';lf.addedWithin='all';lf.albumTypes=[];lf.sortMode='relevance';lf.showBurned='hide';lf.activeBadges=[];
+        _updateFabBadge(0);_render();
+      });
+      return;
+    }
+
+    // Grouping
     let groups=new Map();
-    if(sf.grouping==='genre'){
+    const grp=sf.grouping||'genre';
+    if(grp==='none'){
+      groups.set('',pool);
+    } else if(grp==='genre'){
       for(const a of pool){const lbl=_samGenreLabel(a);if(!groups.has(lbl))groups.set(lbl,[]);groups.get(lbl).push(a);}
       groups=new Map([...groups.entries()].sort((a,b)=>{if(a[0]==='Other')return 1;if(b[0]==='Other')return-1;return b[1].length-a[1].length;}));
-    } else if(sf.grouping==='decade'){
+    } else if(grp==='decade'){
       const DEC_ORDER=['20s','10s','00s','90s','80s','70s','pre-70s'];
       for(const a of pool){const d=decadeOf(releaseYear(a));if(!groups.has(d))groups.set(d,[]);groups.get(d).push(a);}
       const ordered=new Map();for(const d of DEC_ORDER)if(groups.has(d))ordered.set(d,groups.get(d));
-      for(const[k,v]of groups)if(!ordered.has(k))ordered.set(k,v);
-      groups=ordered;
-    } else if(sf.grouping==='artist'){
+      for(const[k,v]of groups)if(!ordered.has(k))ordered.set(k,v);groups=ordered;
+    } else if(grp==='artist'){
       for(const a of pool){const n=(a.artists||[])[0]?.name||'Unknown';if(!groups.has(n))groups.set(n,[]);groups.get(n).push(a);}
       groups=new Map([...groups.entries()].sort((a,b)=>b[1].length-a[1].length));
     } else {
@@ -3162,13 +3362,12 @@ async function openCarouselSeeAllModal(carouselId, title, albums, icon='🎵', r
       groups=new Map([...groups.entries()].sort((a,b)=>Number(b[0])-Number(a[0])));
     }
 
-    body.innerHTML='';
-    if(!pool.length){body.innerHTML=`<div class="sam-empty">No albums match this filter.</div>`;return;}
-
     for(const[groupLabel,groupAlbums]of groups){
-      const ch=document.createElement('div');ch.className='sam-cluster-hdr';
-      ch.innerHTML=`${esc(groupLabel)} <span class="sam-cluster-hdr-count">${groupAlbums.length}</span>`;
-      body.appendChild(ch);
+      if(groupLabel){
+        const ch=document.createElement('div');ch.className='sam-cluster-hdr';
+        ch.innerHTML=`${esc(groupLabel)} <span class="sam-cluster-hdr-count">${groupAlbums.length}</span>`;
+        body.appendChild(ch);
+      }
       const grid=document.createElement('div');grid.className='sam-grid sam-grid-2col';
       for(const a of groupAlbums){
         const art=getArt(a,'md')||getArt(a,'lg');
@@ -3190,24 +3389,25 @@ async function openCarouselSeeAllModal(carouselId, title, albums, icon='🎵', r
   hdr.querySelector('#samClose').addEventListener('click',()=>bg.remove());
   bg.addEventListener('click',e=>{if(e.target===bg)bg.remove();});
 
-  decFilters.addEventListener('click',e=>{
-    const btn=e.target.closest('[data-samdec]');if(!btn)return;
-    sf.decade=btn.dataset.samdec||null;
-    decFilters.querySelectorAll('[data-samdec]').forEach(b=>b.classList.toggle('active',b.dataset.samdec===(sf.decade||'')));
-    _render();
-  });
-
+  // Badge chips — OR filter, default all off
   badgeBar.addEventListener('click',e=>{
-    const btn=e.target.closest('[data-badgekey]');if(!btn)return;
-    const k=btn.dataset.badgekey;bt[k]=!bt[k];
-    btn.classList.toggle('active',bt[k]);
+    const btn=e.target.closest('[data-lbadge]');if(!btn)return;
+    const k=btn.dataset.lbadge;
+    const idx=lf.activeBadges.indexOf(k);
+    if(idx>=0)lf.activeBadges.splice(idx,1);else lf.activeBadges.push(k);
+    btn.classList.toggle('active',lf.activeBadges.includes(k));
+    let n=0;if(lf.heardStatus!=='all')n++;if(lf.addedWithin!=='all')n++;if(lf.albumTypes.length)n++;if(lf.showBurned!=='hide')n++;if(lf.activeBadges.length)n++;
+    _updateFabBadge(n);
     _render();
   });
 
-  // QID-016: Grouping + Artist + Sort filter
   ctrlRow.querySelector('#samGrouping').addEventListener('change',e=>{sf.grouping=e.target.value;_render();});
-  ctrlRow.querySelector('#samSort').addEventListener('change',e=>{sf.sortBy=e.target.value;_render();});
   ctrlRow.querySelector('#samArtistFilter').addEventListener('change',e=>{sf.artistFilter=e.target.value;_render();});
+
+  // FAB
+  fab.addEventListener('click',()=>{
+    _openLensSheet(lf,(activeCount)=>{_updateFabBadge(activeCount);_render();});
+  });
 
   const onKey=e=>{if(e.key==='Escape'){bg.remove();document.removeEventListener('keydown',onKey);}};
   document.addEventListener('keydown',onKey);
@@ -3959,16 +4159,31 @@ function renderHomeDashboard(panel){
     })();
   }
 
-  // ── PHASE 9 QID-009 / QID-026: User Playlist Carousels — Cache-only, 0 API-Calls
+  // ── PHASE 9 QID-009 / QID-026: User Playlist Carousels
+  // Cache-first. Falls kein Cache → API-Fallback im Background → Carousel nachrendern.
   (async()=>{
     const selectedIds=await PlaylistCache.getSelectedIds();
     if(!selectedIds.length)return;
+    const allPl=await PlaylistCache.getPlaylists()||[];
+
     for(const plId of selectedIds.slice(0,5)){
       if(!HomeLayout.get('playlist-'+plId))continue;
-      // QID-026: cache-only — no API call if missing
-      const albums=await PlaylistCache.getAlbums(plId);
+
+      let albums=await PlaylistCache.getAlbums(plId);
+
+      // Kein Cache → API-Fallback (rate-limited)
+      if(!albums||!albums.length){
+        try{
+          await new Promise(r=>setTimeout(r,340));
+          albums=await SpotifyAPI.fetchPlaylistItems(plId);
+          if(albums?.length){
+            await PlaylistCache.saveAlbums(plId,albums);
+            EnrichedLibrary.invalidate().catch(()=>{});
+          }
+        }catch(e){console.warn('Playlist carousel fetch failed',plId,e);continue;}
+      }
+
       if(!albums||!albums.length)continue;
-      const allPl=await PlaylistCache.getPlaylists()||[];
       const plMeta=allPl.find(p=>p.id===plId);
       const plName=plMeta?.name||'Playlist';
       // QID-025: filter burned
