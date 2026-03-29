@@ -830,16 +830,10 @@
     /* Lens: Badge 2-row layout */
     .sam-badge-2row{flex-wrap:wrap;overflow-x:visible;gap:5px 6px;padding:8px 14px}
     .sam-badge-chips-wrap{display:flex;flex-wrap:wrap;gap:5px}
-    /* Lens: FAB filter button */
-    .lens-fab{position:absolute;bottom:20px;right:16px;width:52px;height:52px;border-radius:50%;
-      background:var(--blue);border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;
-      box-shadow:0 4px 16px rgba(74,144,217,.45);z-index:10;transition:transform .15s,background .15s;
-      -webkit-tap-highlight-color:transparent}
-    .lens-fab:active{transform:scale(.9);background:var(--blue-dk)}
-    .lens-fab-icon{font-size:20px;color:#fff;line-height:1}
-    .lens-fab-badge{position:absolute;top:4px;right:4px;min-width:16px;height:16px;border-radius:8px;
-      background:var(--error);color:#fff;font-size:9px;font-weight:700;display:flex;align-items:center;
-      justify-content:center;padding:0 4px;line-height:1;border:2px solid var(--surface)}
+    /* Lens: Filter-Button im Header */
+    .lens-filter-btn{flex-shrink:0;padding:5px 10px;border:1px solid var(--border2);border-radius:var(--r-f);
+      background:none;font-size:11px;font-weight:600;color:var(--text-dim);cursor:pointer;
+      font-family:var(--font-b);white-space:nowrap;transition:all .15s;min-height:30px}
   </style>
 </head>
 <body>
@@ -1502,9 +1496,6 @@ const state={
   expandedClusters:new Set(),
   libFilter:'',albumCount:1,browserMode:false,
   filters:{decades:[],decadesExcl:[],excludeKW:false,minDur:0,maxDur:200,genres:[],clusters:[],minAgeMonths:0,avoidRecent:true,weightUnheard:true,queueHistory:'any',radarSource:'all',pickerSource:'library',mostQueued:'off'},
-  // QID-017: Enriched Library
-  useEnrichedLibrary:false,
-  enrichedSource:'all', // 'all' | 'library' | 'playlists'
   // QID-013: Burn Mode
   burnMode:false,
   // QID-011/012: See All modal state
@@ -1512,8 +1503,8 @@ const state={
   _samFilters:{},
 };
 
-function saveSession(){try{sessionStorage.setItem('ad_s',JSON.stringify({f:state.filters,ac:state.albumCount,as:state.albumSort,ap:state.activePreset,fo:state.filterOpen,fs:state.filterSections,bm:state.browserMode,uel:state.useEnrichedLibrary,es:state.enrichedSource,burn:state.burnMode,mq:state.filters.mostQueued}));}catch(e){}}
-function restoreSession(){try{const r=sessionStorage.getItem('ad_s');if(!r)return;const s=JSON.parse(r);if(s.f)Object.assign(state.filters,s.f);if(s.ac)state.albumCount=s.ac;if(s.as)state.albumSort=s.as;if(s.ap!==undefined)state.activePreset=s.ap;if(s.fo!==undefined)state.filterOpen=s.fo;if(s.fs)Object.assign(state.filterSections,s.fs);if(s.bm!==undefined)state.browserMode=s.bm;if(s.uel!==undefined)state.useEnrichedLibrary=s.uel;if(s.es)state.enrichedSource=s.es;if(s.burn!==undefined)state.burnMode=s.burn;if(s.mq)state.filters.mostQueued=s.mq;}catch(e){}}
+function saveSession(){try{sessionStorage.setItem('ad_s',JSON.stringify({f:state.filters,ac:state.albumCount,as:state.albumSort,ap:state.activePreset,fo:state.filterOpen,fs:state.filterSections,bm:state.browserMode,burn:state.burnMode,mq:state.filters.mostQueued}));}catch(e){}}
+function restoreSession(){try{const r=sessionStorage.getItem('ad_s');if(!r)return;const s=JSON.parse(r);if(s.f)Object.assign(state.filters,s.f);if(s.ac)state.albumCount=s.ac;if(s.as)state.albumSort=s.as;if(s.ap!==undefined)state.activePreset=s.ap;if(s.fo!==undefined)state.filterOpen=s.fo;if(s.fs)Object.assign(state.filterSections,s.fs);if(s.bm!==undefined)state.browserMode=s.bm;if(s.burn!==undefined)state.burnMode=s.burn;if(s.mq)state.filters.mostQueued=s.mq;}catch(e){}}
 
 function applyPreset(name){
   const rst=()=>Object.assign(state.filters,{decades:[],decadesExcl:[],genres:[],clusters:[],excludeKW:false,minAgeMonths:0,avoidRecent:false,weightUnheard:false,minDur:0,maxDur:200,queueHistory:'any'});
@@ -1686,9 +1677,7 @@ function buildPickerHTML(){
   const countHTML=`<div class="section"><div class="count-row"><span class="count-lbl">Albums</span><div class="count-btns">${[1,2,5,10,20].map(n=>`<button class="count-btn${state.albumCount===n?' active':''}" data-count="${n}">${n}</button>`).join('')}</div></div></div>`;
   const filtersHTML=`<div class="card section"><div class="clps-trg" id="filtersTrg"><div style="display:flex;align-items:center;gap:8px"><span style="font-family:var(--font-h);font-size:15px;font-weight:600">Filters</span>${fCount>0?`<span style="background:var(--blue);color:#fff;font-size:10px;font-weight:700;padding:2px 7px;border-radius:var(--r-f)">${fCount}</span>`:''}</div><span class="clps-arr${state.filterOpen?' open':''}">▼</span></div><div class="clps-body${state.filterOpen?' open':''}" id="filtersBody"><div class="clps-inner">${buildFiltersInner()}</div></div></div>`;
   const ps=state.filters.pickerSource||'library';
-  const pickerSourceHTML=state.useEnrichedLibrary
-    ? `<div class="section"><div class="lbl" style="margin-bottom:6px">Quelle</div><div style="display:flex;align-items:center;gap:8px;margin-bottom:8px"><span style="font-size:12px;background:var(--blue-glow);border:1px solid var(--blue);color:var(--blue);padding:3px 9px;border-radius:var(--r-f);font-weight:600">✦ Enriched Library aktiv</span></div><div class="picker-src-btns"><button class="picker-src-btn${state.enrichedSource==='all'?' active':''}" data-enriched-src="all">🔀 Alles</button><button class="picker-src-btn${state.enrichedSource==='library'?' active':''}" data-enriched-src="library">🗂 Bibliothek</button><button class="picker-src-btn${state.enrichedSource==='playlists'?' active':''}" data-enriched-src="playlists">🎵 Nur Playlists</button></div></div>`
-    : `<div class="section"><div class="lbl" style="margin-bottom:8px">Quelle</div><div class="picker-src-btns"><button class="picker-src-btn${ps==='library'?' active':''}" data-src="library">🗂 Bibliothek</button><button class="picker-src-btn${ps==='playlists'?' active':''}" data-src="playlists">🎵 Playlists</button><button class="picker-src-btn${ps==='both'?' active':''}" data-src="both">🔀 Beides</button></div></div>`;
+  const pickerSourceHTML=`<div class="section"><div class="lbl" style="margin-bottom:8px">Quelle</div><div class="picker-src-btns"><button class="picker-src-btn${ps==='library'?' active':''}" data-src="library">🗂 Bibliothek</button><button class="picker-src-btn${ps==='playlists'?' active':''}" data-src="playlists">🎵 Playlists</button><button class="picker-src-btn${ps==='both'?' active':''}" data-src="both">🔀 Beides</button></div></div>`;
   const cvgHTML=cvg.total?buildCoverageHTML(cvg):'';
   const statsHTML=`<div class="stats-info">${filtered.length} of ${allAlbums.length} albums match · ${syncLbl}${state.genresLoading?` · <span id="genreProgressWrap">Loading genres…</span>`:''}</div>`;
   const pickBtn=`<button class="btn btn-primary btn-full" id="queueBtn" ${state.isWorking?'disabled':''} style="height:52px;font-size:14px;font-weight:700;font-family:var(--font-h);border-radius:var(--r-xl);margin-bottom:12px">${state.isWorking&&state.phase!=='queuing'?'<span class="spinner" style="width:18px;height:18px;border-width:2px"></span> Picking…':'🎲 Pick Albums'}</button>`;
@@ -1855,13 +1844,6 @@ function attachPickerEvents(panel){
     panel.querySelectorAll('.picker-src-btn').forEach(x=>x.classList.toggle('active',x.dataset.src===fa.pickerSource));
     saveSession();
   }));
-  // QID-017: enriched source buttons
-  panel.querySelectorAll('.picker-src-btn[data-enriched-src]').forEach(b=>b.addEventListener('click',()=>{
-    state.enrichedSource=b.dataset.enrichedSrc;
-    panel.querySelectorAll('.picker-src-btn[data-enriched-src]').forEach(x=>x.classList.toggle('active',x.dataset.enrichedSrc===state.enrichedSource));
-    EnrichedLibrary.invalidate().catch(()=>{});
-    saveSession();
-  }));
   panel.querySelector('#cvgTrg')?.addEventListener('click',()=>{state.coverageOpen=!state.coverageOpen;panel.querySelector('#cvgBody')?.classList.toggle('open',state.coverageOpen);panel.querySelector('#cvgTrg .clps-arr')?.classList.toggle('open',state.coverageOpen);});
   panel.querySelectorAll('[data-cvgfilter]').forEach(b=>b.addEventListener('click',()=>{state.coverageFilter=b.dataset.cvgfilter;handlePick();}));
 
@@ -1883,39 +1865,25 @@ async function handlePick(){
   if(state.isWorking||!allAlbums.length)return;
   state.isWorking=true;renderPickerContent();
 
-  // QID-017: use enriched pool when active; else QID-009 pickerSource logic
+  // QID-009: build base pool according to pickerSource
   let basePool;
-  if(state.useEnrichedLibrary){
-    try{basePool=await EnrichedLibrary.getPool();}
-    catch(e){basePool=allAlbums;}
-  } else {
-    // QID-009: build base pool according to pickerSource
-    const src=state.filters.pickerSource||'library';
-    basePool=allAlbums;
-    if(src==='playlists'||src==='both'){
-      const selectedIds=await PlaylistCache.getSelectedIds();
-      if(!selectedIds.length){
-        _toast('Keine Playlists hinterlegt. Bitte zuerst im Profil auswählen.',true);
-        state.isWorking=false;renderPickerContent();return;
-      }
-      const plAlbumMap=new Map();
-      for(const pid of selectedIds){
-        const albums=await PlaylistCache.getAlbums(pid)||[];
-        for(const a of albums)if(!plAlbumMap.has(a.id))plAlbumMap.set(a.id,a);
-      }
-      const plAlbums=[...plAlbumMap.values()];
-      if(src==='playlists'){
-        basePool=plAlbums;
-      }else{
-        const merged=new Map(allAlbums.map(a=>[a.id,a]));
-        for(const a of plAlbums)if(!merged.has(a.id))merged.set(a.id,a);
-        basePool=[...merged.values()];
-      }
-      if(!basePool.length){
-        _toast('Playlist-Alben konnten nicht geladen werden. Bitte Playlists neu laden.',true);
-        state.isWorking=false;renderPickerContent();return;
-      }
+  const src=state.filters.pickerSource||'library';
+  basePool=allAlbums;
+  if(src==='playlists'||src==='both'){
+    const selectedIds=await PlaylistCache.getSelectedIds();
+    if(!selectedIds.length){
+      _toast('Keine Playlists hinterlegt. Bitte zuerst im Profil auswählen.',true);
+      state.isWorking=false;renderPickerContent();return;
     }
+    const plAlbumMap=new Map();
+    for(const pid of selectedIds){
+      const albums=await PlaylistCache.getAlbums(pid)||[];
+      for(const a of albums)if(!plAlbumMap.has(a.id))plAlbumMap.set(a.id,a);
+    }
+    const plAlbums=[...plAlbumMap.values()];
+    if(src==='playlists'){basePool=plAlbums.length?plAlbums:allAlbums;}
+    else{const merged=new Map(allAlbums.map(a=>[a.id,a]));for(const a of plAlbums)if(!merged.has(a.id))merged.set(a.id,a);basePool=[...merged.values()];}
+    if(!basePool.length){_toast('Playlist-Alben konnten nicht geladen werden.',true);state.isWorking=false;renderPickerContent();return;}
   }
 
   let pool=applyFilters(basePool);
@@ -1945,27 +1913,22 @@ async function handlePick(){
 }
 
 async function rerollAlbum(idx){
-  // QID-010: async, pickerSource-aware. QID-017: enriched pool when active.
+  // QID-010: async, pickerSource-aware
   if(state.isWorking)return;
   let basePool;
-  if(state.useEnrichedLibrary){
-    try{basePool=await EnrichedLibrary.getPool();}
-    catch(e){basePool=allAlbums;}
-  } else {
-    const src=state.filters.pickerSource||'library';
-    basePool=allAlbums;
-    if(src==='playlists'||src==='both'){
-      const selectedIds=await PlaylistCache.getSelectedIds();
-      if(selectedIds.length){
-        const plAlbumMap=new Map();
-        for(const pid of selectedIds){
-          const albums=await PlaylistCache.getAlbums(pid)||[];
-          for(const a of albums)if(!plAlbumMap.has(a.id))plAlbumMap.set(a.id,a);
-        }
-        const plAlbums=[...plAlbumMap.values()];
-        if(src==='playlists'){basePool=plAlbums.length?plAlbums:allAlbums;}
-        else{const merged=new Map(allAlbums.map(a=>[a.id,a]));for(const a of plAlbums)if(!merged.has(a.id))merged.set(a.id,a);basePool=[...merged.values()];}
+  const src=state.filters.pickerSource||'library';
+  basePool=allAlbums;
+  if(src==='playlists'||src==='both'){
+    const selectedIds=await PlaylistCache.getSelectedIds();
+    if(selectedIds.length){
+      const plAlbumMap=new Map();
+      for(const pid of selectedIds){
+        const albums=await PlaylistCache.getAlbums(pid)||[];
+        for(const a of albums)if(!plAlbumMap.has(a.id))plAlbumMap.set(a.id,a);
       }
+      const plAlbums=[...plAlbumMap.values()];
+      if(src==='playlists'){basePool=plAlbums.length?plAlbums:allAlbums;}
+      else{const merged=new Map(allAlbums.map(a=>[a.id,a]));for(const a of plAlbums)if(!merged.has(a.id))merged.set(a.id,a);basePool=[...merged.values()];}
     }
   }
   const pool=applyFilters(basePool).filter(a=>!state.selectedAlbums.includes(a)&&(!state.burnMode||!BurnMode.isBurned(a.id)));if(!pool.length)return;
@@ -2419,50 +2382,6 @@ async function renderProfileTab(panel){
     } else {
       wrap.querySelector('#p4LoadPlaylists')?.addEventListener('click',()=>renderPlaylistPicker(true));
     }
-  })();
-
-  // ── QID-017: Enriched Library ─────────────────────────────────
-  (()=>{
-    const elDiv=document.createElement('div');elDiv.className='p4-section';
-    const srcVisible=state.useEnrichedLibrary;
-    elDiv.innerHTML=`<div class="p4-section-title">Enriched Library</div>
-      <div class="card" style="overflow:hidden">
-        <div class="settings-row">
-          <div>
-            <div class="settings-row-label">Use Enriched Library</div>
-            <div class="settings-row-sub">Merge your saved albums + playlist albums into one pool</div>
-          </div>
-          <label class="tgl-sw"><input type="checkbox" id="p4EnrichedToggle"${state.useEnrichedLibrary?' checked':''}><span class="tgl-track"></span></label>
-        </div>
-        <div id="p4EnrichedSourceRow" style="display:${srcVisible?'flex':'none'}">
-          <div class="settings-row" style="flex:1">
-            <div>
-              <div class="settings-row-label">Pool source</div>
-              <div class="settings-row-sub">Which albums to include when picking</div>
-            </div>
-            <select class="settings-input" id="p4EnrichedSource" style="width:130px;padding:6px 10px">
-              <option value="all"${state.enrichedSource==='all'?' selected':''}>All albums</option>
-              <option value="library"${state.enrichedSource==='library'?' selected':''}>Library only</option>
-              <option value="playlists"${state.enrichedSource==='playlists'?' selected':''}>Playlists only</option>
-            </select>
-          </div>
-        </div>
-      </div>`;
-    panel.appendChild(elDiv);
-    elDiv.querySelector('#p4EnrichedToggle').addEventListener('change',async e=>{
-      state.useEnrichedLibrary=e.target.checked;
-      saveSession();
-      elDiv.querySelector('#p4EnrichedSourceRow').style.display=state.useEnrichedLibrary?'flex':'none';
-      if(state.useEnrichedLibrary)await EnrichedLibrary.invalidate(); // force rebuild next use
-      _toast(state.useEnrichedLibrary?'Enriched Library aktiviert':'Nur Bibliothek aktiv');
-      renderPickerContent();
-    });
-    elDiv.querySelector('#p4EnrichedSource').addEventListener('change',e=>{
-      state.enrichedSource=e.target.value;
-      saveSession();
-      EnrichedLibrary.invalidate().catch(()=>{});
-      renderPickerContent();
-    });
   })();
 
   // ── History management ────────────────────────────────────────
@@ -3031,12 +2950,14 @@ function _computeBadges(album, relatedArtistName, badgeToggles, heavyIds, trendi
 const _lensFilters={};
 function _getLensFilter(carouselId){
   if(!_lensFilters[carouselId])_lensFilters[carouselId]={
-    heardStatus:'all',   // 'all'|'unheard'|'heard'
-    addedWithin:'all',   // 'all'|'month'|'6months'|'year'
-    albumTypes:[],       // []|['album','single','compilation']
-    sortMode:'relevance',// 'relevance'|'badge'|'az'|'newest'|'oldest'|'mostplayed'|'lastplayed'
-    showBurned:'hide',   // 'hide'|'show'|'only'
-    activeBadges:[],     // [] = show all; non-empty = OR filter
+    heardStatus:'all',
+    addedWithin:'all',
+    albumTypes:[],
+    sortMode:'relevance',
+    showBurned:'hide',
+    activeBadges:[],
+    activeGenres:[],     // genre cluster ids
+    activeSubGenres:[],  // sub-genre strings
   };
   return _lensFilters[carouselId];
 }
@@ -3065,28 +2986,59 @@ function _lensRelevanceScore(album, carouselId, hm, playCounts, heavyIds, hidden
   return recency + newness*0.5 + badgeBonus;
 }
 
-/** Lens Filter Sheet — opens from FAB, uses per-carousel lensFilter state */
-function _openLensSheet(lf, onClose){
+/** Lens Filter Sheet — Genre + Subgenres + Gehört + Hinzugefügt + Typ + Burned + Sort */
+function _openLensSheet(lf, poolAlbums, onClose){
   document.querySelector('.lens-sheet-bg')?.remove();
   const sheetBg=document.createElement('div');sheetBg.className='lib-sheet-bg lens-sheet-bg';
   const sheet=document.createElement('div');sheet.className='lib-sheet';
 
+  // Build genre cluster counts from pool
+  function _genreCounts(){
+    const counts=new Map();
+    for(const a of poolAlbums){
+      const gs=a._genres||[];
+      const clusters=new Set(gs.map(g=>clusterOf(g)));
+      for(const c of clusters)counts.set(c,(counts.get(c)||0)+1);
+    }
+    return counts;
+  }
+  // Sub-genres for active cluster from pool
+  function _subGenresForLens(clusterId){
+    const kw=(GENRE_CLUSTERS.find(c=>c.id===clusterId)||{}).kw||[];
+    const counts=new Map();
+    for(const a of poolAlbums){
+      for(const g of(a._genres||[])){
+        if(kw.some(k=>g.toLowerCase().includes(k)))counts.set(g,(counts.get(g)||0)+1);
+      }
+    }
+    return[...counts.entries()].sort((a,b)=>b[1]-a[1]).slice(0,30).map(([g,n])=>({genre:g,count:n}));
+  }
+
   function _countActive(){
     let n=0;
-    if(lf.heardStatus!=='all')n++;
-    if(lf.addedWithin!=='all')n++;
-    if(lf.albumTypes.length)n++;
-    if(lf.showBurned!=='hide')n++;
-    if(lf.activeBadges.length)n++;
+    if(lf.heardStatus!=='all')n++;if(lf.addedWithin!=='all')n++;if(lf.albumTypes.length)n++;
+    if(lf.showBurned!=='hide')n++;if(lf.activeBadges.length)n++;if(lf.activeGenres.length)n++;
     return n;
   }
 
   function _build(){
-    const typeChips=['album','single','compilation'].map(t=>{
-      const lbl={album:'Album',single:'Single / EP',compilation:'Compilation'}[t];
-      return`<button class="lib-type-chip${lf.albumTypes.includes(t)?' active':''}" data-lt="${t}">${lbl}</button>`;
+    const genreCounts=_genreCounts();
+    const genreChips=GENRE_CLUSTERS.map(c=>{
+      const cnt=genreCounts.get(c.id)||0;if(!cnt)return'';
+      const active=lf.activeGenres.includes(c.id);
+      return`<button class="lib-genre-chip${active?' active':''}" data-lg="${c.id}"><span class="chip-icon">${c.icon}</span>${c.label}<span class="chip-cnt">${cnt}</span></button>`;
     }).join('');
-    const sortChips=[['relevance','Relevance'],['badge','By Badge'],['newest','Newest First'],['oldest','Oldest First'],['az','A–Z'],['za','Z–A'],['mostplayed','Most Played'],['lastplayed','Last Played']].map(
+
+    let subHTML='';
+    if(lf.activeGenres.length===1){
+      const subs=_subGenresForLens(lf.activeGenres[0]).slice(0,30);
+      if(subs.length)subHTML=`<div class="lib-subgenre-wrap">${subs.map(({genre,count})=>`<button class="lib-subgenre-chip${lf.activeSubGenres.includes(genre)?' active':''}" data-lsg="${esc(genre)}">${esc(genre)}<span class="chip-cnt" style="font-size:9px;opacity:.5;margin-left:3px">${count}</span></button>`).join('')}</div>`;
+    }
+
+    const typeChips=['album','single','compilation'].map(t=>
+      `<button class="lib-type-chip${lf.albumTypes.includes(t)?' active':''}" data-lt="${t}">${{album:'Album',single:'Single / EP',compilation:'Compilation'}[t]}</button>`
+    ).join('');
+    const sortChips=[['relevance','Relevance'],['badge','By Badge'],['newest','Newest'],['oldest','Oldest'],['az','A–Z'],['za','Z–A'],['mostplayed','Most Played'],['lastplayed','Last Played']].map(
       ([v,l])=>`<button class="lib-sort-chip${lf.sortMode===v?' active':''}" data-ls="${v}">${l}</button>`).join('');
     const heardHTML=[['all','Alle'],['unheard','🆕 Ungehört'],['heard','👂 Gehört']].map(
       ([v,l])=>`<label class="lib-sh-radio-row"><input type="radio" name="lsheard" value="${v}"${lf.heardStatus===v?' checked':''}><span>${l}</span></label>`).join('');
@@ -3102,6 +3054,7 @@ function _openLensSheet(lf, onClose){
         <button class="lib-sheet-reset" id="lsReset">Reset all</button>
       </div>
       <div class="lib-sheet-body">
+        <div class="lib-sh-sec"><div class="lib-sh-sec-title">🎸 Genre</div><div class="lib-genre-wrap">${genreChips}</div>${subHTML}</div>
         <div class="lib-sh-sec"><div class="lib-sh-sec-title">👂 Gehört-Status</div><div class="lib-sh-radio-group">${heardHTML}</div></div>
         <div class="lib-sh-sec"><div class="lib-sh-sec-title">🗓 Hinzugefügt</div><div class="lib-sh-radio-group">${addedHTML}</div></div>
         <div class="lib-sh-sec"><div class="lib-sh-sec-title">📦 Typ</div><div class="lib-type-chips">${typeChips}</div></div>
@@ -3113,9 +3066,22 @@ function _openLensSheet(lf, onClose){
 
   function _attachSheetEv(){
     sheet.querySelector('#lsReset')?.addEventListener('click',()=>{
-      lf.heardStatus='all';lf.addedWithin='all';lf.albumTypes=[];lf.sortMode='relevance';lf.showBurned='hide';
+      lf.heardStatus='all';lf.addedWithin='all';lf.albumTypes=[];lf.sortMode='relevance';
+      lf.showBurned='hide';lf.activeGenres=[];lf.activeSubGenres=[];
       _build();
     });
+    sheet.querySelectorAll('[data-lg]').forEach(b=>b.addEventListener('click',()=>{
+      const id=b.dataset.lg;
+      const i=lf.activeGenres.indexOf(id);
+      if(i>=0){lf.activeGenres.splice(i,1);lf.activeSubGenres=[];}
+      else{lf.activeGenres=[id];lf.activeSubGenres=[];}// single-select for sub-genre support
+      _build();
+    }));
+    sheet.querySelectorAll('[data-lsg]').forEach(b=>b.addEventListener('click',()=>{
+      const g=b.dataset.lsg;const i=lf.activeSubGenres.indexOf(g);
+      if(i>=0)lf.activeSubGenres.splice(i,1);else lf.activeSubGenres.push(g);
+      _build();
+    }));
     sheet.querySelectorAll('[data-lt]').forEach(b=>b.addEventListener('click',()=>{
       const t=b.dataset.lt;const i=lf.albumTypes.indexOf(t);
       if(i>=0)lf.albumTypes.splice(i,1);else lf.albumTypes.push(t);
@@ -3137,8 +3103,8 @@ function _openLensSheet(lf, onClose){
   sheetBg.appendChild(sheet);
   document.body.appendChild(sheetBg);
   sheetBg.addEventListener('click',e=>{if(e.target===sheetBg)_close();});
-  const esc=e=>{if(e.key==='Escape'){_close();document.removeEventListener('keydown',esc);}};
-  document.addEventListener('keydown',esc);
+  const escKey=e=>{if(e.key==='Escape'){_close();document.removeEventListener('keydown',escKey);}};
+  document.addEventListener('keydown',escKey);
 }
 
 /** QID-011 / Lens: Open See All grid modal for a carousel.
@@ -3207,16 +3173,22 @@ async function openCarouselSeeAllModal(carouselId, title, albums, icon='🎵', r
   const bg=document.createElement('div');bg.className='sam-bg';
   const sheet=document.createElement('div');sheet.className='sam-sheet';
 
-  // Header
+  // Header — Filter-Button rechts neben Count, gleicher Style wie Library
+  function _activeFilterCount(){
+    let n=0;
+    if(lf.heardStatus!=='all')n++;if(lf.addedWithin!=='all')n++;if(lf.albumTypes.length)n++;
+    if(lf.showBurned!=='hide')n++;if(lf.activeBadges.length)n++;if(lf.activeGenres.length)n++;
+    return n;
+  }
   const hdr=document.createElement('div');hdr.className='sam-hdr';
-  hdr.innerHTML=`<span class="sam-hdr-icon">${esc(icon)}</span><span class="sam-hdr-title">${esc(title)}</span><span class="sam-hdr-count" id="samCount"></span><button class="sam-close" id="samClose">✕</button>`;
+  hdr.innerHTML=`<span class="sam-hdr-icon">${esc(icon)}</span><span class="sam-hdr-title">${esc(title)}</span><span class="sam-hdr-count" id="samCount"></span><button class="lib-filter-btn lens-filter-btn" id="lensFilterBtn">⚙ Filter</button><button class="sam-close" id="samClose">✕</button>`;
   sheet.appendChild(hdr);
 
-  // Burn Mode info banner (only when burnMode active AND showBurned=hide)
+  // Burn Mode info banner
   const burnBannerWrap=document.createElement('div');burnBannerWrap.id='samBurnBanner';
   sheet.appendChild(burnBannerWrap);
 
-  // Badge chips — 2 rows, default ALL OFF, OR-logic when any active
+  // Badge chips — 2 rows, OR-logic, default all OFF
   const BADGE_DEFS=[
     ['heavyRotation','⭐ Heavy'],['trending','🔥 Trending'],['repeat','🔁 Repeat'],['favorite','❤️ Fave'],
     ['hiddenGem','💎 Gem'],['justAdded','🆕 Just Added'],['newAlbum','📅 30d'],['playlist','🎵 Playlist'],
@@ -3250,24 +3222,15 @@ async function openCarouselSeeAllModal(carouselId, title, albums, icon='🎵', r
   bg.appendChild(sheet);
   document.body.appendChild(bg);
 
-  // ── FAB Filter Button ──
-  const fab=document.createElement('button');
-  fab.className='lens-fab';fab.id='lensFab';
-  fab.innerHTML='<span class="lens-fab-icon">⚙</span><span class="lens-fab-badge" id="lensFabBadge" style="display:none"></span>';
-  bg.appendChild(fab);
-
-  function _updateFabBadge(n){
-    const badge=fab.querySelector('#lensFabBadge');
-    if(!badge)return;
-    if(n>0){badge.textContent=n;badge.style.display='';}
-    else badge.style.display='none';
+  function _updateFilterBtn(){
+    const n=_activeFilterCount();
+    const btn=hdr.querySelector('#lensFilterBtn');
+    if(!btn)return;
+    btn.textContent=n>0?`⚙ Filter (${n})`:'⚙ Filter';
+    btn.style.borderColor=n>0?'var(--blue)':'';
+    btn.style.color=n>0?'var(--blue)':'';
   }
-  // Set initial badge count
-  (()=>{
-    let n=0;
-    if(lf.heardStatus!=='all')n++;if(lf.addedWithin!=='all')n++;if(lf.albumTypes.length)n++;if(lf.showBurned!=='hide')n++;if(lf.activeBadges.length)n++;
-    _updateFabBadge(n);
-  })();
+  _updateFilterBtn();
 
   // ── Apply all filters + sort → return pool ──
   function _applyLensFilters(){
@@ -3314,6 +3277,15 @@ async function openCarouselSeeAllModal(carouselId, title, albums, icon='🎵', r
     else if(sm==='mostplayed')pool=[...pool].sort((a,b)=>(playCounts.get(b.id)||0)-(playCounts.get(a.id)||0));
     else if(sm==='lastplayed')pool=[...pool].sort((a,b)=>(hm.get(b.id)||0)-(hm.get(a.id)||0));
 
+    // Genre filter
+    if(lf.activeGenres.length){
+      pool=pool.filter(a=>{
+        const gs=a._genres||[];
+        if(lf.activeSubGenres.length)return lf.activeSubGenres.some(sg=>gs.includes(sg));
+        return gs.some(g=>lf.activeGenres.includes(clusterOf(g)));
+      });
+    }
+
     return pool;
   }
 
@@ -3335,8 +3307,9 @@ async function openCarouselSeeAllModal(carouselId, title, albums, icon='🎵', r
     body.innerHTML='';
     if(!pool.length){body.innerHTML=`<div class="sam-empty">No albums match this filter. <button class="btn btn-sm" id="samResetLens" style="margin-top:10px">Reset filters</button></div>`;
       body.querySelector('#samResetLens')?.addEventListener('click',()=>{
-        lf.heardStatus='all';lf.addedWithin='all';lf.albumTypes=[];lf.sortMode='relevance';lf.showBurned='hide';lf.activeBadges=[];
-        _updateFabBadge(0);_render();
+        lf.heardStatus='all';lf.addedWithin='all';lf.albumTypes=[];lf.sortMode='relevance';
+        lf.showBurned='hide';lf.activeBadges=[];lf.activeGenres=[];lf.activeSubGenres=[];
+        _updateFilterBtn();_render();
       });
       return;
     }
@@ -3396,17 +3369,15 @@ async function openCarouselSeeAllModal(carouselId, title, albums, icon='🎵', r
     const idx=lf.activeBadges.indexOf(k);
     if(idx>=0)lf.activeBadges.splice(idx,1);else lf.activeBadges.push(k);
     btn.classList.toggle('active',lf.activeBadges.includes(k));
-    let n=0;if(lf.heardStatus!=='all')n++;if(lf.addedWithin!=='all')n++;if(lf.albumTypes.length)n++;if(lf.showBurned!=='hide')n++;if(lf.activeBadges.length)n++;
-    _updateFabBadge(n);
-    _render();
+    _updateFilterBtn();_render();
   });
 
   ctrlRow.querySelector('#samGrouping').addEventListener('change',e=>{sf.grouping=e.target.value;_render();});
   ctrlRow.querySelector('#samArtistFilter').addEventListener('change',e=>{sf.artistFilter=e.target.value;_render();});
 
-  // FAB
-  fab.addEventListener('click',()=>{
-    _openLensSheet(lf,(activeCount)=>{_updateFabBadge(activeCount);_render();});
+  // Filter-Button (ersetzt FAB)
+  hdr.querySelector('#lensFilterBtn').addEventListener('click',()=>{
+    _openLensSheet(lf,allAlbums_orig,()=>{_updateFilterBtn();_render();});
   });
 
   const onKey=e=>{if(e.key==='Escape'){bg.remove();document.removeEventListener('keydown',onKey);}};
