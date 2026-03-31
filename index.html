@@ -3374,7 +3374,7 @@ function _lensRelevanceScore(album, carouselId, hm, playCounts, heavyIds, hidden
 }
 
 /** Lens Filter Sheet — Genre + Subgenres + Gehört + Hinzugefügt + Typ + Burned + Sort */
-function _openLensSheet(lf, poolAlbums, onClose){
+function _openLensSheet(lf, poolAlbums, onClose, carouselId=''){
   document.querySelector('.lens-sheet-bg')?.remove();
   const sheetBg=document.createElement('div');sheetBg.className='lib-sheet-bg lens-sheet-bg';
   const sheet=document.createElement('div');sheet.className='lib-sheet';
@@ -3772,7 +3772,7 @@ async function openCarouselSeeAllModal(carouselId, title, albums, icon='🎵', r
 
   // Filter-Button (ersetzt FAB)
   hdr.querySelector('#lensFilterBtn').addEventListener('click',()=>{
-    _openLensSheet(lf,allAlbums_orig,()=>{_updateFilterBtn();_render();});
+    _openLensSheet(lf,allAlbums_orig,()=>{_updateFilterBtn();_render();},carouselId);
   });
 
   const onKey=e=>{if(e.key==='Escape'){bg.remove();document.removeEventListener('keydown',onKey);}};
