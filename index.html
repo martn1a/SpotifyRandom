@@ -1271,7 +1271,7 @@ const LastfmCache=(()=>{
   }
 
   /** QID-053: Top albums by play count, matched to allAlbums */
-  function getMostPlayed(limit=20){
+  function getMostPlayed(limit=100){
     if(!_stats?.albums)return[];
     const map=getPlayCountMap();
     return allAlbums
@@ -1282,7 +1282,7 @@ const LastfmCache=(()=>{
   }
 
   /** QID-044: Albums with ≥30 plays, sorted by avg scrobble date DESC (newest discoveries) */
-  function getLatestDiscoveries(limit=20){
+  function getLatestDiscoveries(limit=100){
     if(!_stats?.fatgad)return[];
     const albumDates=new Map(); // key → [timestamps]
     for(const s of _stats.fatgad){
@@ -1303,8 +1303,8 @@ const LastfmCache=(()=>{
   }
 
   /** QID-045: Same as above but ASC (oldest avg date = golden oldies) */
-  function getGoldenOldies(limit=20){
-    return getLatestDiscoveries(200).sort((a,b)=>a.avgDate-b.avgDate).slice(0,limit);
+  function getGoldenOldies(limit=100){
+    return getLatestDiscoveries(300).sort((a,b)=>a.avgDate-b.avgDate).slice(0,limit);
   }
 
   /** QID-046/047: Climbers (gain>0) or Fallers (gain<0) — plays last month vs 3m avg */
@@ -1338,11 +1338,11 @@ const LastfmCache=(()=>{
     }
     return results;
   }
-  function getBiggestClimbers(limit=20){return _getMonthlyTrend().filter(x=>x.gain>=2).sort((a,b)=>b.gain-a.gain).slice(0,limit);}
-  function getBiggestFallers(limit=20){return _getMonthlyTrend().filter(x=>x.gain<=-2).sort((a,b)=>a.gain-b.gain).slice(0,limit);}
+  function getBiggestClimbers(limit=100){return _getMonthlyTrend().filter(x=>x.gain>=2).sort((a,b)=>b.gain-a.gain).slice(0,limit);}
+  function getBiggestFallers(limit=100){return _getMonthlyTrend().filter(x=>x.gain<=-2).sort((a,b)=>a.gain-b.gain).slice(0,limit);}
 
   /** QID-048: Artists with only 1 unique track but ≥5 plays — matched to albums */
-  function getOneHitWonders(limit=20){
+  function getOneHitWonders(limit=100){
     if(!_stats?.artists||!_stats?.tracks)return[];
     const ohwArtists=_stats.artists.filter(a=>a.tracks===1&&a.plays>=5).sort((a,b)=>b.plays-a.plays).slice(0,limit*2);
     // find best matching album for each artist
@@ -1361,7 +1361,7 @@ const LastfmCache=(()=>{
   }
 
   /** QID-049: Albums with longest consecutive-day listening streaks */
-  function getListeningStreaks(limit=20){
+  function getListeningStreaks(limit=100){
     if(!_stats?.fatgad)return[];
     const albumDays=new Map(); // key → Set<dateStr>
     for(const s of _stats.fatgad){
@@ -1415,7 +1415,7 @@ const LastfmCache=(()=>{
   }
 
   /** QID-051: Artists with ≥20 unique tracks + ≥50 plays in Last.fm */
-  function getDeepDives(minTracks=20,minPlays=50,limit=20){
+  function getDeepDives(minTracks=20,minPlays=50,limit=100){
     if(!_stats?.artists)return[];
     const deepArtists=_stats.artists.filter(a=>a.tracks>=minTracks&&a.plays>=minPlays).sort((a,b)=>b.plays-a.plays);
     const results=[];
@@ -1430,7 +1430,7 @@ const LastfmCache=(()=>{
   }
 
   /** QID-052: Top albums for a given month (1=Jan…12=Dec), aggregated across all years */
-  function getSeasonalFavorites(month,limit=20){
+  function getSeasonalFavorites(month,limit=100){
     if(!_stats?.fatgad)return[];
     const m=month!=null?month:new Date().getMonth()+1; // 1-based
     const albumPlays=new Map();
@@ -1869,8 +1869,10 @@ function attachShellEvents(){
       // Invalidate enriched library so next pick is fresh
       EnrichedLibrary.invalidate().catch(()=>{});
       // Re-render Home
+      _invalidateHomeDashCache();
       const panel=document.getElementById('tab-home');
       if(panel)renderHomeDashboard(panel);
+      _homeDashCache.valid=true;
       _toast('Home refreshed');
     }catch(e){_toast('Refresh failed: '+e.message,true);}
     btn.textContent='🔄';btn.disabled=false;delete btn.dataset.refreshing;
@@ -2240,6 +2242,7 @@ async function handleRefresh(){
     
     // Reset browser tab so genre chips re-build with new data
     const lp=document.getElementById('tab-browser');if(lp)delete lp.dataset.libBuilt;
+    _invalidateHomeDashCache();
     renderPickerContent();
   }catch(err){
     state.loadingLibrary=false;state.genresLoading=false;
@@ -2250,9 +2253,15 @@ async function handleRefresh(){
 // ═══════════════════════════════════════════════════════════════════
 // SECTION 11 — HOME TAB  (Phase 2 Dashboard)
 // ═══════════════════════════════════════════════════════════════════
+// Home dashboard cache — valid=true means panel already rendered, skip re-render on tab switch
+const _homeDashCache={valid:false};
+function _invalidateHomeDashCache(){_homeDashCache.valid=false;}
+
 function renderHomeTab(panel){
-  // Re-render each visit so stats/carousels are fresh
+  // Option B: serve from cache on tab switch — only re-render if invalidated
+  if(_homeDashCache.valid&&panel.children.length>1)return;
   renderHomeDashboard(panel);
+  _homeDashCache.valid=true;
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -2351,7 +2360,37 @@ function openAlbumDetail(album){
       const tracks=await SpotifyAPI.getAlbumTracks(qAlbum);
       for(const t of tracks){await SpotifyAPI.addToQueue(t.uri);await sleep(delay);}
       await HistoryProvider.log(qAlbum.id,qAlbum.name);
-      if(state.burnMode){await BurnMode.burn(qAlbum.id,qAlbum.name);_burnToast(qAlbum.name);}
+      if(state.burnMode){
+        await BurnMode.burn(qAlbum.id,qAlbum.name);
+        _burnToast(qAlbum.name);
+        // Remove card from Home carousels + Lens immediately (no full re-render)
+        if(state.activeTab==='home'||document.querySelector('.sam-bg')){
+          const albumId=qAlbum.id;
+          // Remove from all carousel tracks on Home
+          document.querySelectorAll(`.car-card[data-id="${CSS.escape(albumId)}"]`).forEach(card=>{
+            const track=card.closest('.carousel-track');
+            card.remove();
+            // If carousel track is now empty → hide the whole section
+            if(track&&!track.children.length){
+              const sec=track.closest('.dash-section,.heavy-rot-section,.library-radio-container,.daily-pick-section');
+              if(sec)sec.remove();
+            }
+          });
+          // Remove from Lens View grid if open
+          document.querySelectorAll(`.sam-item[data-id="${CSS.escape(albumId)}"]`).forEach(item=>{
+            const grid=item.closest('.sam-grid');
+            item.remove();
+            const countEl=document.querySelector('#samCount');
+            if(countEl){const n=parseInt(countEl.textContent)||0;if(n>0)countEl.textContent=`${n-1} albums`;}
+            // If grid group is empty → remove group header + grid
+            if(grid&&!grid.children.length){
+              const grpWrap=grid.closest('.sam-group,.sam-cluster-hdr')?.parentElement;
+              if(grpWrap)grpWrap.remove();else grid.remove();
+            }
+          });
+          _invalidateHomeDashCache();
+        }
+      }
       btn.textContent='✓ Queued!';setTimeout(()=>modal.remove(),1500);
     }    catch(err){btn.disabled=false;btn.textContent='▶ Queue Album';alert(err.message);}
   });
@@ -3000,7 +3039,7 @@ async function migrateFromLegacy(){
 function _carCard(a, badge){
   const art=getArt(a,'md')||getArt(a,'lg');
   const artist=(a.artists||[]).map(x=>x.name).join(', ');
-  return `<div class="car-card" data-carid="${esc(a.id)}">
+  return `<div class="car-card" data-carid="${esc(a.id)}" data-id="${esc(a.id)}">
     <div class="car-art-wrap">
       ${art?`<img class="car-art" src="${esc(art)}" alt="" loading="lazy">`:`<div class="car-art-ph">🎵</div>`}
       ${badge?`<div class="car-badge">${esc(badge)}</div>`:''}
@@ -3277,42 +3316,61 @@ function _computeBadges(album, relatedArtistName, badgeToggles, heavyIds, trendi
 
 /** Lens: per-carousel filter state (independent from libState) */
 const _lensFilters={};
+const _LF_CAROUSEL_IDS=new Set(['lf-most-played','lf-latest-disc','lf-golden-oldies','lf-climbers','lf-fallers','lf-one-hit','lf-streaks','lf-recent-disc','lf-deep-dives','lf-seasonal']);
 function _getLensFilter(carouselId){
+  const isLf=_LF_CAROUSEL_IDS.has(carouselId);
   if(!_lensFilters[carouselId])_lensFilters[carouselId]={
     heardStatus:'all',
     addedWithin:'all',
     albumTypes:[],
-    sortMode:'relevance',
+    sortMode:isLf?'original':'relevance', // Last.fm carousels default to original order
     showBurned:'hide',
     activeBadges:[],
-    activeGenres:[],     // genre cluster ids
-    activeSubGenres:[],  // sub-genre strings
+    activeGenres:[],
+    activeSubGenres:[],
   };
   return _lensFilters[carouselId];
 }
 
-/** Lens: Relevance Score — carousel-type-aware */
+/** Phase 17: Unified Relevance Score — integrates Last.fm play data for all carousels.
+ *  Formula: lfPlays_norm×2.0 + recency×1.5 + rank_norm×1.0 + newness×0.8 + carouselBonus
+ */
 function _lensRelevanceScore(album, carouselId, hm, playCounts, heavyIds, hiddenGemIds){
   const now=Date.now();
   const lastPlayed=hm.get(album.id)||0;
   const daysSince=lastPlayed?(now-lastPlayed)/86400000:9999;
-  const plays=playCounts.get(album.id)||0;
   const addedMs=album._added_at?new Date(album._added_at).getTime():0;
   const daysSinceAdded=addedMs?(now-addedMs)/86400000:9999;
 
-  // Base score components
-  let recency   = Math.min(daysSince/365,3);          // 0–3, higher = not heard longer
-  let newness   = Math.max(0,1-(daysSinceAdded/180));  // 0–1, newer = higher
-  let badgeBonus= heavyIds.has(album.id)?0.5:hiddenGemIds.has(album.id)?0.8:0;
+  // App-history components
+  const recency   = Math.min(daysSince/365,3);         // 0–3, higher = not heard longer
+  const newness   = Math.max(0,1-(daysSinceAdded/180));// 0–1, newer = higher
+  const badgeBonus= heavyIds.has(album.id)?0.5:hiddenGemIds.has(album.id)?0.8:0;
 
-  // Carousel-type weighting
-  if(carouselId==='forgotten-gems')   return recency*2 + badgeBonus + newness*0.2;
-  if(carouselId==='heavy-rotation')   return plays*0.5 + badgeBonus;
-  if(carouselId==='new-in-library')   return newness*3 + badgeBonus;
-  if(carouselId==='rediscover')       return recency*2.5;
-  if(carouselId.startsWith('playlist-')) return newness*2 + recency*0.5;
-  // Default: balanced
-  return recency + newness*0.5 + badgeBonus;
+  // Last.fm components
+  const lfMap=LastfmCache.getPlayCountMap();
+  const lfKey=(album.artists||[])[0]?.name?.toLowerCase().trim()+'||'+album.name.toLowerCase().trim();
+  const lfPlays=lfMap.get(lfKey)||0;
+  const LF_MAX_PLAYS=387; // Bonobo/Fragments — top album in dataset
+  const lfPlays_norm=Math.min(lfPlays/LF_MAX_PLAYS,1); // 0–1
+
+  // Last.fm rank (lower rank = better, invert to 0–1)
+  const lfStats=LastfmCache.getStats();
+  const lfAlbumEntry=lfStats?.albums?.find(a=>a.artist?.toLowerCase().trim()+'||'+a.album?.toLowerCase().trim()===lfKey);
+  const lfRank=lfAlbumEntry?.myRank||null;
+  const LF_TOTAL=lfStats?.albums?.length||14589;
+  const rank_norm=lfRank?Math.max(0,1-(lfRank/LF_TOTAL)):0; // 0–1, rank 1 = ~1.0
+
+  // Unified base score
+  const base = (lfPlays_norm*2.0) + (recency*1.5) + (rank_norm*1.0) + (newness*0.8) + badgeBonus;
+
+  // Carousel-type bonus on top of unified base
+  if(carouselId==='forgotten-gems')   return base + recency*0.5;
+  if(carouselId==='heavy-rotation')   return base + lfPlays_norm*0.5;
+  if(carouselId==='new-in-library')   return base + newness*1.5;
+  if(carouselId==='rediscover')       return base + recency*1.0;
+  if(carouselId.startsWith('playlist-')) return base + newness*0.5;
+  return base;
 }
 
 /** Lens Filter Sheet — Genre + Subgenres + Gehört + Hinzugefügt + Typ + Burned + Sort */
@@ -3367,8 +3425,14 @@ function _openLensSheet(lf, poolAlbums, onClose){
     const typeChips=['album','single','compilation'].map(t=>
       `<button class="lib-type-chip${lf.albumTypes.includes(t)?' active':''}" data-lt="${t}">${{album:'Album',single:'Single / EP',compilation:'Compilation'}[t]}</button>`
     ).join('');
-    const sortChips=[['relevance','Relevance'],['badge','By Badge'],['newest','Newest'],['oldest','Oldest'],['az','A–Z'],['za','Z–A'],['mostplayed','Most Played'],['lastplayed','Last Played']].map(
-      ([v,l])=>`<button class="lib-sort-chip${lf.sortMode===v?' active':''}" data-ls="${v}">${l}</button>`).join('');
+    const isLfCarousel=_LF_CAROUSEL_IDS.has(carouselId);
+    const sortChips=[
+      ...(isLfCarousel?[['original','Original']]:
+          [['relevance','Relevance']]),
+      ...(isLfCarousel?[['relevance','Relevance']]:
+          []),
+      ['badge','By Badge'],['newest','Newest'],['oldest','Oldest'],['az','A–Z'],['za','Z–A'],['mostplayed','Most Played'],['lastplayed','Last Played']
+    ].map(([v,l])=>`<button class="lib-sort-chip${lf.sortMode===v?' active':''}" data-ls="${v}">${l}</button>`).join('');
     const heardHTML=[['all','Alle'],['unheard','🆕 Ungehört'],['heard','👂 Gehört']].map(
       ([v,l])=>`<label class="lib-sh-radio-row"><input type="radio" name="lsheard" value="${v}"${lf.heardStatus===v?' checked':''}><span>${l}</span></label>`).join('');
     const addedHTML=[['all','Alles'],['month','Letzter Monat'],['6months','Letzte 6 Monate'],['year','Letztes Jahr']].map(
@@ -3395,7 +3459,8 @@ function _openLensSheet(lf, poolAlbums, onClose){
 
   function _attachSheetEv(){
     sheet.querySelector('#lsReset')?.addEventListener('click',()=>{
-      lf.heardStatus='all';lf.addedWithin='all';lf.albumTypes=[];lf.sortMode='relevance';
+      lf.heardStatus='all';lf.addedWithin='all';lf.albumTypes=[];
+      lf.sortMode=_LF_CAROUSEL_IDS.has(carouselId)?'original':'relevance';
       lf.showBurned='hide';lf.activeGenres=[];lf.activeSubGenres=[];
       _build();
     });
@@ -3597,7 +3662,8 @@ async function openCarouselSeeAllModal(carouselId, title, albums, icon='🎵', r
 
     // Sort
     const sm=lf.sortMode||'relevance';
-    if(sm==='relevance')pool=[...pool].sort((a,b)=>_lensRelevanceScore(b,carouselId,hm,playCounts,heavyIds,hiddenGemIds)-_lensRelevanceScore(a,carouselId,hm,playCounts,heavyIds,hiddenGemIds));
+    if(sm==='original'){/* preserve incoming order — no sort */}
+    else if(sm==='relevance')pool=[...pool].sort((a,b)=>_lensRelevanceScore(b,carouselId,hm,playCounts,heavyIds,hiddenGemIds)-_lensRelevanceScore(a,carouselId,hm,playCounts,heavyIds,hiddenGemIds));
     else if(sm==='badge')pool=[...pool].sort((a,b)=>_badgePriority(b)-_badgePriority(a));
     else if(sm==='az')pool=[...pool].sort((a,b)=>(a.name||'').localeCompare(b.name||''));
     else if(sm==='za')pool=[...pool].sort((a,b)=>(b.name||'').localeCompare(a.name||''));
@@ -3636,7 +3702,7 @@ async function openCarouselSeeAllModal(carouselId, title, albums, icon='🎵', r
     body.innerHTML='';
     if(!pool.length){body.innerHTML=`<div class="sam-empty">No albums match this filter. <button class="btn btn-sm" id="samResetLens" style="margin-top:10px">Reset filters</button></div>`;
       body.querySelector('#samResetLens')?.addEventListener('click',()=>{
-        lf.heardStatus='all';lf.addedWithin='all';lf.albumTypes=[];lf.sortMode='relevance';
+        lf.heardStatus='all';lf.addedWithin='all';lf.albumTypes=[];lf.sortMode=_LF_CAROUSEL_IDS.has(carouselId)?'original':'relevance';
         lf.showBurned='hide';lf.activeBadges=[];lf.activeGenres=[];lf.activeSubGenres=[];
         _updateFilterBtn();_render();
       });
@@ -3676,7 +3742,7 @@ async function openCarouselSeeAllModal(carouselId, title, albums, icon='🎵', r
         const artist=(a.artists||[]).map(x=>x.name).join(', ');
         const badges=_computeBadges(a,relatedArtistName,bt,heavyIds,trendingIds,favoriteIds,hiddenGemIds,repeatIds);
         const badgesHTML=badges.length?`<div class="sam-badges">${badges.map(b=>`<span class="sam-badge ${b.cls}">${esc(b.label)}</span>`).join('')}</div>`:'';
-        const item=document.createElement('div');item.className='sam-item';
+        const item=document.createElement('div');item.className='sam-item';item.dataset.id=a.id;
         item.innerHTML=`<div class="sam-art-wrap">${art?`<img class="sam-art" src="${esc(art)}" alt="" loading="lazy">`:`<div class="sam-art-ph">🎵</div>`}${badgesHTML}</div><div class="sam-name">${esc(a.name)}</div><div class="sam-artist">${esc(artist)}</div>`;
         item.addEventListener('click',()=>openAlbumDetail(a));
         grid.appendChild(item);
@@ -4499,9 +4565,9 @@ function renderHomeDashboard(panel){
     if(HomeLayout.get('lf-most-played')){
       if(!imported){_lfPlaceholder('lf-most-played','👑','Most Played (Last.fm)');}
       else{
-        const items=_burnFilter(LastfmCache.getMostPlayed(20).map(x=>x.album));
+        const items=_burnFilter(LastfmCache.getMostPlayed(100).map(x=>x.album));
         _lfSection('lf-most-played','👑','Most Played (Last.fm)',
-          LastfmCache.getMostPlayed(20).filter(x=>!state.burnMode||!BurnMode.isBurned(x.album.id)),
+          LastfmCache.getMostPlayed(100).filter(x=>!state.burnMode||!BurnMode.isBurned(x.album.id)),
           x=>`#${x.rank} · ${x.plays}×`,
           `${items.length} alben`);
       }
@@ -4511,7 +4577,7 @@ function renderHomeDashboard(panel){
     if(HomeLayout.get('lf-latest-disc')){
       if(!imported){_lfPlaceholder('lf-latest-disc','🔭','Latest Discoveries');}
       else{
-        const raw=LastfmCache.getLatestDiscoveries(20).filter(x=>!state.burnMode||!BurnMode.isBurned(x.album.id));
+        const raw=LastfmCache.getLatestDiscoveries(100).filter(x=>!state.burnMode||!BurnMode.isBurned(x.album.id));
         _lfSection('lf-latest-disc','🔭','Latest Discoveries',raw,
           x=>{const d=new Date(x.avgDate);return d.toLocaleDateString(undefined,{month:'short',year:'2-digit'});},
           `${raw.length} alben`);
@@ -4522,7 +4588,7 @@ function renderHomeDashboard(panel){
     if(HomeLayout.get('lf-golden-oldies')){
       if(!imported){_lfPlaceholder('lf-golden-oldies','🕰️','Golden Oldies');}
       else{
-        const raw=LastfmCache.getGoldenOldies(20).filter(x=>!state.burnMode||!BurnMode.isBurned(x.album.id));
+        const raw=LastfmCache.getGoldenOldies(100).filter(x=>!state.burnMode||!BurnMode.isBurned(x.album.id));
         _lfSection('lf-golden-oldies','🕰️','Golden Oldies',raw,
           x=>{const d=new Date(x.avgDate);return`Since ${d.toLocaleDateString(undefined,{month:'short',year:'2-digit'})}`;},
           `${raw.length} alben`);
@@ -4533,7 +4599,7 @@ function renderHomeDashboard(panel){
     if(HomeLayout.get('lf-climbers')){
       if(!imported){_lfPlaceholder('lf-climbers','📈','Biggest Climbers');}
       else{
-        const raw=LastfmCache.getBiggestClimbers(20).filter(x=>!state.burnMode||!BurnMode.isBurned(x.album.id));
+        const raw=LastfmCache.getBiggestClimbers(100).filter(x=>!state.burnMode||!BurnMode.isBurned(x.album.id));
         _lfSection('lf-climbers','📈','Biggest Climbers',raw,
           x=>`+${x.gain} this month`,
           `${raw.length} im Aufwind`);
@@ -4544,7 +4610,7 @@ function renderHomeDashboard(panel){
     if(HomeLayout.get('lf-fallers')){
       if(!imported){_lfPlaceholder('lf-fallers','📉','Biggest Fallers');}
       else{
-        const raw=LastfmCache.getBiggestFallers(20).filter(x=>!state.burnMode||!BurnMode.isBurned(x.album.id));
+        const raw=LastfmCache.getBiggestFallers(100).filter(x=>!state.burnMode||!BurnMode.isBurned(x.album.id));
         _lfSection('lf-fallers','📉','Biggest Fallers',raw,
           x=>`${x.gain} this month`,
           `${raw.length} im Abwind`);
@@ -4555,7 +4621,7 @@ function renderHomeDashboard(panel){
     if(HomeLayout.get('lf-one-hit')){
       if(!imported){_lfPlaceholder('lf-one-hit','🎯','One-Hit Wonders');}
       else{
-        const raw=LastfmCache.getOneHitWonders(20).filter(x=>!state.burnMode||!BurnMode.isBurned(x.album.id));
+        const raw=LastfmCache.getOneHitWonders(100).filter(x=>!state.burnMode||!BurnMode.isBurned(x.album.id));
         _lfSection('lf-one-hit','🎯','One-Hit Wonders',raw,
           x=>`${x.plays}× · ${esc(x.track||'')}`,
           `${raw.length} artists`);
@@ -4566,7 +4632,7 @@ function renderHomeDashboard(panel){
     if(HomeLayout.get('lf-streaks')){
       if(!imported){_lfPlaceholder('lf-streaks','🔥','Listening Streaks');}
       else{
-        const raw=LastfmCache.getListeningStreaks(20).filter(x=>!state.burnMode||!BurnMode.isBurned(x.album.id));
+        const raw=LastfmCache.getListeningStreaks(100).filter(x=>!state.burnMode||!BurnMode.isBurned(x.album.id));
         _lfSection('lf-streaks','🔥','Listening Streaks',raw,
           x=>`🔥 ${x.longestStreak}d streak`,
           `${raw.length} alben`);
@@ -4577,7 +4643,7 @@ function renderHomeDashboard(panel){
     if(HomeLayout.get('lf-recent-disc')){
       if(!imported){_lfPlaceholder('lf-recent-disc','🆕','Recently Discovered');}
       else{
-        const raw=LastfmCache.getRecentlyDiscovered(14).filter(x=>!state.burnMode||!BurnMode.isBurned(x.album.id));
+        const raw=LastfmCache.getRecentlyDiscovered(30).filter(x=>!state.burnMode||!BurnMode.isBurned(x.album.id));
         _lfSection('lf-recent-disc','🆕','Recently Discovered',raw,
           x=>`${x.daysAgo}d ago · ${x.plays}×`,
           `${raw.length} neue Funde`);
@@ -4588,7 +4654,7 @@ function renderHomeDashboard(panel){
     if(HomeLayout.get('lf-deep-dives')){
       if(!imported){_lfPlaceholder('lf-deep-dives','🔍','Deep Dives');}
       else{
-        const raw=LastfmCache.getDeepDives(20,50,20).filter(x=>!state.burnMode||!BurnMode.isBurned(x.album.id));
+        const raw=LastfmCache.getDeepDives(20,50,100).filter(x=>!state.burnMode||!BurnMode.isBurned(x.album.id));
         _lfSection('lf-deep-dives','🔍','Deep Dives',raw,
           x=>`${x.tracks} tracks · ${x.plays}×`,
           `${raw.length} artists`);
@@ -4612,7 +4678,7 @@ function renderHomeDashboard(panel){
         panel.appendChild(sec);
 
         function _renderSeasonal(month){
-          const items=LastfmCache.getSeasonalFavorites(month,20).filter(x=>!state.burnMode||!BurnMode.isBurned(x.album.id));
+          const items=LastfmCache.getSeasonalFavorites(month,100).filter(x=>!state.burnMode||!BurnMode.isBurned(x.album.id));
           if(!items.length){body.innerHTML=`<div style="padding:12px 0;color:var(--text-dim);font-size:13px">Keine Daten für diesen Monat.</div>`;return;}
           body.innerHTML=`<div class="carousel-wrap"><div class="carousel-track">${items.map(x=>_carCard(x.album,`${x.plays}× im ${MONTHS[month-1]}`)).join('')}</div></div>`;
           _attachCarouselClicks(body,items.map(x=>x.album));
