@@ -579,6 +579,9 @@
       border:1px solid var(--border2);border-bottom:none;
       max-height:88dvh;display:flex;flex-direction:column;
       animation:slideup .28s cubic-bezier(.32,1,.56,1)}
+    /* Lens Filter Sheet: z-index above .sam-bg (200) */
+    .lens-sheet-bg{z-index:250!important}
+    .lens-sheet-bg .lib-sheet{z-index:251!important}
     .lib-sheet-handle{width:36px;height:4px;background:var(--border3);border-radius:var(--r-f);
       margin:12px auto 0;flex-shrink:0}
     .lib-sheet-header{display:flex;align-items:center;justify-content:space-between;
@@ -884,7 +887,7 @@ const DELAY_BROWSER_MS = 5000;
 const HISTORY_MAX_AGE_DAYS = 30;
 const BLOCKLIST_KW = ['instrumental','remix','edit','live','reprise','version'];
 const DB_NAME = 'albumdiscovery_db';
-const DB_VERSION = 10; // Phase 11 QID-017: enriched_library store added
+const DB_VERSION = 12; // Phase 17 QID-036v2: lastfm_complete store added
 const ENRICHED_LIB_TTL = 24*60*60*1000; // 24h — same as PLAYLIST_CACHE_TTL
 
 const GENRE_CLUSTERS = [
@@ -922,6 +925,7 @@ const DB=(()=>{
       if(!db.objectStoreNames.contains('top_albums'))          db.createObjectStore('top_albums'); // Phase 11 QID-018
       if(!db.objectStoreNames.contains('top_artists'))         db.createObjectStore('top_artists'); // Phase 11 QID-021
       if(!db.objectStoreNames.contains('burn_tracking'))       db.createObjectStore('burn_tracking',{keyPath:'id'}); // Phase 11 QID-013
+      if(!db.objectStoreNames.contains('lastfm_complete'))     db.createObjectStore('lastfm_complete'); // Phase 17 QID-036v2
       // Phase 7B migration: remove deprecated stores
       if(db.objectStoreNames.contains('lastfm_cache'))   db.deleteObjectStore('lastfm_cache');
       if(db.objectStoreNames.contains('radar_cache'))    db.deleteObjectStore('radar_cache');
@@ -1212,6 +1216,244 @@ const BurnMode={
 };
 
 // ═══════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════════
+// SECTION 4F — LASTFM CACHE v2 (QID-036 Phase 17)
+// ═══════════════════════════════════════════════════════════════════
+const LastfmCache=(()=>{
+  let _stats=null; // {metadata, fatgad[], albums[], artists[], tracks[]}
+  let _playCountMap=null; // Map<"artist||album", plays>
+
+  async function load(){
+    if(_stats)return;
+    try{
+      const db=await DB.getDb();
+      const r=await db.get('lastfm_complete','main');
+      if(r){_stats=r;_playCountMap=null;} // reset derived map on load
+    }catch(e){console.warn('LastfmCache.load failed',e);}
+  }
+
+  function getStats(){return _stats||null;}
+
+  function isImported(){return!!(_stats?.metadata);}
+
+  /** Map<"artist_lower||album_lower", plays> — built once, cached */
+  function getPlayCountMap(){
+    if(_playCountMap)return _playCountMap;
+    if(!_stats?.albums)return new Map();
+    _playCountMap=new Map();
+    for(const a of _stats.albums){
+      const k=(a.artist||'').toLowerCase().trim()+'||'+(a.album||'').toLowerCase().trim();
+      _playCountMap.set(k,a.plays||0);
+    }
+    return _playCountMap;
+  }
+
+  /** Resolve plays for a Spotify album object */
+  function playsForAlbum(album){
+    const map=getPlayCountMap();
+    const artist=(album.artists||[])[0]?.name||'';
+    const k=artist.toLowerCase().trim()+'||'+album.name.toLowerCase().trim();
+    return map.get(k)||0;
+  }
+
+  async function saveStats(data){
+    try{
+      const db=await DB.getDb();
+      await db.put('lastfm_complete',data,'main');
+      _stats=data;
+      _playCountMap=null; // invalidate derived map
+    }catch(e){console.warn('LastfmCache.saveStats failed',e);throw e;}
+  }
+
+  async function clear(){
+    try{const db=await DB.getDb();await db.delete('lastfm_complete','main');}catch(e){}
+    _stats=null;_playCountMap=null;
+  }
+
+  /** QID-053: Top albums by play count, matched to allAlbums */
+  function getMostPlayed(limit=20){
+    if(!_stats?.albums)return[];
+    const map=getPlayCountMap();
+    return allAlbums
+      .map(a=>{const k=(a.artists||[])[0]?.name?.toLowerCase().trim()+'||'+a.name.toLowerCase().trim();return{album:a,plays:map.get(k)||0,rank:_stats.albums.find(x=>x.artist?.toLowerCase().trim()+'||'+x.album?.toLowerCase().trim()===k)?.myRank||9999};})
+      .filter(x=>x.plays>0)
+      .sort((a,b)=>a.rank-b.rank)
+      .slice(0,limit);
+  }
+
+  /** QID-044: Albums with ≥30 plays, sorted by avg scrobble date DESC (newest discoveries) */
+  function getLatestDiscoveries(limit=20){
+    if(!_stats?.fatgad)return[];
+    const albumDates=new Map(); // key → [timestamps]
+    for(const s of _stats.fatgad){
+      if(!s.artist||!s.album)continue;
+      const k=s.artist.toLowerCase().trim()+'||'+s.album.toLowerCase().trim();
+      if(!albumDates.has(k))albumDates.set(k,[]);
+      albumDates.get(k).push(s.timestamp);
+    }
+    const results=[];
+    for(const a of allAlbums){
+      const k=(a.artists||[])[0]?.name?.toLowerCase().trim()+'||'+a.name.toLowerCase().trim();
+      const ts=albumDates.get(k);
+      if(!ts||ts.length<30)continue;
+      const avg=ts.reduce((s,t)=>s+t,0)/ts.length;
+      results.push({album:a,plays:ts.length,avgDate:avg,firstDate:Math.min(...ts)});
+    }
+    return results.sort((a,b)=>b.avgDate-a.avgDate).slice(0,limit);
+  }
+
+  /** QID-045: Same as above but ASC (oldest avg date = golden oldies) */
+  function getGoldenOldies(limit=20){
+    return getLatestDiscoveries(200).sort((a,b)=>a.avgDate-b.avgDate).slice(0,limit);
+  }
+
+  /** QID-046/047: Climbers (gain>0) or Fallers (gain<0) — plays last month vs 3m avg */
+  function _getMonthlyTrend(){
+    if(!_stats?.fatgad)return[];
+    const now=Date.now();
+    const oneMonthAgo=now-30*86400000;
+    const threeMonthsAgo=now-90*86400000;
+    const albumMonth=new Map();
+    const album3m=new Map();
+    const albumTotal=new Map();
+    for(const s of _stats.fatgad){
+      if(!s.artist||!s.album)continue;
+      const k=s.artist.toLowerCase().trim()+'||'+s.album.toLowerCase().trim();
+      albumTotal.set(k,(albumTotal.get(k)||0)+1);
+      if(s.timestamp>=oneMonthAgo)albumMonth.set(k,(albumMonth.get(k)||0)+1);
+      if(s.timestamp>=threeMonthsAgo)album3m.set(k,(album3m.get(k)||0)+1);
+    }
+    const results=[];
+    for(const a of allAlbums){
+      const k=(a.artists||[])[0]?.name?.toLowerCase().trim()+'||'+a.name.toLowerCase().trim();
+      const total=albumTotal.get(k)||0;
+      if(total<30)continue;
+      const lastMonth=albumMonth.get(k)||0;
+      const last3m=album3m.get(k)||0;
+      const avg3m=last3m/3;
+      const gain=lastMonth-avg3m;
+      // skip albums not played in last 3m (no baseline)
+      if(last3m<2)continue;
+      results.push({album:a,gain:Math.round(gain*10)/10,lastMonth,avg3m:Math.round(avg3m*10)/10,total});
+    }
+    return results;
+  }
+  function getBiggestClimbers(limit=20){return _getMonthlyTrend().filter(x=>x.gain>=2).sort((a,b)=>b.gain-a.gain).slice(0,limit);}
+  function getBiggestFallers(limit=20){return _getMonthlyTrend().filter(x=>x.gain<=-2).sort((a,b)=>a.gain-b.gain).slice(0,limit);}
+
+  /** QID-048: Artists with only 1 unique track but ≥5 plays — matched to albums */
+  function getOneHitWonders(limit=20){
+    if(!_stats?.artists||!_stats?.tracks)return[];
+    const ohwArtists=_stats.artists.filter(a=>a.tracks===1&&a.plays>=5).sort((a,b)=>b.plays-a.plays).slice(0,limit*2);
+    // find best matching album for each artist
+    const trackMap=new Map(_stats.tracks.map(t=>[t.artist?.toLowerCase().trim(),t]));
+    const results=[];
+    for(const ar of ohwArtists){
+      const arKey=ar.artist?.toLowerCase().trim();
+      const track=trackMap.get(arKey);
+      // find matching spotify album
+      const album=allAlbums.find(a=>(a.artists||[]).some(x=>x.name.toLowerCase().trim()===arKey));
+      if(!album)continue;
+      results.push({album,artist:ar.artist,track:track?.track||'',plays:ar.plays});
+      if(results.length>=limit)break;
+    }
+    return results;
+  }
+
+  /** QID-049: Albums with longest consecutive-day listening streaks */
+  function getListeningStreaks(limit=20){
+    if(!_stats?.fatgad)return[];
+    const albumDays=new Map(); // key → Set<dateStr>
+    for(const s of _stats.fatgad){
+      if(!s.artist||!s.album)continue;
+      const k=s.artist.toLowerCase().trim()+'||'+s.album.toLowerCase().trim();
+      if(!albumDays.has(k))albumDays.set(k,new Set());
+      const d=new Date(s.timestamp);
+      albumDays.get(k).add(`${d.getUTCFullYear()}-${d.getUTCMonth()}-${d.getUTCDate()}`);
+    }
+    const results=[];
+    for(const a of allAlbums){
+      const k=(a.artists||[])[0]?.name?.toLowerCase().trim()+'||'+a.name.toLowerCase().trim();
+      const days=albumDays.get(k);
+      if(!days||days.size<5)continue;
+      const sorted=[...days].sort();
+      let longest=1,cur=1;
+      for(let i=1;i<sorted.length;i++){
+        const [py,pm,pd]=sorted[i-1].split('-').map(Number);
+        const [cy,cm,cd]=sorted[i].split('-').map(Number);
+        const prev=Date.UTC(py,pm,pd),curr=Date.UTC(cy,cm,cd);
+        if((curr-prev)/86400000===1){cur++;longest=Math.max(longest,cur);}else cur=1;
+      }
+      if(longest>=5)results.push({album:a,longestStreak:longest,totalDays:days.size});
+    }
+    return results.sort((a,b)=>b.longestStreak-a.longestStreak).slice(0,limit);
+  }
+
+  /** QID-050: Albums with first play in last 7 days of data + ≥5 plays */
+  function getRecentlyDiscovered(days=14){
+    if(!_stats?.fatgad)return[];
+    const dataEnd=Math.max(..._stats.fatgad.map(s=>s.timestamp));
+    const cutoff=dataEnd-(days*86400000);
+    const albumFirst=new Map();
+    const albumTotal=new Map();
+    for(const s of _stats.fatgad){
+      if(!s.artist||!s.album)continue;
+      const k=s.artist.toLowerCase().trim()+'||'+s.album.toLowerCase().trim();
+      albumTotal.set(k,(albumTotal.get(k)||0)+1);
+      if(!albumFirst.has(k)||s.timestamp<albumFirst.get(k))albumFirst.set(k,s.timestamp);
+    }
+    const results=[];
+    for(const a of allAlbums){
+      const k=(a.artists||[])[0]?.name?.toLowerCase().trim()+'||'+a.name.toLowerCase().trim();
+      const first=albumFirst.get(k);
+      const total=albumTotal.get(k)||0;
+      if(!first||first<cutoff||total<5)continue;
+      const daysAgo=Math.round((dataEnd-first)/86400000);
+      results.push({album:a,firstDate:first,plays:total,daysAgo});
+    }
+    return results.sort((a,b)=>b.firstDate-a.firstDate).slice(0,20);
+  }
+
+  /** QID-051: Artists with ≥20 unique tracks + ≥50 plays in Last.fm */
+  function getDeepDives(minTracks=20,minPlays=50,limit=20){
+    if(!_stats?.artists)return[];
+    const deepArtists=_stats.artists.filter(a=>a.tracks>=minTracks&&a.plays>=minPlays).sort((a,b)=>b.plays-a.plays);
+    const results=[];
+    for(const ar of deepArtists){
+      const arKey=ar.artist?.toLowerCase().trim();
+      const album=allAlbums.find(a=>(a.artists||[]).some(x=>x.name.toLowerCase().trim()===arKey));
+      if(!album)continue;
+      results.push({album,artist:ar.artist,tracks:ar.tracks,plays:ar.plays,discoveryType:ar.discoveryType||''});
+      if(results.length>=limit)break;
+    }
+    return results;
+  }
+
+  /** QID-052: Top albums for a given month (1=Jan…12=Dec), aggregated across all years */
+  function getSeasonalFavorites(month,limit=20){
+    if(!_stats?.fatgad)return[];
+    const m=month!=null?month:new Date().getMonth()+1; // 1-based
+    const albumPlays=new Map();
+    for(const s of _stats.fatgad){
+      if(!s.artist||!s.album)continue;
+      const mo=new Date(s.timestamp).getMonth()+1;
+      if(mo!==m)continue;
+      const k=s.artist.toLowerCase().trim()+'||'+s.album.toLowerCase().trim();
+      albumPlays.set(k,(albumPlays.get(k)||0)+1);
+    }
+    if(!albumPlays.size)return[];
+    return allAlbums
+      .map(a=>{const k=(a.artists||[])[0]?.name?.toLowerCase().trim()+'||'+a.name.toLowerCase().trim();return{album:a,plays:albumPlays.get(k)||0};})
+      .filter(x=>x.plays>=2)
+      .sort((a,b)=>b.plays-a.plays)
+      .slice(0,limit);
+  }
+
+  return{load,getStats,isImported,getPlayCountMap,playsForAlbum,saveStats,clear,
+    getMostPlayed,getLatestDiscoveries,getGoldenOldies,getBiggestClimbers,getBiggestFallers,
+    getOneHitWonders,getListeningStreaks,getRecentlyDiscovered,getDeepDives,getSeasonalFavorites};
+})();
+
 const Auth={
   isLoggedIn(){return!!localStorage.getItem('spotify_refresh_token');},
   async login(){
@@ -1452,6 +1694,17 @@ const HOME_CAROUSEL_DEFAULTS=[
   {id:'almost-there',   label:'🎯 Almost There',           visible:true},
   {id:'top-albums',     label:'🏆 Top Albums',             visible:true},
   {id:'top-artists',    label:'🎤 Top Artists',             visible:true},
+  // Phase 17 QID-044–053: Last.fm Carousels (default off — enable after import)
+  {id:'lf-most-played',     label:'👑 Most Played (Last.fm)',      visible:false},
+  {id:'lf-latest-disc',     label:'🔭 Latest Discoveries',         visible:false},
+  {id:'lf-golden-oldies',   label:'🕰️ Golden Oldies',              visible:false},
+  {id:'lf-climbers',        label:'📈 Biggest Climbers',           visible:false},
+  {id:'lf-fallers',         label:'📉 Biggest Fallers',            visible:false},
+  {id:'lf-one-hit',         label:'🎯 One-Hit Wonders',            visible:false},
+  {id:'lf-streaks',         label:'🔥 Listening Streaks',          visible:false},
+  {id:'lf-recent-disc',     label:'🆕 Recently Discovered',        visible:false},
+  {id:'lf-deep-dives',      label:'🔍 Deep Dives',                 visible:false},
+  {id:'lf-seasonal',        label:'🌸 Seasonal Favorites',         visible:false},
 ];
 
 const HomeLayout={
@@ -2437,6 +2690,82 @@ async function renderProfileTab(panel){
     </div>`;
   panel.appendChild(settDiv);
 
+  // ── Last.fm Import ────────────────────────────────────────────
+  (async()=>{
+    const lfDiv=document.createElement('div');lfDiv.className='p4-section';
+    const lfStats=LastfmCache.getStats();
+    const lfImportedAt=lfStats?.metadata?.parsedAt||lfStats?.importedAt||null;
+    const lfMeta=lfStats?.metadata?.counts||null;
+    const lfDateStr=lfImportedAt?new Date(lfImportedAt).toLocaleDateString(undefined,{day:'2-digit',month:'short',year:'numeric'}):'';
+
+    lfDiv.innerHTML=`<div class="p4-section-title">Last.fm</div>
+      <div class="card" style="overflow:hidden">
+        ${lfStats?`
+          <div class="settings-row" style="flex-direction:column;align-items:flex-start;gap:6px;padding:14px 16px">
+            <div class="settings-row-label">Importiert am ${lfDateStr}</div>
+            <div class="settings-row-sub">${(lfMeta?.scrobbles||0).toLocaleString()} Scrobbles · ${(lfMeta?.albums||0).toLocaleString()} Alben · ${(lfMeta?.artists||0).toLocaleString()} Artists</div>
+          </div>
+          <div class="settings-row" style="padding:0 16px 14px;border-top:none">
+            <div><div class="settings-row-label">Neu importieren</div><div class="settings-row-sub">Ersetzt vorhandene Daten</div></div>
+            <label class="btn btn-sm" style="position:relative;overflow:hidden;cursor:pointer">⬆ Import<input type="file" id="p4LfImportFile" accept=".json" style="position:absolute;inset:0;opacity:0;cursor:pointer"></label>
+          </div>`:`
+          <div class="settings-row" style="flex-direction:column;align-items:flex-start;gap:6px;padding:14px 16px">
+            <div class="settings-row-label">Noch nicht importiert</div>
+            <div class="settings-row-sub">Importiere deine <code>lastfm_complete_stats.json</code> um Last.fm Carousels zu aktivieren</div>
+          </div>
+          <div id="p4LfPreview" style="display:none;padding:0 16px 14px"></div>
+          <div class="settings-row" style="padding:0 16px 14px;border-top:none">
+            <label class="btn btn-sm btn-primary" style="position:relative;overflow:hidden;cursor:pointer">⬆ JSON auswählen<input type="file" id="p4LfImportFile" accept=".json" style="position:absolute;inset:0;opacity:0;cursor:pointer"></label>
+          </div>`}
+      </div>`;
+    panel.appendChild(lfDiv);
+
+    lfDiv.querySelector('#p4LfImportFile')?.addEventListener('change',async e=>{
+      const f=e.target.files[0];if(!f)return;
+      const btn=e.target.parentElement;
+      btn.textContent='Lädt…';btn.style.pointerEvents='none';
+      try{
+        const text=await f.text();
+        const data=JSON.parse(text);
+        // Validate minimal structure
+        if(!data.fatgad||!data.albums||!data.artists||!data.tracks)throw new Error('Ungültiges Format — fatgad/albums/artists/tracks fehlen.');
+        const meta=data.metadata?.counts||{};
+        // If not already imported: show preview + confirm
+        if(!lfStats){
+          const preview=lfDiv.querySelector('#p4LfPreview');
+          if(preview){
+            preview.style.display='';
+            preview.innerHTML=`<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:12px 14px;font-size:12px;color:var(--text-mid);line-height:1.8">
+              <strong style="color:var(--text);display:block;margin-bottom:4px">📊 Vorschau</strong>
+              ${(meta.scrobbles||data.fatgad.length).toLocaleString()} Scrobbles · ${(meta.albums||data.albums.length).toLocaleString()} Alben · ${(meta.artists||data.artists.length).toLocaleString()} Artists · ${(meta.tracks||data.tracks.length).toLocaleString()} Tracks
+            </div>
+            <button class="btn btn-primary btn-full" id="p4LfConfirmBtn" style="margin-top:8px;height:40px;font-size:13px">✓ Importieren & speichern</button>`;
+            preview.querySelector('#p4LfConfirmBtn').addEventListener('click',async()=>{
+              preview.querySelector('#p4LfConfirmBtn').disabled=true;
+              preview.querySelector('#p4LfConfirmBtn').textContent='Speichert…';
+              try{
+                await LastfmCache.saveStats(data);
+                await Settings.set('lastfmImported',true);
+                _toast('✅ Last.fm Stats importiert!');
+                delete panel.dataset.rendered;renderProfileTab(panel);
+              }catch(err){_toast('Speichern fehlgeschlagen: '+err.message,true);}
+            });
+          }
+        } else {
+          // Already imported → direct replace
+          await LastfmCache.saveStats(data);
+          await Settings.set('lastfmImported',true);
+          _toast('✅ Last.fm Stats aktualisiert!');
+          delete panel.dataset.rendered;renderProfileTab(panel);
+        }
+      }catch(err){
+        _toast('Import fehlgeschlagen: '+err.message,true);
+        btn.textContent='⬆ JSON auswählen';btn.style.pointerEvents='';
+      }
+      e.target.value='';
+    });
+  })();
+
   // ── Wire events ────────────────────────────────────────────────
   panel.querySelector('#p4ExportBtn').addEventListener('click',()=>HistoryProvider.export(allAlbums));
   panel.querySelector('#p4ImportFile').addEventListener('change',async e=>{
@@ -2602,7 +2931,7 @@ async function migrateFromLegacy(){
   await migrateFromLegacy();
 
   if(Auth.isLoggedIn()){
-    await Promise.all([Cache.loadLibrary(),HistoryProvider.load(),HomeLayout.load(),BurnMode.load()]);
+    await Promise.all([Cache.loadLibrary(),HistoryProvider.load(),HomeLayout.load(),BurnMode.load(),LastfmCache.load()]);
     restoreSession();
     if(allAlbums.length){
       const syncBtn=document.getElementById('syncBtn');if(syncBtn)syncBtn.style.display='';
@@ -4129,6 +4458,175 @@ function renderHomeDashboard(panel){
       _loadArtists('medium_term');
     })();
   }
+
+  // ── PHASE 17: Last.fm Carousels (QID-044–053)
+  (()=>{
+    const LF_IDS=['lf-most-played','lf-latest-disc','lf-golden-oldies','lf-climbers','lf-fallers','lf-one-hit','lf-streaks','lf-recent-disc','lf-deep-dives','lf-seasonal'];
+    const anyActive=LF_IDS.some(id=>HomeLayout.get(id));
+    if(!anyActive)return; // all toggled off → skip entirely
+
+    /** shared: render a standard carousel section */
+    function _lfSection(id,icon,title,items,badgeFn,subText){
+      if(!HomeLayout.get(id))return;
+      if(!items||!items.length){_lfPlaceholder(id,icon,title);return;}
+      const sec=document.createElement('div');sec.className='dash-section';
+      const hdr=document.createElement('div');hdr.className='car-section-hdr';
+      const albums=items.map(x=>x.album||x);
+      hdr.innerHTML=`<span class="car-section-title" id="${id}Title">${icon} ${esc(title)}${items.length>1?'<span class="car-see-all">See All ›</span>':''}</span><span class="car-section-sub">${esc(subText||'')}</span>`;
+      sec.appendChild(hdr);
+      if(items.length>1)hdr.querySelector('#'+id+'Title').addEventListener('click',()=>openCarouselSeeAllModal(id,title,albums,icon));
+      const wrap=document.createElement('div');wrap.className='carousel-wrap';
+      wrap.innerHTML=`<div class="carousel-track">${items.map(x=>_carCard(x.album||x,badgeFn(x))).join('')}</div>`;
+      sec.appendChild(wrap);
+      _attachCarouselClicks(sec,albums);
+      panel.appendChild(sec);
+    }
+
+    /** shared: placeholder card when Last.fm not imported */
+    function _lfPlaceholder(id,icon,title){
+      if(!HomeLayout.get(id))return;
+      const sec=document.createElement('div');sec.className='dash-section';
+      sec.innerHTML=`<div class="car-section-hdr"><span class="car-section-title">${icon} ${esc(title)}</span></div>
+        <div style="padding:18px 16px;background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);text-align:center;color:var(--text-dim);font-size:13px">
+          📊 Last.fm Daten importieren → <button class="btn btn-sm" onclick="switchTab('profile')" style="margin-left:6px">Profile Tab</button>
+        </div>`;
+      panel.appendChild(sec);
+    }
+
+    const imported=LastfmCache.isImported();
+
+    // QID-053 — Your Most Played
+    if(HomeLayout.get('lf-most-played')){
+      if(!imported){_lfPlaceholder('lf-most-played','👑','Most Played (Last.fm)');}
+      else{
+        const items=_burnFilter(LastfmCache.getMostPlayed(20).map(x=>x.album));
+        _lfSection('lf-most-played','👑','Most Played (Last.fm)',
+          LastfmCache.getMostPlayed(20).filter(x=>!state.burnMode||!BurnMode.isBurned(x.album.id)),
+          x=>`#${x.rank} · ${x.plays}×`,
+          `${items.length} alben`);
+      }
+    }
+
+    // QID-044 — Latest Discoveries
+    if(HomeLayout.get('lf-latest-disc')){
+      if(!imported){_lfPlaceholder('lf-latest-disc','🔭','Latest Discoveries');}
+      else{
+        const raw=LastfmCache.getLatestDiscoveries(20).filter(x=>!state.burnMode||!BurnMode.isBurned(x.album.id));
+        _lfSection('lf-latest-disc','🔭','Latest Discoveries',raw,
+          x=>{const d=new Date(x.avgDate);return d.toLocaleDateString(undefined,{month:'short',year:'2-digit'});},
+          `${raw.length} alben`);
+      }
+    }
+
+    // QID-045 — Golden Oldies
+    if(HomeLayout.get('lf-golden-oldies')){
+      if(!imported){_lfPlaceholder('lf-golden-oldies','🕰️','Golden Oldies');}
+      else{
+        const raw=LastfmCache.getGoldenOldies(20).filter(x=>!state.burnMode||!BurnMode.isBurned(x.album.id));
+        _lfSection('lf-golden-oldies','🕰️','Golden Oldies',raw,
+          x=>{const d=new Date(x.avgDate);return`Since ${d.toLocaleDateString(undefined,{month:'short',year:'2-digit'})}`;},
+          `${raw.length} alben`);
+      }
+    }
+
+    // QID-046 — Biggest Climbers
+    if(HomeLayout.get('lf-climbers')){
+      if(!imported){_lfPlaceholder('lf-climbers','📈','Biggest Climbers');}
+      else{
+        const raw=LastfmCache.getBiggestClimbers(20).filter(x=>!state.burnMode||!BurnMode.isBurned(x.album.id));
+        _lfSection('lf-climbers','📈','Biggest Climbers',raw,
+          x=>`+${x.gain} this month`,
+          `${raw.length} im Aufwind`);
+      }
+    }
+
+    // QID-047 — Biggest Fallers
+    if(HomeLayout.get('lf-fallers')){
+      if(!imported){_lfPlaceholder('lf-fallers','📉','Biggest Fallers');}
+      else{
+        const raw=LastfmCache.getBiggestFallers(20).filter(x=>!state.burnMode||!BurnMode.isBurned(x.album.id));
+        _lfSection('lf-fallers','📉','Biggest Fallers',raw,
+          x=>`${x.gain} this month`,
+          `${raw.length} im Abwind`);
+      }
+    }
+
+    // QID-048 — One-Hit Wonders
+    if(HomeLayout.get('lf-one-hit')){
+      if(!imported){_lfPlaceholder('lf-one-hit','🎯','One-Hit Wonders');}
+      else{
+        const raw=LastfmCache.getOneHitWonders(20).filter(x=>!state.burnMode||!BurnMode.isBurned(x.album.id));
+        _lfSection('lf-one-hit','🎯','One-Hit Wonders',raw,
+          x=>`${x.plays}× · ${esc(x.track||'')}`,
+          `${raw.length} artists`);
+      }
+    }
+
+    // QID-049 — Listening Streaks
+    if(HomeLayout.get('lf-streaks')){
+      if(!imported){_lfPlaceholder('lf-streaks','🔥','Listening Streaks');}
+      else{
+        const raw=LastfmCache.getListeningStreaks(20).filter(x=>!state.burnMode||!BurnMode.isBurned(x.album.id));
+        _lfSection('lf-streaks','🔥','Listening Streaks',raw,
+          x=>`🔥 ${x.longestStreak}d streak`,
+          `${raw.length} alben`);
+      }
+    }
+
+    // QID-050 — Recently Discovered
+    if(HomeLayout.get('lf-recent-disc')){
+      if(!imported){_lfPlaceholder('lf-recent-disc','🆕','Recently Discovered');}
+      else{
+        const raw=LastfmCache.getRecentlyDiscovered(14).filter(x=>!state.burnMode||!BurnMode.isBurned(x.album.id));
+        _lfSection('lf-recent-disc','🆕','Recently Discovered',raw,
+          x=>`${x.daysAgo}d ago · ${x.plays}×`,
+          `${raw.length} neue Funde`);
+      }
+    }
+
+    // QID-051 — Deep Dives
+    if(HomeLayout.get('lf-deep-dives')){
+      if(!imported){_lfPlaceholder('lf-deep-dives','🔍','Deep Dives');}
+      else{
+        const raw=LastfmCache.getDeepDives(20,50,20).filter(x=>!state.burnMode||!BurnMode.isBurned(x.album.id));
+        _lfSection('lf-deep-dives','🔍','Deep Dives',raw,
+          x=>`${x.tracks} tracks · ${x.plays}×`,
+          `${raw.length} artists`);
+      }
+    }
+
+    // QID-052 — Seasonal Favorites (month-selector chips)
+    if(HomeLayout.get('lf-seasonal')){
+      if(!imported){_lfPlaceholder('lf-seasonal','🌸','Seasonal Favorites');}
+      else{
+        const MONTHS=['Jan','Feb','Mär','Apr','Mai','Jun','Jul','Aug','Sep','Okt','Nov','Dez'];
+        const curMonth=new Date().getMonth()+1;
+        const secId='lf-seasonal';
+        const sec=document.createElement('div');sec.className='dash-section';
+        const hdr=document.createElement('div');hdr.className='car-section-hdr';
+        hdr.innerHTML=`<span class="car-section-title">${'🌸'} Seasonal Favorites</span>
+          <div class="time-chips" id="lfSeasonalChips">${MONTHS.map((m,i)=>`<button class="time-chip${i+1===curMonth?' active':''}" data-mo="${i+1}">${m}</button>`).join('')}</div>`;
+        sec.appendChild(hdr);
+        const body=document.createElement('div');body.id='lfSeasonalBody';
+        sec.appendChild(body);
+        panel.appendChild(sec);
+
+        function _renderSeasonal(month){
+          const items=LastfmCache.getSeasonalFavorites(month,20).filter(x=>!state.burnMode||!BurnMode.isBurned(x.album.id));
+          if(!items.length){body.innerHTML=`<div style="padding:12px 0;color:var(--text-dim);font-size:13px">Keine Daten für diesen Monat.</div>`;return;}
+          body.innerHTML=`<div class="carousel-wrap"><div class="carousel-track">${items.map(x=>_carCard(x.album,`${x.plays}× im ${MONTHS[month-1]}`)).join('')}</div></div>`;
+          _attachCarouselClicks(body,items.map(x=>x.album));
+        }
+        _renderSeasonal(curMonth);
+        hdr.querySelector('#lfSeasonalChips').addEventListener('click',e=>{
+          const btn=e.target.closest('.time-chip');if(!btn)return;
+          hdr.querySelectorAll('.time-chip').forEach(c=>c.classList.remove('active'));
+          btn.classList.add('active');
+          _renderSeasonal(+btn.dataset.mo);
+        });
+      }
+    }
+  })();
 
   // ── PHASE 9 QID-009 / QID-026: User Playlist Carousels
   // Cache-first. Falls kein Cache → API-Fallback im Background → Carousel nachrendern.
