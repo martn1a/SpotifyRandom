@@ -1,0 +1,33 @@
+name: Last.fm Parser
+
+on:
+  schedule:
+    # Täglich um 2:00 Uhr UTC (nachts)
+    - cron: '0 2 * * *'
+  # Ermöglicht manuelles Ausführen über GitHub UI
+  workflow_dispatch:
+
+jobs:
+  parse:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v4
+      
+      - name: 🐍 Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+      
+      - name: 🎵 Run Parser
+        working-directory: lastfm-parser
+        run: python lastfm_complete_parser_v1.py
+      
+      - name: 📝 Commit & Push JSON
+        run: |
+          git config user.name "Last.fm Parser Bot"
+          git config user.email "bot@github.com"
+          git add lastfm-parser/lastfm_complete_stats.json
+          git commit -m "🎵 Auto-generated stats $(date +%Y-%m-%d\ %H:%M:%S)" || echo "No changes to commit"
+          git push
