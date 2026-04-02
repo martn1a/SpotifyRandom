@@ -1449,7 +1449,32 @@ const LastfmCache=(()=>{
       .slice(0,limit);
   }
 
-  return{load,getStats,isImported,getPlayCountMap,playsForAlbum,saveStats,clear,
+  const GITHUB_LF_URL='https://raw.githubusercontent.com/martn1a/SpotifyRandom/main/lastfm-parser/lastfm_complete_stats.json';
+
+  /** Fetch lastfm_complete_stats.json from GitHub, compare parsedAt, save if newer.
+   *  @param {boolean} [showError=false] — show toast on network error (for manual button)
+   *  @returns {Promise<'updated'|'uptodate'|'first'|'error'>}
+   */
+  async function githubSync(showError=false){
+    try{
+      const res=await fetch(GITHUB_LF_URL);
+      if(!res.ok)throw new Error('HTTP '+res.status);
+      const data=await res.json();
+      if(!data.fatgad||!data.albums||!data.artists||!data.tracks)throw new Error('Ungültiges Format');
+      const remoteTs=data.metadata?.parsedAt||null;
+      const localTs=_stats?.metadata?.parsedAt||null;
+      if(remoteTs&&localTs&&new Date(remoteTs)<=new Date(localTs))return'uptodate';
+      await saveStats(data);
+      await Settings.set('lastfmImported',true);
+      return localTs?'updated':'first';
+    }catch(e){
+      console.warn('LastfmCache.githubSync failed',e);
+      if(showError)_toast('GitHub-Sync fehlgeschlagen: '+e.message,true);
+      return'error';
+    }
+  }
+
+  return{load,getStats,isImported,getPlayCountMap,playsForAlbum,saveStats,clear,githubSync,
     getMostPlayed,getLatestDiscoveries,getGoldenOldies,getBiggestClimbers,getBiggestFallers,
     getOneHitWonders,getListeningStreaks,getRecentlyDiscovered,getDeepDives,getSeasonalFavorites};
 })();
@@ -2744,8 +2769,9 @@ async function renderProfileTab(panel){
             <div class="settings-row-label">Importiert am ${lfDateStr}</div>
             <div class="settings-row-sub">${(lfMeta?.scrobbles||0).toLocaleString()} Scrobbles · ${(lfMeta?.albums||0).toLocaleString()} Alben · ${(lfMeta?.artists||0).toLocaleString()} Artists</div>
           </div>
-          <div class="settings-row" style="padding:0 16px 14px;border-top:none">
+          <div class="settings-row" style="padding:0 16px 14px;border-top:none;gap:8px">
             <div><div class="settings-row-label">Neu importieren</div><div class="settings-row-sub">Ersetzt vorhandene Daten</div></div>
+            <button class="btn btn-sm" id="p4LfGithubBtn">🔄 GitHub</button>
             <label class="btn btn-sm" style="position:relative;overflow:hidden;cursor:pointer">⬆ Import<input type="file" id="p4LfImportFile" accept=".json" style="position:absolute;inset:0;opacity:0;cursor:pointer"></label>
           </div>`:`
           <div class="settings-row" style="flex-direction:column;align-items:flex-start;gap:6px;padding:14px 16px">
@@ -2753,11 +2779,29 @@ async function renderProfileTab(panel){
             <div class="settings-row-sub">Importiere deine <code>lastfm_complete_stats.json</code> um Last.fm Carousels zu aktivieren</div>
           </div>
           <div id="p4LfPreview" style="display:none;padding:0 16px 14px"></div>
-          <div class="settings-row" style="padding:0 16px 14px;border-top:none">
-            <label class="btn btn-sm btn-primary" style="position:relative;overflow:hidden;cursor:pointer">⬆ JSON auswählen<input type="file" id="p4LfImportFile" accept=".json" style="position:absolute;inset:0;opacity:0;cursor:pointer"></label>
+          <div class="settings-row" style="padding:0 16px 14px;border-top:none;gap:8px">
+            <button class="btn btn-sm btn-primary" id="p4LfGithubBtn">🔄 Von GitHub laden</button>
+            <label class="btn btn-sm" style="position:relative;overflow:hidden;cursor:pointer">⬆ JSON<input type="file" id="p4LfImportFile" accept=".json" style="position:absolute;inset:0;opacity:0;cursor:pointer"></label>
           </div>`}
       </div>`;
     panel.appendChild(lfDiv);
+
+    // ── GitHub Sync Button ────────────────────────────────────────
+    lfDiv.querySelector('#p4LfGithubBtn')?.addEventListener('click',async e=>{
+      const btn=e.currentTarget;
+      btn.disabled=true;btn.textContent='Lädt…';
+      const result=await LastfmCache.githubSync(true);
+      if(result==='updated'||result==='first'){
+        _toast('✅ Last.fm Stats aktualisiert!');
+        _invalidateHomeDashCache&&_invalidateHomeDashCache();
+        delete panel.dataset.rendered;renderProfileTab(panel);
+      }else if(result==='uptodate'){
+        _toast('✓ Already up to date');
+        btn.disabled=false;btn.textContent=lfStats?'🔄 GitHub':'🔄 Von GitHub laden';
+      }else{
+        btn.disabled=false;btn.textContent=lfStats?'🔄 GitHub':'🔄 Von GitHub laden';
+      }
+    });
 
     lfDiv.querySelector('#p4LfImportFile')?.addEventListener('change',async e=>{
       const f=e.target.files[0];if(!f)return;
@@ -3014,6 +3058,26 @@ async function migrateFromLegacy(){
           }
         }
       }catch(e){console.warn('Background sync error',e);}
+    })();
+
+    // Phase 17C: Last.fm GitHub Auto-Sync — silent, non-blocking
+    (async()=>{
+      const result=await LastfmCache.githubSync(false);
+      if(result==='updated')_toast('🎵 Last.fm Stats aktualisiert');
+      else if(result==='first'){
+        // Erster Import: interaktiver Toast mit Bestätigungs-Button
+        const t=document.createElement('div');
+        t.style.cssText='position:fixed;bottom:calc(var(--tab-h)+16px);left:50%;transform:translateX(-50%);background:rgba(74,144,217,.18);border:1px solid rgba(74,144,217,.4);color:var(--blue);padding:10px 16px;border-radius:var(--r-f);font-size:13px;font-weight:500;z-index:999;display:flex;align-items:center;gap:10px;backdrop-filter:blur(8px);white-space:nowrap';
+        t.innerHTML='🎵 Last.fm Stats verfügbar <button id="lfGhAccept" style="background:var(--blue);color:#fff;border:none;border-radius:var(--r-f);padding:4px 12px;font-size:12px;font-weight:600;cursor:pointer">Jetzt laden</button>';
+        document.body.appendChild(t);
+        const cleanup=()=>{t.style.transition='opacity .3s';t.style.opacity='0';setTimeout(()=>t.remove(),300);};
+        setTimeout(cleanup,8000);
+        t.querySelector('#lfGhAccept').addEventListener('click',async()=>{
+          cleanup();
+          const r=await LastfmCache.githubSync(true);
+          if(r==='updated'||r==='first'){_toast('✅ Last.fm Stats importiert!');_invalidateHomeDashCache&&_invalidateHomeDashCache();}
+        });
+      }
     })();
   }
 
