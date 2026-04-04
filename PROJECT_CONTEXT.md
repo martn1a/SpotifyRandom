@@ -26,11 +26,3 @@
 4. Set up environment variables for Last.fm API and Spotify API.
 5. Start the application: `npm start`
 
-## Usage
-Users can sign in using their Last.fm accounts to connect their listening history. The app analyzes their scrobbles and preferences to generate personalized album recommendations. Users can then play previews through Spotify or visit album details. The app continuously refines its suggestions based on user interactions and Last.fm data updates.
-
-## Contribution
-Contributions are welcome! Please open issues for suggestions or submit pull requests for improvements.
-
-## License
-This project is licensed under the MIT License.

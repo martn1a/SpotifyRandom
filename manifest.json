@@ -6,10 +6,16 @@
   "scope": "/SpotifyRandom/",
   "display": "standalone",
   "orientation": "portrait-primary",
-  "background_color": "#1a1a1a",
-  "theme_color": "#1a1a1a",
+  "background_color": "#fafafa",
+  "theme_color": "#ffffff",
   "categories": ["music", "entertainment"],
   "icons": [
+    {
+      "src": "icons/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
     {
       "src": "icons/icon-192.png",
       "sizes": "192x192",

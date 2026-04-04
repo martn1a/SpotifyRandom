@@ -11,8 +11,21 @@ async function get(url) {
   return res.json()
 }
 
+const ALBUM_CACHE_TTL = 24 * 60 * 60 * 1000 // 24 hours
+
 // GET /me/albums — paginated, returns all saved albums
+// Cache: reads from IndexedDB 'library' store on repeat visits (TTL = 24h)
 export async function fetchAllAlbums(onProgress) {
+  const db = await getDb()
+
+  // ── Cache hit ──────────────────────────────────────────────────
+  const cached = await db.get('library', 'albums')
+  if (cached && Date.now() - cached.cachedAt < ALBUM_CACHE_TTL) {
+    onProgress(cached.data.length, cached.data.length)
+    return cached.data
+  }
+
+  // ── Cache miss / stale → fetch fresh ──────────────────────────
   const albums = []
   let url = 'https://api.spotify.com/v1/me/albums?limit=50&market=from_token'
   while (url) {
@@ -25,6 +38,9 @@ export async function fetchAllAlbums(onProgress) {
     url = data.next
     onProgress(albums.length, data.total)
   }
+
+  db.put('library', { data: albums, cachedAt: Date.now() }, 'albums').catch(() => {})
+
   return albums
 }
 

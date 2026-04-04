@@ -52,7 +52,7 @@ export default function TabBar({ activeTab, onTabChange }) {
           <button
             key={tab.id}
             onClick={() => onTabChange(tab.id)}
-            className={`flex-1 flex flex-col items-center justify-center gap-0.5 transition-colors ${
+            className={`relative flex-1 flex flex-col items-center justify-center gap-0.5 transition-colors ${
               isActive ? 'text-ink' : 'text-ink-muted'
             }`}
           >

@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Background -->
+  <rect width="512" height="512" rx="114" fill="#1a1a1a"/>
+  <!-- Outer ring -->
+  <circle cx="256" cy="256" r="188" fill="none" stroke="#ffffff" stroke-width="28" stroke-opacity="0.9"/>
+  <!-- Middle ring -->
+  <circle cx="256" cy="256" r="120" fill="none" stroke="#ffffff" stroke-width="14" stroke-opacity="0.35"/>
+  <!-- Inner disc -->
+  <circle cx="256" cy="256" r="52" fill="#ffffff" fill-opacity="0.9"/>
+  <!-- Centre hole -->
+  <circle cx="256" cy="256" r="22" fill="#1a1a1a"/>
+  <!-- Teal accent dot -->
+  <circle cx="256" cy="256" r="8" fill="#0f6e56"/>
+</svg>

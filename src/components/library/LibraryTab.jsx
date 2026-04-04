@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react'
 import { GENRE_CLUSTERS, clusterOf } from '../../data/genre-clusters.js'
+import AlbumModal from '../AlbumModal.jsx'
 
 // ── Sub-components ────────────────────────────────────────────────────
 
@@ -13,11 +14,26 @@ function ListenBadge({ count }) {
   )
 }
 
-function AlbumRow({ album, listenCount }) {
+function BookmarkIcon({ filled }) {
+  return filled
+    ? (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" className="text-ink">
+        <path d="M17 3H7a2 2 0 0 0-2 2v16l7-3 7 3V5a2 2 0 0 0-2-2z"/>
+      </svg>
+    )
+    : (
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+           strokeLinecap="round" strokeLinejoin="round" className="text-ink-muted">
+        <path d="M17 3H7a2 2 0 0 0-2 2v16l7-3 7 3V5a2 2 0 0 0-2-2z"/>
+      </svg>
+    )
+}
+
+function AlbumRow({ album, listenCount, saved, onSave, onRemove, onClick }) {
   const art = album.images?.[album.images.length - 1]?.url || album.images?.[0]?.url
 
   return (
-    <div className="flex items-center gap-3 px-4 py-2.5 active:bg-gray-50 transition-colors">
+    <div className="flex items-center gap-3 px-4 py-2.5 active:bg-gray-50 transition-colors cursor-pointer" onClick={onClick}>
       {/* Cover art */}
       <div className="w-12 h-12 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0">
         {art
@@ -36,6 +52,15 @@ function AlbumRow({ album, listenCount }) {
 
       {/* Listen count badge */}
       <ListenBadge count={listenCount} />
+
+      {/* Bookmark */}
+      <button
+        onClick={e => { e.stopPropagation(); saved ? onRemove(album.id) : onSave(album) }}
+        className="flex-shrink-0 p-1 active:scale-90 transition-transform"
+        aria-label={saved ? 'Remove from Later' : 'Save for Later'}
+      >
+        <BookmarkIcon filled={saved} />
+      </button>
     </div>
   )
 }
@@ -45,13 +70,23 @@ function AlbumRow({ album, listenCount }) {
 const SORT_OPTIONS = [
   { id: 'recently_added', label: 'Recently Added' },
   { id: 'most_played',    label: 'Most Played'    },
+  { id: 'year',           label: 'Year'           },
   { id: 'name',           label: 'Name'           },
 ]
 
-export default function LibraryTab({ albums, getAlbumStats, genresLoading }) {
+const TYPE_OPTIONS = [
+  { id: 'all',         label: 'All'          },
+  { id: 'album',       label: 'Albums'       },
+  { id: 'single',      label: 'Singles'      },
+  { id: 'compilation', label: 'Compilations' },
+]
+
+export default function LibraryTab({ albums, getAlbumStats, genresLoading, saveLater, removeLater, isSaved }) {
   const [search,        setSearch]        = useState('')
   const [activeCluster, setActiveCluster] = useState(null)
+  const [typeFilter,    setTypeFilter]    = useState('all')
   const [sort,          setSort]          = useState('recently_added')
+  const [selectedAlbum, setSelectedAlbum] = useState(null)
 
   // Build cluster → album count map (only includes clusters with ≥1 album)
   const clusterCounts = useMemo(() => {
@@ -83,6 +118,10 @@ export default function LibraryTab({ albums, getAlbumStats, genresLoading }) {
       )
     }
 
+    if (typeFilter !== 'all') {
+      list = list.filter(a => a.album_type === typeFilter)
+    }
+
     if (activeCluster) {
       list = list.filter(a => {
         const clusters = new Set((a._genres || []).map(clusterOf))
@@ -92,6 +131,8 @@ export default function LibraryTab({ albums, getAlbumStats, genresLoading }) {
 
     if (sort === 'name') {
       list.sort((a, b) => a.name.localeCompare(b.name))
+    } else if (sort === 'year') {
+      list.sort((a, b) => (b.release_date || '').localeCompare(a.release_date || ''))
     } else if (sort === 'most_played') {
       list.sort((a, b) => {
         const aStats = getAlbumStats(a)
@@ -104,7 +145,7 @@ export default function LibraryTab({ albums, getAlbumStats, genresLoading }) {
     }
 
     return list
-  }, [albums, search, activeCluster, sort, getAlbumStats])
+  }, [albums, search, typeFilter, activeCluster, sort, getAlbumStats])
 
   return (
     <div className="flex flex-col h-full">
@@ -133,6 +174,23 @@ export default function LibraryTab({ albums, getAlbumStats, genresLoading }) {
             onClick={() => setSort(opt.id)}
             className={`flex-shrink-0 px-3 py-1.5 rounded-full text-[11px] font-medium transition-colors
               ${sort === opt.id
+                ? 'bg-chip-active text-white'
+                : 'bg-chip-inactive text-gray-600'
+              }`}
+          >
+            {opt.label}
+          </button>
+        ))}
+      </div>
+
+      {/* ── Type filter chips ──────────────────────────────────────── */}
+      <div className="flex gap-2 px-4 pb-2 overflow-x-auto scrollbar-hide">
+        {TYPE_OPTIONS.map(opt => (
+          <button
+            key={opt.id}
+            onClick={() => setTypeFilter(opt.id)}
+            className={`flex-shrink-0 px-3 py-1.5 rounded-full text-[11px] font-medium transition-colors
+              ${typeFilter === opt.id
                 ? 'bg-chip-active text-white'
                 : 'bg-chip-inactive text-gray-600'
               }`}
@@ -194,6 +252,10 @@ export default function LibraryTab({ albums, getAlbumStats, genresLoading }) {
             key={album.id}
             album={album}
             listenCount={getAlbumStats(album)?.listenCount || 0}
+            saved={isSaved(album.id)}
+            onSave={saveLater}
+            onRemove={removeLater}
+            onClick={() => setSelectedAlbum(album)}
           />
         ))}
 
@@ -208,6 +270,17 @@ export default function LibraryTab({ albums, getAlbumStats, genresLoading }) {
         {/* Bottom padding for tab bar */}
         <div className="h-4" />
       </div>
+
+      {selectedAlbum && (
+        <AlbumModal
+          album={selectedAlbum}
+          stats={getAlbumStats(selectedAlbum)}
+          saved={isSaved(selectedAlbum.id)}
+          onSave={saveLater}
+          onRemove={removeLater}
+          onClose={() => setSelectedAlbum(null)}
+        />
+      )}
     </div>
   )
 }

@@ -42,3 +42,12 @@ html, body, #root {
   scrollbar-width: none;
   &::-webkit-scrollbar { display: none; }
 }
+
+/* iOS safe area inset for home indicator */
+@utility pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+@utility pt-safe {
+  padding-top: env(safe-area-inset-top, 0px);
+}

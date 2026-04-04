@@ -1,7 +1,9 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, Component } from 'react'
 import { isLoggedIn, handleCallback, logout } from './lib/auth.js'
+import { getDb } from './lib/db.js'
 import { useLibrary } from './hooks/useLibrary.js'
 import { useLastfm } from './hooks/useLastfm.js'
+import { useListenLater } from './hooks/useListenLater.js'
 import LoginScreen from './components/LoginScreen.jsx'
 import Header from './components/layout/Header.jsx'
 import TabBar from './components/layout/TabBar.jsx'
@@ -9,6 +11,36 @@ import DiscoverTab from './components/discover/DiscoverTab.jsx'
 import LibraryTab from './components/library/LibraryTab.jsx'
 import StatsTab from './components/stats/StatsTab.jsx'
 import ListenLaterTab from './components/listen-later/ListenLaterTab.jsx'
+
+// ── Error boundary (catches render errors per tab) ────────────────────
+
+class ErrorBoundary extends Component {
+  constructor(props) {
+    super(props)
+    this.state = { error: null }
+  }
+  static getDerivedStateFromError(error) {
+    return { error }
+  }
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="flex flex-col items-center justify-center py-16 px-8 text-center gap-3">
+          <p className="text-2xl">⚠️</p>
+          <p className="text-sm font-medium text-ink">Something went wrong</p>
+          <p className="text-[11px] text-ink-muted max-w-xs">{this.state.error.message}</p>
+          <button
+            onClick={() => this.setState({ error: null })}
+            className="mt-1 px-4 py-2 bg-ink text-white text-[13px] rounded-xl"
+          >
+            Try again
+          </button>
+        </div>
+      )
+    }
+    return this.props.children
+  }
+}
 
 // ── Loading screen (shown while album library is fetching) ────────────
 
@@ -46,7 +78,14 @@ function MainApp({ onLogout }) {
     albums, genresLoading, albumsLoading, albumsProgress, error: libraryError
   } = useLibrary()
 
-  const { getAlbumStats } = useLastfm()
+  const { getAlbumStats, lastfmMap, onThisDay, loaded: lastfmLoaded, meta: lastfmMeta } = useLastfm()
+  const { items: listenLater, save: saveLater, remove: removeLater, isSaved } = useListenLater()
+
+  async function handleRefresh() {
+    const db = await getDb()
+    await db.delete('library', 'albums')
+    window.location.reload()
+  }
 
   if (libraryError) {
     return (
@@ -69,25 +108,62 @@ function MainApp({ onLogout }) {
 
   const renderTab = () => {
     switch (activeTab) {
-      case 'discover': return <DiscoverTab albums={albums} getAlbumStats={getAlbumStats} />
+      case 'discover': return (
+        <DiscoverTab
+          albums={albums}
+          getAlbumStats={getAlbumStats}
+          saveLater={saveLater}
+          removeLater={removeLater}
+          isSaved={isSaved}
+        />
+      )
       case 'library':  return (
         <LibraryTab
           albums={albums}
           getAlbumStats={getAlbumStats}
           genresLoading={genresLoading}
+          saveLater={saveLater}
+          removeLater={removeLater}
+          isSaved={isSaved}
         />
       )
-      case 'stats':    return <StatsTab getAlbumStats={getAlbumStats} />
-      case 'later':    return <ListenLaterTab />
+      case 'stats':    return (
+        <StatsTab
+          albums={albums}
+          getAlbumStats={getAlbumStats}
+          lastfmMap={lastfmMap}
+          lastfmLoaded={lastfmLoaded}
+          onThisDay={onThisDay}
+          saveLater={saveLater}
+          removeLater={removeLater}
+          isSaved={isSaved}
+        />
+      )
+      case 'later':    return (
+        <ListenLaterTab
+          items={listenLater}
+          saveLater={saveLater}
+          removeLater={removeLater}
+          isSaved={isSaved}
+          getAlbumStats={getAlbumStats}
+        />
+      )
       default:         return null
     }
   }
 
   return (
     <div className="flex flex-col h-dvh bg-page overflow-hidden">
-      <Header onLogout={onLogout} />
+      <Header
+          onLogout={onLogout}
+          albumCount={albums.length}
+          lastfmMeta={lastfmMeta}
+          onRefresh={handleRefresh}
+        />
       <main className="flex-1 overflow-y-auto overflow-x-hidden">
-        {renderTab()}
+        <ErrorBoundary key={activeTab}>
+          {renderTab()}
+        </ErrorBoundary>
       </main>
       <TabBar activeTab={activeTab} onTabChange={setActiveTab} />
     </div>
