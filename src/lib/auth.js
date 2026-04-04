@@ -1,5 +1,5 @@
 const CLIENT_ID   = 'ed48e32b12fd4b01ad0dbdf383cb3ff6'
-const REDIRECT_URI = 'http://127.0.0.1:5173'
+const REDIRECT_URI = window.location.origin + window.location.pathname.replace(/\/$/, '')
 const SCOPES = 'user-library-read user-read-playback-state user-modify-playback-state user-read-private playlist-read-private playlist-read-collaborative'
 
 // ── PKCE helpers ────────────────────────────────────────────────────
