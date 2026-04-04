@@ -1,0 +1,44 @@
+@import "tailwindcss";
+
+@theme {
+  /* Typography */
+  --font-family-sans: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+
+  /* Surface colors */
+  --color-page: #fafafa;
+  --color-card: #ffffff;
+  --color-border-subtle: #f0f0f0;
+
+  /* Text colors */
+  --color-ink: #1a1a1a;
+  --color-ink-secondary: #888888;
+  --color-ink-muted: #aaaaaa;
+
+  /* Listen count badge */
+  --color-badge-listen-bg: #e1f5ee;
+  --color-badge-listen: #0f6e56;
+
+  /* Genre badge */
+  --color-badge-genre-bg: #eeedfe;
+  --color-badge-genre: #534ab7;
+
+  /* Trend badges */
+  --color-badge-rising-bg: #eaf3de;
+  --color-badge-rising: #639922;
+  --color-badge-falling-bg: #fcebeb;
+  --color-badge-falling: #a32d2d;
+
+  /* Filter chips */
+  --color-chip-active: #1a1a1a;
+  --color-chip-inactive: #f5f5f5;
+}
+
+html, body, #root {
+  height: 100%;
+  overscroll-behavior: none;
+}
+
+@utility scrollbar-hide {
+  scrollbar-width: none;
+  &::-webkit-scrollbar { display: none; }
+}

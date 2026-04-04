@@ -1,0 +1,4 @@
+parser/.env
+node_modules/
+dist/
+.claude/
