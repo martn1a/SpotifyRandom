@@ -96,6 +96,7 @@ export function computeAlbumSessions(artist, album, scrobbles, knownTrackCount) 
   let listenCount = 0;
   let backgroundCount = 0;
   const sessionDetails = [];
+  const sessionDates = [];
 
   for (const session of sessions) {
     const scored = scoreSession(session, effectiveTrackCount);
@@ -105,10 +106,12 @@ export function computeAlbumSessions(artist, album, scrobbles, knownTrackCount) 
       backgroundCount++;
     } else if (scored.countsAsListen) {
       listenCount++;
+      sessionDates.push(scored.startTs);
     }
   }
 
   const timestamps = scrobbles.map(s => s.timestamp);
+  const uniqueListeningDays = new Set(timestamps.map(t => new Date(t).toDateString())).size;
 
   return {
     artist,
@@ -128,6 +131,9 @@ export function computeAlbumSessions(artist, album, scrobbles, knownTrackCount) 
     lastHeard:          timestamps[timestamps.length - 1],
     // For peak month calculation
     allTimestamps:      timestamps,
+    // New v2 fields
+    sessionDates,
+    uniqueListeningDays,
   };
 }
 
@@ -306,5 +312,7 @@ function emptyStats(artist, album, trackCount) {
     firstHeard: null,
     lastHeard: null,
     allTimestamps: [],
+    sessionDates: [],
+    uniqueListeningDays: 0,
   };
 }

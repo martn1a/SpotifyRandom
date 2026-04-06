@@ -79,9 +79,23 @@ export async function fetchByMbId(mbReleaseId) {
 
       if (!allTracks.length) return null;
 
+      // Extract release year from MusicBrainz date field (format: "YYYY-MM-DD" or "YYYY")
+      let releaseYear = null;
+      const releaseDate = data?.date?.trim();
+      if (releaseDate) {
+        const match = releaseDate.match(/^(\d{4})/);
+        if (match) {
+          const year = parseInt(match[1]);
+          if (year >= 1900 && year <= new Date().getFullYear() + 1) {
+            releaseYear = year;
+          }
+        }
+      }
+
       return {
         trackCount: allTracks.length,
         tracks: allTracks,
+        releaseYear,
       };
 
     } catch (e) {

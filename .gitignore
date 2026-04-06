@@ -2,3 +2,11 @@ parser/.env
 node_modules/
 dist/
 .claude/
+
+# Claude / Planning meta
+.agents/
+HANDOFF.md
+IDEAS.md
+burn-tracking-spec.md
+design-sandbox/
+skills-lock.json

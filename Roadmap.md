@@ -1,59 +1,87 @@
 # Roadmap — Album Discovery React App
 
 ## Phase 1 Core Tabs ✅ DONE
-
-- [x] Parser (Last.fm CSV + API calls)
-- [x] Auth + Spotify library sync
-- [x] Library tab (search, filter, sort)
-- [x] Stats tab (carousels, charts)
-- [x] Listen Later tab
-
 ## Phase 2 Discover Tab ✅ DONE
+## Phase 3 Redesign ✅ ABGEBROCHEN — Features zuerst
 
-- [x] FeaturedAlbumCard → tap opens AlbumModal
-- [x] Random Picker UI (shuffle button)
-- [x] Album of the Day (seeded daily hash)
-- [x] Filter chips layout (decade, genre, never heard, not recent)
-- [x] Queue album to Spotify
-- [x] StatsTab carousels → tap opens AlbumModal (Queue + Save Later)
-- [x] StatsTab album cover matching (normalized Spotify↔Last.fm lookup)
-- [x] StatsTab carousels: library-only (no placeholder covers)
-- [x] Weighted random toggle (prefer never-heard albums, 10× weight)
-- [x] Keyword filter toggle (blocks: live, remix, edit, instrumental, reprise, version)
-- [x] Avoid recently queued toggle (excludes albums queued in last 30 days)
-- [x] Built-in presets (🎲 Surprise Me, 💎 Forgotten Gems, 🕰 Deep Cuts)
-- [x] Save custom filter presets (localStorage, named, deletable)
+---
 
-## Phase 3 Polish & Deploy
+## Phase 4 — Aktiv (V1 Feature-Complete)
 
-- [ ] Animations (tab transitions, card slides)
-- [x] PWA manifest + installable
-- [x] Error boundary per-tab reset
-- [x] GitHub Pages vite.config base path
-- [x] gh-pages publish workflow
+- [x] **Burn Tracking** ✅ 2026-04-06
+  - Queue / Save for Later entfernt Album aus Carousel (Standardverhalten, kein Modus)
+  - Burn-Event in IndexedDB (`burn_events` + `burn_resets`, DB v2)
+  - Reset pro Carousel (Sichtbarkeit zurück, Historie bleibt)
+  - Burned Count Badge neben Reset-Button
+  - Per-Carousel Metriken: Completion-Bar (2px), lastBurnedAt (relativ, "2h ago"), resetCount (↺ Nx)
+  - burnStats erweitert: `perCarousel` Map + `resetCounts` aus IndexedDB
+  - Burn-Sektion in StatsTab: per-Carousel-Tabelle mit Mini-Progressbar + Count + Resets
 
-Time estimate remaining: 1–2 hours (animations only)
+- [x] **Multi-Pick Album Selector** ✅ 2026-04-06
+  - Discover Tab: Count-Selektor [1][3][5][10] über Pick-Button
+  - Default 1 = bisheriges Verhalten (FeaturedAlbumCard) unverändert
+  - Multi-Pick: SwipeableAlbumRow mit Pointer-Events (kein externe Library)
+  - Swipe Left (>80px) = Queue + aus Liste entfernen
+  - Swipe Right (>80px) = Skip (nur entfernen)
+  - Tap = AlbumModal (Queue/Save entfernt Album aus Pick-Liste)
+  - Batch: "Queue All" / "Save All"
+  - Weighted Pick funktioniert mit Multi-Pick (sampling without replacement)
 
-## Missing Features from old app (backlog)
+- [ ] **Artist Deep Dive Modal** ← Phase 4.2 (Parser Tier 1 ✅ — jetzt unblocked)
+  - Tap auf Künstlername → alle Library-Alben des Artists
+  - Heard/Unheard, Top Albums (aus Parser `topAlbums[]`), Coverage %, Album Cards
+  - Coverage % visuell darstellen (Fortschrittsbalken)
 
-- [ ] Artist Deep Dive modal (tap artist → all their albums in library)
-- [ ] Library coverage bar (X / Y albums heard, Z%)
-- [ ] Three-state decade filter (neutral / include / exclude)
-- [ ] Listening streaks stat in StatsTab
-- [ ] Seasonal favorites carousel
+- [ ] **Library Coverage Bar** (StatsTab, Phase 4.3)
+  - X / Y Albums heard, Z% — global + nach Artist
 
-## Decided Decisions (Not Open)
+- [ ] **Empty-State bei geleerten Carousels** (Phase 4.4)
+  - Feedback wenn alle Alben eines Carousels geburnt wurden
+  - Ggf. "Reset"-CTA direkt im leeren Carousel
 
-- Session window 20 minutes ✅
-- Listen threshold 50% unique tracks ✅
-- Loop counting each full loop = 1 listen ✅
-- Background sessions weight 0, separate stat ✅
-- Scrobble minimum for API ≥3 scrobbles ✅
+- [ ] **Animationen** (Phase 4.5)
+  - Tab-Übergänge, Card-Slides
 
-## Intentionally Deferred (v2+)
+---
 
-- Burn Mode
-- Lens (album grid)
-- Playlist import carousels
-- MusicBrainz genre enrichment
-- Auto Last.fm API sync (manual only in v1)
+## Phase 5 — Parser-Erweiterung ✅ TIER 1 DONE 2026-04-06
+
+### TIER 1 ✅ Done (Parser v2.0.0)
+**Per Album (neu):** `uniqueListeningDays`, `peakYear`, `listeningSpanDays`, `sessionDates[]`, `avgGapDays`, `releaseYear`, `albumAgeAtFirstListen`  
+**Per Artist (neu):** `albumCount`, `heardAlbumCount`, `coveragePercent`, `topAlbums[]`, `mostRecentAlbum`, `mostRediscoveredAlbum`
+
+- [x] **Unique listening days** pro Album — `uniqueListeningDays`
+- [x] **Top albums pro Artist** — `topAlbums[{key, name, listenCount, firstHeard, lastHeard}]` (top 5)
+- [x] **Album coverage % pro Artist** — `coveragePercent` (heardAlbumCount / albumCount)
+- [x] **Most rediscovered album** pro Artist — `{key, name, gapVarianceDays, sessionCount}`
+- [x] **Session dates** pro Album — `sessionDates[]` + `avgGapDays`
+- [x] **Release year** — `releaseYear` (Last.fm fetch, gecacht). Befüllen: `node index.js --fill-release-years`
+- [x] **Album age at first listen** — `albumAgeAtFirstListen` (nach --fill-release-years)
+
+### TIER 2 (Backlog)
+- Total listening time pro Album (requires Spotify track duration — kein CSV-Feld)
+- Listening streaks
+
+### TIER 3 (Backlog)
+- Session-chain patterns
+- Listening streaks
+- Behavior models
+
+---
+
+## Backlog (kein aktiver Plan)
+
+- Playlist Import Carousels
+- MusicBrainz Genre Enrichment
+- Drei-Zustands-Dekaden-Filter
+- Listening Streaks
+- Seasonal Favorites Carousel
+
+---
+
+## Gestrichen
+
+- V2 Redesign Branch (design-2) — eingefroren
+- Burn Mode als separater Modus — ersetzt durch Standardverhalten
+- Lens / Album Grid
+- Auto Last.fm API Sync

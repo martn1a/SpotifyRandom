@@ -10,9 +10,10 @@
  *   6. Build and write lastfm-data.json
  *
  * Usage:
- *   node index.js                  — normal run
- *   node index.js --dry-run        — parse + session compute, skip API fetches
- *   node index.js --force-refetch  — ignore cache, re-fetch all track counts
+ *   node index.js                       — normal run
+ *   node index.js --dry-run             — parse + session compute, skip API fetches
+ *   node index.js --force-refetch       — ignore cache, re-fetch all track counts
+ *   node index.js --fill-release-years  — one-time: fill releaseYear for cached entries
  *
  * Environment:
  *   LASTFM_API_KEY — required unless --dry-run (set in .env file)
@@ -24,7 +25,7 @@ import { fileURLToPath } from 'url';
 
 import { loadAll, albumKey } from './lib/csv-reader.js';
 import {
-  loadCache, saveCache, getCached, setCached, isCached,
+  loadCache, saveCache, getCached, setCached, setReleaseYear, isCached,
   getCacheStats, mergeSpotifyExport, SOURCE,
 } from './lib/cache.js';
 import { setApiKey, fetchAlbumInfo } from './lib/lastfm-api.js';
@@ -39,14 +40,15 @@ const OUTPUT_DIR  = path.join(__dirname, 'output');
 const OUTPUT_FILE = path.join(OUTPUT_DIR, 'lastfm-data.json');
 const SPOTIFY_EXPORT_PATH = path.join(__dirname, 'data', 'track_counts_cache_spotify.json');
 
-const PARSER_VERSION = '1.0.0';
+const PARSER_VERSION = '2.0.0';
 
 // ─────────────────────────────────────────────────────────────────
 // CLI flags
 // ─────────────────────────────────────────────────────────────────
 const args = process.argv.slice(2);
-const DRY_RUN      = args.includes('--dry-run');
-const FORCE_FETCH  = args.includes('--force-refetch');
+const DRY_RUN            = args.includes('--dry-run');
+const FORCE_FETCH        = args.includes('--force-refetch');
+const FILL_RELEASE_YEARS = args.includes('--fill-release-years');
 const MIN_SCROBBLES = 3;  // Albums below this threshold skip API fetch
 
 // ─────────────────────────────────────────────────────────────────
@@ -103,7 +105,7 @@ async function fetchMissingTrackCounts(albumsToFetch, mbIdMap) {
     // 1. Try Last.fm API
     const lfResult = await fetchAlbumInfo(artist, album);
     if (lfResult && lfResult.trackCount > 0) {
-      setCached(artist, album, lfResult.trackCount, SOURCE.LASTFM);
+      setCached(artist, album, lfResult.trackCount, SOURCE.LASTFM, lfResult.releaseYear);
       lastfmHits++;
       done++;
       progress(done, total, label);
@@ -115,7 +117,7 @@ async function fetchMissingTrackCounts(albumsToFetch, mbIdMap) {
     if (mbId) {
       const mbResult = await fetchByMbId(mbId);
       if (mbResult && mbResult.trackCount > 0) {
-        setCached(artist, album, mbResult.trackCount, SOURCE.MUSICBRAINZ);
+        setCached(artist, album, mbResult.trackCount, SOURCE.MUSICBRAINZ, mbResult.releaseYear);
         mbHits++;
         done++;
         progress(done, total, label);
@@ -133,6 +135,24 @@ async function fetchMissingTrackCounts(albumsToFetch, mbIdMap) {
   }
 
   console.log(`\n  Results: ${lastfmHits} Last.fm ✓  ${mbHits} MusicBrainz ✓  ${estimates} estimated`);
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Helper: gap-based metrics
+// ─────────────────────────────────────────────────────────────────
+function computeAvgGapDays(dates) {
+  const sorted = [...dates].sort((a, b) => a - b);
+  let sum = 0;
+  for (let i = 1; i < sorted.length; i++) sum += sorted[i] - sorted[i - 1];
+  return Math.round(sum / (sorted.length - 1) / 86400000 * 10) / 10;
+}
+
+function computeGapVariance(dates) {
+  const sorted = [...dates].sort((a, b) => a - b);
+  const gaps = [];
+  for (let i = 1; i < sorted.length; i++) gaps.push((sorted[i] - sorted[i - 1]) / 86400000);
+  const mean = gaps.reduce((a, b) => a + b, 0) / gaps.length;
+  return Math.round(gaps.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / gaps.length);
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -167,13 +187,22 @@ function buildAlbumOutput(
       : recent < previous * 0.5 ? 'falling'
       : 'flat';
 
+    // New v2: release year + derived album age
+    const cachedEntry = getCached(stats.artist, stats.album);
+    const releaseYear = cachedEntry?.releaseYear || null;
+    const firstYear = stats.firstHeard ? new Date(stats.firstHeard).getFullYear() : null;
+
+    // New v2: gap-based metrics from sessionDates
+    const sessionDates = stats.sessionDates || [];
+    const avgGapDays = sessionDates.length >= 2 ? computeAvgGapDays(sessionDates) : null;
+
     output[key] = {
       artist:              stats.artist,
       name:                stats.album,
       albumId:             mbId,
       // Track count
       trackCount:          stats.trackCount,
-      trackCountSource:    stats.trackCountIsEstimate ? SOURCE.ESTIMATE : (getCached(stats.artist, stats.album)?.source || SOURCE.ESTIMATE),
+      trackCountSource:    stats.trackCountIsEstimate ? SOURCE.ESTIMATE : (cachedEntry?.source || SOURCE.ESTIMATE),
       // Scrobble data
       rawScrobbles:        stats.rawScrobbles,
       rank:                csvEntry?.rank ?? 9999,
@@ -185,23 +214,95 @@ function buildAlbumOutput(
       firstHeard:          stats.firstHeard,
       lastHeard:           stats.lastHeard,
       peakMonth,
+      peakYear:            peakMonth ? parseInt(peakMonth.slice(0, 4)) : null,
       // Trend
       trend,
       recentPlays:         recent,
+      // New v2: richer temporal metrics
+      uniqueListeningDays: stats.uniqueListeningDays,
+      listeningSpanDays:   (stats.firstHeard && stats.lastHeard)
+                             ? Math.round((stats.lastHeard - stats.firstHeard) / 86400000)
+                             : 0,
+      sessionDates,
+      avgGapDays,
+      releaseYear,
+      albumAgeAtFirstListen: (releaseYear && firstYear) ? firstYear - releaseYear : null,
     };
   }
 
   return output;
 }
 
-function buildArtistOutput(artistsSummary) {
+function buildArtistOutput(artistsSummary, albumOutput) {
+  // Group albums by artist key for aggregations
+  const albumsByArtist = new Map();
+  for (const album of Object.values(albumOutput)) {
+    const artistKey = album.artist.toLowerCase().trim();
+    if (!albumsByArtist.has(artistKey)) albumsByArtist.set(artistKey, []);
+    albumsByArtist.get(artistKey).push(album);
+  }
+
   const output = {};
   for (const a of artistsSummary) {
-    output[a.name.toLowerCase().trim()] = {
+    const artistKey = a.name.toLowerCase().trim();
+    const albums = albumsByArtist.get(artistKey) || [];
+    const heardAlbums = albums.filter(al => al.listenCount >= 1);
+    const albumCount = albums.length;
+    const heardAlbumCount = heardAlbums.length;
+
+    // Top 5 albums by listenCount
+    const topAlbums = [...heardAlbums]
+      .sort((a, b) => b.listenCount - a.listenCount)
+      .slice(0, 5)
+      .map(al => ({
+        key:         `${al.artist.toLowerCase().trim()}||${al.name.toLowerCase().trim()}`,
+        name:        al.name,
+        listenCount: al.listenCount,
+        firstHeard:  al.firstHeard,
+        lastHeard:   al.lastHeard,
+      }));
+
+    // Most recently heard album
+    let mostRecentAlbum = null;
+    for (const al of albums) {
+      if (al.lastHeard && (!mostRecentAlbum || al.lastHeard > mostRecentAlbum.lastHeard)) {
+        mostRecentAlbum = {
+          key:      `${al.artist.toLowerCase().trim()}||${al.name.toLowerCase().trim()}`,
+          name:     al.name,
+          lastHeard: al.lastHeard,
+        };
+      }
+    }
+
+    // Most rediscovered: album with highest gap variance (min 3 sessions)
+    let mostRediscoveredAlbum = null;
+    let maxVariance = -1;
+    for (const al of heardAlbums) {
+      if (!al.sessionDates || al.sessionDates.length < 3) continue;
+      const variance = computeGapVariance(al.sessionDates);
+      if (variance > maxVariance) {
+        maxVariance = variance;
+        mostRediscoveredAlbum = {
+          key:             `${al.artist.toLowerCase().trim()}||${al.name.toLowerCase().trim()}`,
+          name:            al.name,
+          gapVarianceDays: variance,
+          sessionCount:    al.sessionDates.length,
+        };
+      }
+    }
+
+    output[artistKey] = {
       name:      a.name,
       scrobbles: a.scrobbles,
       tracks:    a.tracks,
       rank:      a.rank,
+      // New v2: per-artist aggregations
+      albumCount,
+      heardAlbumCount,
+      coveragePercent:      albumCount > 0 ? Math.round((heardAlbumCount / albumCount) * 100) : 0,
+      topAlbums,
+      mostRecentAlbum,
+      mostRediscoveredAlbum,
     };
   }
   return output;
@@ -315,6 +416,44 @@ async function main() {
 
   // ── Ensure output dir ──────────────────────────────────────────
   if (!existsSync(OUTPUT_DIR)) mkdirSync(OUTPUT_DIR, { recursive: true });
+
+  // ── FILL RELEASE YEARS MODE ────────────────────────────────────
+  if (FILL_RELEASE_YEARS) {
+    console.log('\n📅 --fill-release-years: fetching release years for cached albums without one\n');
+    loadCache();
+    const cacheMap = loadCache();
+    const missing = [...cacheMap.entries()].filter(([, v]) => !v.releaseYear);
+    console.log(`  ${missing.length.toLocaleString()} entries without release year`);
+    if (missing.length === 0 || DRY_RUN) {
+      console.log('  Nothing to do.');
+      process.exit(0);
+    }
+
+    // Build a reverse lookup: key → { artist, album }
+    // The cache key IS "artist||album" (lowercased) but we need original case for API calls.
+    // We'll parse artist/album from the key directly.
+    let done = 0;
+    let filled = 0;
+    for (const [key] of missing) {
+      const sepIdx = key.indexOf('||');
+      if (sepIdx === -1) { done++; continue; }
+      const artist = key.slice(0, sepIdx);
+      const album  = key.slice(sepIdx + 2);
+
+      const lfResult = await fetchAlbumInfo(artist, album);
+      if (lfResult?.releaseYear) {
+        setReleaseYear(artist, album, lfResult.releaseYear);
+        filled++;
+      }
+
+      done++;
+      progress(done, missing.length, `${artist} — ${album}`);
+    }
+
+    saveCache();
+    console.log(`\n  Filled ${filled} / ${missing.length} release years`);
+    process.exit(0);
+  }
 
   // ── STEP 1: Load CSVs ─────────────────────────────────────────
   console.log('STEP 1 — Loading Last.fm CSV exports');
@@ -433,7 +572,7 @@ async function main() {
   console.log('\nSTEP 5 — Building output JSON');
 
   const albumOutput  = buildAlbumOutput(sessionMap, albums, mbIdMap);
-  const artistOutput = buildArtistOutput(artists);
+  const artistOutput = buildArtistOutput(artists, albumOutput);
   const derivedStats = buildDerivedStats(albumOutput, fadgad, artists);
 
   // Compact timeline for app (timestamps only need month resolution)

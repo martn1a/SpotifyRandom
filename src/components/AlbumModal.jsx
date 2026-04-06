@@ -21,7 +21,7 @@ function fmtType(t) {
 
 // ── Component ─────────────────────────────────────────────────────────
 
-export default function AlbumModal({ album, stats, saved, onSave, onRemove, onClose }) {
+export default function AlbumModal({ album, stats, saved, onSave, onRemove, onClose, onQueue }) {
   const [queueStatus, setQueueStatus] = useState(null)
   const [queuing,     setQueuing]     = useState(false)
 
@@ -53,6 +53,7 @@ export default function AlbumModal({ album, stats, saved, onSave, onRemove, onCl
     setQueuing(true)
     try {
       for (const uri of uris) await addToQueue(uri)
+      onQueue?.(album)
       setQueueStatus({ msg: `"${album.name}" added to queue`, error: false })
     } catch (e) {
       setQueueStatus({ msg: e.message, error: true })
@@ -117,7 +118,7 @@ export default function AlbumModal({ album, stats, saved, onSave, onRemove, onCl
               onClick={handleQueue}
               disabled={queuing}
               className="w-full bg-ink text-white text-[13px] font-medium py-3 rounded-xl
-                         active:opacity-80 disabled:opacity-40 transition-opacity"
+                         hover:opacity-90 active:scale-[0.98] disabled:opacity-40 transition-all"
             >
               {queuing ? 'Queuing…' : 'Queue to Spotify'}
             </button>
@@ -138,7 +139,7 @@ export default function AlbumModal({ album, stats, saved, onSave, onRemove, onCl
           {/* Last.fm stats */}
           {stats && stats.listenCount > 0 && (
             <div className="py-4 border-t border-gray-50">
-              <p className="text-[10px] font-medium text-ink-muted uppercase tracking-wide mb-2.5">
+              <p className="text-[12px] font-semibold text-ink mb-2.5">
                 Last.fm
               </p>
               <div className="grid grid-cols-2 gap-y-1.5">
@@ -152,7 +153,7 @@ export default function AlbumModal({ album, stats, saved, onSave, onRemove, onCl
                 ].filter(([, v]) => v).map(([label, value]) => (
                   <div key={label}>
                     <p className="text-[10px] text-ink-muted">{label}</p>
-                    <p className="text-[12px] font-medium text-ink">{value}</p>
+                    <p className="text-[12px] font-medium text-ink tabular-nums">{value}</p>
                   </div>
                 ))}
               </div>
@@ -162,7 +163,7 @@ export default function AlbumModal({ album, stats, saved, onSave, onRemove, onCl
           {/* Track list */}
           {tracks.length > 0 && (
             <div className="py-4 border-t border-gray-50">
-              <p className="text-[10px] font-medium text-ink-muted uppercase tracking-wide mb-2.5">
+              <p className="text-[12px] font-semibold text-ink mb-2.5">
                 Tracks
               </p>
               <div>

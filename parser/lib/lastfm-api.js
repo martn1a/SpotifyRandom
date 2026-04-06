@@ -86,9 +86,23 @@ export async function fetchAlbumInfo(artist, album) {
       const tracks = Array.isArray(trackList) ? trackList : [trackList];
       const trackNames = tracks.map(t => t.name).filter(Boolean);
 
+      // Extract release year from releasedate field (e.g. " 01 Jan 2010, 00:00")
+      let releaseYear = null;
+      const releasedate = data?.album?.releasedate?.trim();
+      if (releasedate) {
+        const match = releasedate.match(/\b(\d{4})\b/);
+        if (match) {
+          const year = parseInt(match[1]);
+          if (year >= 1900 && year <= new Date().getFullYear() + 1) {
+            releaseYear = year;
+          }
+        }
+      }
+
       return {
         trackCount: trackNames.length,
         tracks: trackNames,
+        releaseYear,
       };
 
     } catch (e) {

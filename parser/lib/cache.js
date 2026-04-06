@@ -73,13 +73,28 @@ export function getCached(artist, album) {
 /**
  * Store a track count result in the cache.
  */
-export function setCached(artist, album, trackCount, source) {
+export function setCached(artist, album, trackCount, source, releaseYear = null) {
   const cache = loadCache();
   cache.set(albumKey(artist, album), {
     trackCount,
     source,
     fetchedAt: Date.now(),
+    releaseYear: releaseYear || null,
   });
+}
+
+/**
+ * Update only the release year for an existing cache entry.
+ * Used by --fill-release-years pass. Does not touch trackCount or source.
+ */
+export function setReleaseYear(artist, album, releaseYear) {
+  const cache = loadCache();
+  const key = albumKey(artist, album);
+  const existing = cache.get(key);
+  if (existing) {
+    existing.releaseYear = releaseYear;
+    cache.set(key, existing);
+  }
 }
 
 /**
