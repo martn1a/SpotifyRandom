@@ -1,2 +1,2 @@
-*.csv
-track_counts_cache.json
+# CSVs are now tracked so they can be uploaded via GitHub web UI
+# track_counts_cache.json is also tracked so CI runs don't re-fetch all track counts
