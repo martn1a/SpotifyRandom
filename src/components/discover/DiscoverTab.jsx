@@ -225,22 +225,21 @@ function FeaturedAlbumCard({ album, stats, onQueue, onSave, onRemove, saved, onT
 // ── SwipeableAlbumRow ─────────────────────────────────────────────────
 
 function SwipeableAlbumRow({ album, stats, onQueue, onSave, onRemove, saved, onTap }) {
-  const art    = album.images?.[album.images.length - 1]?.url
+  const art    = album.images?.[0]?.url
   const artist = (album.artists || []).map(a => a.name).join(', ')
   const count  = stats?.listenCount ?? 0
+  const year   = (album.release_date || '').substring(0, 4)
 
-  const [offsetX, setOffsetX]   = useState(0)
-  const [swiping, setSwiping]   = useState(false)
-  const [done,    setDone]      = useState(false)
-  const startXRef               = useRef(null)
-  const pointerIdRef            = useRef(null)
+  const [offsetX, setOffsetX] = useState(0)
+  const [swiping, setSwiping] = useState(false)
+  const [done,    setDone]    = useState(false)
+  const startXRef             = useRef(null)
 
   const THRESHOLD = 80
   const MAX_DRAG  = 120
 
   function onPointerDown(e) {
-    startXRef.current   = e.clientX
-    pointerIdRef.current = e.pointerId
+    startXRef.current = e.clientX
     e.currentTarget.setPointerCapture(e.pointerId)
     setSwiping(true)
   }
@@ -258,52 +257,38 @@ function SwipeableAlbumRow({ album, stats, onQueue, onSave, onRemove, saved, onT
     setSwiping(false)
 
     if (dx < -THRESHOLD) {
-      // Left swipe → Queue
+      // Left swipe → Skip
+      setDone(true)
+    } else if (dx > THRESHOLD) {
+      // Right swipe → Queue
       setDone(true)
       onQueue(album)
-    } else if (dx > THRESHOLD) {
-      // Right swipe → Skip
-      setDone(true)
     } else {
       setOffsetX(0)
     }
   }
 
-  const [revealRef, revealed] = useScrollReveal()
   if (done) return null
 
-  const progress = Math.abs(offsetX) / THRESHOLD // 0 → 1 as user drags to threshold
-  const isLeft   = offsetX < -8
-  const isRight  = offsetX > 8
+  const progress     = Math.abs(offsetX) / THRESHOLD
+  const isLeft       = offsetX < -8
+  const isRight      = offsetX > 8
   const leftOpacity  = isLeft  ? Math.min(1, progress) : 0
   const rightOpacity = isRight ? Math.min(1, progress) : 0
 
-  const bgStyle = isLeft  ? `rgba(15, 110, 86, ${Math.min(0.15, progress * 0.15)})` :
-                  isRight ? `rgba(180, 30, 30, ${Math.min(0.15, progress * 0.15)})`  : 'transparent'
-
   return (
     <div
-      ref={revealRef}
-      style={{ transitionTimingFunction: 'cubic-bezier(0.32,0.72,0,1)' }}
-      className={`relative overflow-hidden rounded-2xl ring-1 ring-black/[0.08] bg-white shadow-sm
-                  transition-all duration-500
-                  ${revealed ? 'translate-y-0 opacity-100' : 'translate-y-4 opacity-0'}`}
+      className="bg-card rounded-2xl border border-border-subtle overflow-hidden flex-shrink-0"
+      style={{ minWidth: 'calc(50% - 6px)' }}
     >
-      {/* Hint overlays */}
-      <div className="absolute inset-0 flex items-center px-4 pointer-events-none">
-        <span className="text-[11px] font-semibold text-[#0F6E56]" style={{ opacity: leftOpacity }}>🎵 Queue</span>
-      </div>
-      <div className="absolute inset-0 flex items-center justify-end px-4 pointer-events-none">
-        <span className="text-[11px] font-semibold text-[#A32D2D]" style={{ opacity: rightOpacity }}>✕ Skip</span>
-      </div>
-
-      {/* Row content */}
+      {/* Cover with swipe gesture */}
       <div
-        className={`flex items-center gap-3 p-3 select-none ${swiping ? '' : 'transition-transform duration-150'}`}
+        className="relative w-full aspect-square overflow-hidden"
         style={{
           transform: `translateX(${offsetX}px)`,
-          background: bgStyle,
+          transition: swiping ? 'none' : 'transform 0.15s ease',
           touchAction: 'pan-y',
+          cursor: 'grab',
         }}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
@@ -311,44 +296,47 @@ function SwipeableAlbumRow({ album, stats, onQueue, onSave, onRemove, saved, onT
         onPointerCancel={onPointerUp}
         onClick={() => { if (Math.abs(offsetX) < 5) onTap(album) }}
       >
-        {/* Cover */}
-        <div className="w-[56px] h-[56px] rounded-xl overflow-hidden bg-gray-100 flex-shrink-0">
-          {art
-            ? <img src={art} alt="" className="w-full h-full object-cover" loading="lazy" />
-            : <div className="w-full h-full flex items-center justify-center text-lg">💿</div>
-          }
-        </div>
+        {art
+          ? <img src={art} alt="" className="w-full h-full object-cover block select-none" draggable={false} loading="lazy" />
+          : <div className="w-full h-full flex items-center justify-center text-4xl bg-card-raised">💿</div>
+        }
 
-        {/* Info */}
-        <div className="flex-1 min-w-0">
-          <p className="text-[13px] font-medium text-ink leading-tight line-clamp-1">{album.name}</p>
-          <p className="text-[11px] text-ink-muted mt-0.5 truncate">{artist}</p>
-          {count > 0 && (
-            <span className="inline-block mt-1 text-[9px] font-medium text-badge-listen">{count}× heard</span>
-          )}
-        </div>
+        {/* Top badge */}
+        {count > 0 && (
+          <div className="absolute top-2 left-2">
+            <span
+              className="px-1.5 py-0.5 rounded text-[10px] font-semibold"
+              style={{
+                background: 'rgba(30,215,96,0.2)', color: '#1ed760',
+                border: '1px solid rgba(30,215,96,0.3)',
+                backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)',
+              }}
+            >{count}×</span>
+          </div>
+        )}
 
-        {/* Action buttons */}
-        <div className="flex flex-col gap-1.5 flex-shrink-0">
-          <button
-            onPointerDown={e => e.stopPropagation()}
-            onClick={e => { e.stopPropagation(); onQueue(album) }}
-            style={{ transitionTimingFunction: 'cubic-bezier(0.32,0.72,0,1)' }}
-            className="px-3 py-1.5 bg-ink text-white text-[10px] font-semibold rounded-xl
-                       active:opacity-70 transition-all duration-500"
-          >
-            Queue
-          </button>
-          <button
-            onPointerDown={e => e.stopPropagation()}
-            onClick={e => { e.stopPropagation(); saved ? onRemove(album.id) : onSave(album) }}
-            style={{ transitionTimingFunction: 'cubic-bezier(0.32,0.72,0,1)' }}
-            className={`px-3 py-1.5 text-[10px] font-medium rounded-xl active:opacity-70 transition-all duration-500
-              ${saved ? 'bg-gray-100 text-ink-muted' : 'ring-1 ring-black/10 bg-white text-ink'}`}
-          >
-            {saved ? 'Saved' : 'Save'}
-          </button>
+        {/* Swipe overlays */}
+        <div className="absolute inset-0 flex items-center justify-start px-3 pointer-events-none"
+             style={{ opacity: leftOpacity }}>
+          <span className="text-[11px] font-bold px-2 py-1 rounded-md"
+                style={{ color: '#8a8a8a', background: 'rgba(255,255,255,0.1)', backdropFilter: 'blur(8px)' }}>
+            ← Skip
+          </span>
         </div>
+        <div className="absolute inset-0 flex items-center justify-end px-3 pointer-events-none"
+             style={{ opacity: rightOpacity }}>
+          <span className="text-[11px] font-bold px-2 py-1 rounded-md"
+                style={{ color: '#1ed760', background: 'rgba(30,215,96,0.2)', backdropFilter: 'blur(8px)' }}>
+            Queue →
+          </span>
+        </div>
+      </div>
+
+      {/* Metadata */}
+      <div className="px-3 py-2.5 cursor-pointer" onClick={() => onTap(album)}>
+        <p className="text-[13px] font-semibold text-ink leading-tight line-clamp-1">{album.name}</p>
+        <p className="text-[11px] text-ink-secondary mt-0.5 truncate">{artist}</p>
+        {year && <p className="text-[10px] text-ink-muted mt-0.5">{year}</p>}
       </div>
     </div>
   )
@@ -359,35 +347,36 @@ function SwipeableAlbumRow({ album, stats, onQueue, onSave, onRemove, saved, onT
 function MultiPickList({ albums, getAlbumStats, onQueue, onSave, onRemove, isSaved, onTap, onQueueAll, onSaveAll }) {
   if (!albums.length) return null
   return (
-    <div className="space-y-2">
-      {albums.map(album => (
-        <SwipeableAlbumRow
-          key={album.id}
-          album={album}
-          stats={getAlbumStats(album)}
-          onQueue={onQueue}
-          onSave={onSave}
-          onRemove={onRemove}
-          saved={isSaved(album.id)}
-          onTap={onTap}
-        />
-      ))}
+    <div>
+      {/* Horizontal scroll row */}
+      <div className="flex gap-3 overflow-x-auto scrollbar-hide pb-1" style={{ paddingRight: 20 }}>
+        {albums.map(album => (
+          <SwipeableAlbumRow
+            key={album.id}
+            album={album}
+            stats={getAlbumStats(album)}
+            onQueue={onQueue}
+            onSave={onSave}
+            onRemove={onRemove}
+            saved={isSaved(album.id)}
+            onTap={onTap}
+          />
+        ))}
+      </div>
+
       {albums.length > 1 && (
-        <div className="flex gap-3 pt-2">
+        <div className="flex gap-3 pt-3">
           <button
             onClick={onQueueAll}
-            style={{ transitionTimingFunction: 'cubic-bezier(0.32,0.72,0,1)' }}
-            className="flex-1 bg-ink text-white text-[12px] font-semibold py-3 rounded-2xl
-                       transition-all duration-700 active:scale-[0.98]
-                       hover:shadow-[0_4px_16px_rgba(0,0,0,0.12)]"
+            className="flex-1 py-3.5 rounded-xl text-[14px] font-bold transition-all duration-200 active:scale-[0.98]"
+            style={{ background: '#1ed760', color: '#000' }}
           >
-            Queue All
+            ▶ Queue All
           </button>
           <button
             onClick={onSaveAll}
-            style={{ transitionTimingFunction: 'cubic-bezier(0.32,0.72,0,1)' }}
-            className="flex-1 ring-1 ring-black/10 bg-white text-ink text-[12px] font-medium py-3 rounded-2xl
-                       transition-all duration-700 active:scale-[0.98]"
+            className="flex-1 py-3.5 rounded-xl text-[14px] font-semibold border border-border-subtle text-ink transition-all duration-200 active:scale-[0.98]"
+            style={{ background: 'transparent' }}
           >
             Save All
           </button>
