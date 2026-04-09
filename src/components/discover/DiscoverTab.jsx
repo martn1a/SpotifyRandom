@@ -690,15 +690,6 @@ export default function DiscoverTab({ albums, getAlbumStats, saveLater, removeLa
     + (toggles.excludeKeywords ? 1 : 0)
     + (toggles.avoidRecent ? 1 : 0)
 
-  // Auto-pick when the album pool is ready and nothing is shown yet
-  useEffect(() => {
-    if (filteredAlbums.length > 0 && pickedAlbums.length === 0) {
-      pickRandom()
-    }
-    // pickRandom closes over filteredAlbums + pickCount — both represented in deps
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filteredAlbums.length, pickCount])
-
   function openFilterModal() {
     setDraftFilters(new Set(activeFilters))
     setDraftToggles({ ...toggles })
@@ -776,6 +767,15 @@ export default function DiscoverTab({ albums, getAlbumStats, saveLater, removeLa
     }
     setPickedAlbums(picks)
   }
+
+  // Auto-pick when the album pool is ready and nothing is shown yet
+  // Must be after filteredAlbums (useMemo) and pickRandom — both used below
+  useEffect(() => {
+    if (filteredAlbums.length > 0 && pickedAlbums.length === 0) {
+      pickRandom()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [filteredAlbums.length, pickCount])
 
   const handleQueue = useCallback(async (album) => {
     const tracks = (album.tracks?.items || []).filter(t => t?.uri)
