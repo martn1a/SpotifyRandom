@@ -102,93 +102,121 @@ function FeaturedAlbumCard({ album, stats, onQueue, onSave, onRemove, saved, onT
   const artist  = (album.artists || []).map(a => a.name).join(', ')
   const cluster = getGenreCluster(album)
   const count   = stats?.listenCount ?? 0
+  const year    = (album.release_date || '').substring(0, 4)
   const [revealRef, revealed] = useScrollReveal()
 
   return (
-    /* OUTER SHELL — Double-Bezel layer 1 */
     <div
       ref={revealRef}
-      style={{ transitionTimingFunction: 'cubic-bezier(0.32,0.72,0,1)' }}
-      className={`transition-all duration-700
-        bg-black/[0.03] ring-1 ring-black/[0.08] p-1.5 rounded-[2rem]
-        ${revealed ? 'translate-y-0 opacity-100' : 'translate-y-8 opacity-0'}`}
+      style={{
+        transitionTimingFunction: 'cubic-bezier(0.32,0.72,0,1)',
+        animation: revealed ? 'cardIn 0.4s cubic-bezier(0.32,0.72,0,1) both' : 'none',
+      }}
+      className="bg-card rounded-2xl border border-border-subtle overflow-hidden"
     >
-      {/* INNER CORE — Double-Bezel layer 2 */}
-      <div className="bg-white rounded-[calc(2rem-6px)] shadow-[inset_0_1px_1px_rgba(255,255,255,0.9)] overflow-hidden">
+      {/* Cover with badges overlay */}
+      <div
+        className="relative w-full aspect-square cursor-pointer active:opacity-90 transition-opacity duration-200"
+        onClick={onTap}
+      >
+        {art
+          ? <img src={art} alt="" className="w-full h-full object-cover block" loading="lazy" />
+          : <div className="w-full h-full flex items-center justify-center text-5xl bg-card-raised">💿</div>
+        }
 
-        {/* Tappable cover */}
-        <div
-          className="cursor-pointer active:opacity-90 transition-opacity duration-300"
-          onClick={onTap}
-        >
-          <div className="w-full aspect-square overflow-hidden">
-            {art
-              ? <img src={art} alt="" className="w-full h-full object-cover" loading="lazy" />
-              : <div className="w-full h-full flex items-center justify-center text-5xl bg-gray-100">💿</div>
-            }
-          </div>
+        {/* Top-left badges */}
+        <div className="absolute top-2.5 left-2.5 flex gap-1.5">
+          {count > 0 && (
+            <span
+              className="px-2 py-1 rounded-md text-[11px] font-semibold"
+              style={{
+                background: 'rgba(30,215,96,0.2)',
+                color: '#1ed760',
+                border: '1px solid rgba(30,215,96,0.3)',
+                backdropFilter: 'blur(8px)',
+                WebkitBackdropFilter: 'blur(8px)',
+              }}
+            >
+              {count}×
+            </span>
+          )}
+          {year && (
+            <span
+              className="px-2 py-1 rounded-md text-[11px] font-semibold"
+              style={{
+                background: 'rgba(255,255,255,0.12)',
+                color: '#f0f0f0',
+                border: '1px solid rgba(255,255,255,0.1)',
+                backdropFilter: 'blur(8px)',
+                WebkitBackdropFilter: 'blur(8px)',
+              }}
+            >
+              {year}
+            </span>
+          )}
         </div>
 
-        {/* Info block */}
-        <div className="px-5 pt-4 pb-2 cursor-pointer" onClick={onTap}>
-          {cluster && (
-            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full
-                             bg-accent-dim ring-1 ring-accent/20 text-accent-text
-                             text-[9px] font-bold uppercase tracking-widest mb-2">
+        {/* Swipe hints — bottom */}
+        <div className="absolute bottom-2.5 left-2.5 right-2.5 flex justify-between pointer-events-none">
+          <span
+            className="px-2 py-1 rounded-md text-[11px] font-semibold"
+            style={{
+              background: 'rgba(255,255,255,0.1)',
+              color: '#8a8a8a',
+              border: '1px solid rgba(255,255,255,0.08)',
+              backdropFilter: 'blur(8px)',
+              WebkitBackdropFilter: 'blur(8px)',
+            }}
+          >
+            ← Skip
+          </span>
+          <span
+            className="px-2 py-1 rounded-md text-[11px] font-semibold"
+            style={{
+              background: 'rgba(30,215,96,0.2)',
+              color: '#1ed760',
+              border: '1px solid rgba(30,215,96,0.3)',
+              backdropFilter: 'blur(8px)',
+              WebkitBackdropFilter: 'blur(8px)',
+            }}
+          >
+            Queue →
+          </span>
+        </div>
+      </div>
+
+      {/* Metadata */}
+      <div className="px-4 pt-3 pb-1 cursor-pointer" onClick={onTap}>
+        <p className="text-[17px] font-bold text-ink leading-snug line-clamp-2">{album.name}</p>
+        <p className="text-[13px] text-ink-secondary mt-1 truncate">{artist}</p>
+        {cluster && (
+          <div className="flex gap-1.5 mt-2 flex-wrap">
+            <span
+              className="px-2 py-0.5 rounded-md text-[10px] font-semibold"
+              style={{ background: 'rgba(138,138,255,0.15)', color: '#a0a0ff' }}
+            >
               {cluster.icon} {cluster.label}
             </span>
-          )}
-          <p className="text-[22px] font-bold text-ink leading-snug line-clamp-2">{album.name}</p>
-          <p className="text-[14px] text-ink-secondary mt-1 truncate">{artist}</p>
-          {count > 0 && (
-            <span className="inline-flex items-center mt-2 px-2.5 py-0.5 rounded-full
-                             bg-badge-listen-bg text-badge-listen ring-1 ring-accent/15
-                             text-[10px] font-semibold">
-              {count}× heard
-            </span>
-          )}
-        </div>
+          </div>
+        )}
+      </div>
 
-        {/* CTA buttons */}
-        <div className="px-3 pt-2 pb-3 flex flex-col gap-2">
-          {/* Primary — Button-in-Button */}
-          <button
-            onClick={(e) => { e.stopPropagation(); onQueue(album) }}
-            style={{ transitionTimingFunction: 'cubic-bezier(0.32,0.72,0,1)' }}
-            className="group w-full flex items-center justify-between
-                       bg-ink text-white font-semibold
-                       pl-5 pr-2 py-2 rounded-[1.25rem]
-                       transition-all duration-700 active:scale-[0.98]
-                       hover:shadow-[0_4px_20px_rgba(0,0,0,0.15)]"
-          >
-            <span className="text-[14px]">Queue to Spotify</span>
-            <span
-              className="flex items-center justify-center w-9 h-9 rounded-full bg-white/15
-                         transition-transform duration-700
-                         group-hover:translate-x-1 group-hover:-translate-y-[1px]"
-              style={{ transitionTimingFunction: 'cubic-bezier(0.32,0.72,0,1)' }}
-            >
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
-                   stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>
-              </svg>
-            </span>
-          </button>
-
-          {/* Secondary */}
-          <button
-            onClick={(e) => { e.stopPropagation(); saved ? onRemove(album.id) : onSave(album) }}
-            style={{ transitionTimingFunction: 'cubic-bezier(0.32,0.72,0,1)' }}
-            className={`w-full text-[13px] font-medium py-3 rounded-[1.25rem] transition-all duration-700 active:scale-[0.98]
-              ${saved
-                ? 'bg-gray-50 text-ink-muted'
-                : 'ring-1 ring-black/10 text-ink hover:bg-gray-50'
-              }`}
-          >
-            {saved ? 'Saved ✓' : 'Save for Later'}
-          </button>
-        </div>
-
+      {/* Actions */}
+      <div className="px-4 pt-3 pb-4 flex flex-col gap-2.5">
+        <button
+          onClick={(e) => { e.stopPropagation(); onQueue(album) }}
+          className="w-full py-3.5 rounded-xl text-[15px] font-bold transition-all duration-200 active:scale-[0.98]"
+          style={{ background: '#1ed760', color: '#000' }}
+        >
+          ▶ Queue to Spotify
+        </button>
+        <button
+          onClick={(e) => { e.stopPropagation(); saved ? onRemove(album.id) : onSave(album) }}
+          className="w-full py-3.5 rounded-xl text-[14px] font-semibold border border-border-subtle text-ink transition-all duration-200 active:scale-[0.98]"
+          style={{ background: 'transparent' }}
+        >
+          {saved ? 'Saved ✓' : '⏰ Save for Later'}
+        </button>
       </div>
     </div>
   )
