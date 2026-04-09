@@ -45,7 +45,7 @@ const TABS = [
 
 export default function TabBar({ activeTab, onTabChange }) {
   return (
-    <nav className="flex h-16 border-t border-border-subtle bg-card flex-shrink-0 pb-safe">
+    <nav className="flex h-16 border-t border-border-subtle flex-shrink-0 pb-safe" style={{ background: 'rgba(10,10,10,0.92)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)' }}>
       {TABS.map(tab => {
         const isActive = activeTab === tab.id
         return (
@@ -53,13 +53,13 @@ export default function TabBar({ activeTab, onTabChange }) {
             key={tab.id}
             onClick={() => onTabChange(tab.id)}
             className={`relative flex-1 flex flex-col items-center justify-center gap-0.5 transition-colors ${
-              isActive ? 'text-ink' : 'text-ink-muted'
+              isActive ? 'text-accent' : 'text-ink-muted'
             }`}
           >
             {tab.icon}
             <span className="text-[10px] font-medium">{tab.label}</span>
             {isActive && (
-              <span className="absolute bottom-2 w-1 h-1 rounded-full bg-ink" />
+              <span className="absolute bottom-2 w-1 h-1 rounded-full bg-accent" />
             )}
           </button>
         )

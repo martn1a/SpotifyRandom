@@ -7,9 +7,9 @@ export default function Header({ onLogout, albumCount, lastfmMeta, onRefresh }) 
   const metaDate = fmtMetaDate(lastfmMeta?.generatedAt)
 
   return (
-    <header className="h-14 flex items-center justify-between px-4 bg-card border-b border-border-subtle flex-shrink-0">
+    <header className="h-14 flex items-center justify-between px-4 bg-page border-b border-border-subtle flex-shrink-0">
       <div className="flex flex-col justify-center">
-        <span className="text-base font-medium text-ink tracking-tight leading-tight">
+        <span className="text-base font-semibold text-ink tracking-tight leading-tight">
           Album Discovery
         </span>
         <div className="flex items-center gap-2 mt-0.5">
@@ -26,7 +26,7 @@ export default function Header({ onLogout, albumCount, lastfmMeta, onRefresh }) 
         {onRefresh && (
           <button
             onClick={onRefresh}
-            className="text-ink-muted text-base active:text-ink transition-colors"
+            className="text-ink-secondary text-base active:text-ink transition-colors"
             aria-label="Refresh library"
           >
             ↺
@@ -35,7 +35,7 @@ export default function Header({ onLogout, albumCount, lastfmMeta, onRefresh }) 
         {onLogout && (
           <button
             onClick={onLogout}
-            className="text-xs text-ink-muted active:text-ink transition-colors"
+            className="text-xs text-ink-secondary active:text-ink transition-colors"
           >
             Sign out
           </button>

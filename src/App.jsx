@@ -31,7 +31,7 @@ class ErrorBoundary extends Component {
           <p className="text-[11px] text-ink-muted max-w-xs">{this.state.error.message}</p>
           <button
             onClick={() => this.setState({ error: null })}
-            className="mt-1 px-4 py-2 bg-ink text-white text-[13px] rounded-xl"
+            className="mt-1 px-4 py-2 bg-accent text-black font-semibold text-[13px] rounded-xl"
           >
             Try again
           </button>
@@ -54,9 +54,9 @@ function LoadingScreen({ progress }) {
 
       {total > 0 && (
         <div className="w-full max-w-xs flex flex-col gap-2">
-          <div className="h-1 bg-gray-100 rounded-full overflow-hidden">
+          <div className="h-1 bg-card-raised rounded-full overflow-hidden">
             <div
-              className="h-full bg-ink rounded-full transition-all duration-300"
+              className="h-full bg-accent rounded-full transition-all duration-300"
               style={{ width: `${pct}%` }}
             />
           </div>
@@ -94,7 +94,7 @@ function MainApp({ onLogout }) {
         <p className="text-xs text-ink-muted text-center">{libraryError}</p>
         <button
           onClick={onLogout}
-          className="mt-2 px-4 py-2 bg-ink text-white text-sm rounded-xl"
+          className="mt-2 px-4 py-2 bg-accent text-black font-semibold text-sm rounded-xl"
         >
           Sign out and retry
         </button>
