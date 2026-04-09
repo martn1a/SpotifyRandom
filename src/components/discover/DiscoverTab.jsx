@@ -388,7 +388,10 @@ function MultiPickList({ albums, getAlbumStats, onQueue, onSave, onRemove, isSav
 
 // ── FilterModal ───────────────────────────────────────────────────────
 
-function FilterModal({ draftFilters, draftToggles, setDraftFilters, setDraftToggles, onApply, onClose, activeFilterCount }) {
+function FilterModal({ draftFilters, draftToggles, setDraftFilters, setDraftToggles, onApply, onClose, onSavePreset, activeFilterCount }) {
+  const [presetName,     setPresetName]     = useState('')
+  const [showNameInput,  setShowNameInput]  = useState(false)
+
   function toggleDraftFilter(f) {
     setDraftFilters(prev => {
       const next = new Set(prev)
@@ -402,121 +405,128 @@ function FilterModal({ draftFilters, draftToggles, setDraftFilters, setDraftTogg
   }
 
   const draftCount = draftFilters.size
-    + (draftToggles.weightUnheard ? 1 : 0)
+    + (draftToggles.weightUnheard   ? 1 : 0)
     + (draftToggles.excludeKeywords ? 1 : 0)
-    + (draftToggles.avoidRecent ? 1 : 0)
+    + (draftToggles.avoidRecent     ? 1 : 0)
+
+  function handleSavePreset() {
+    if (!showNameInput) { setShowNameInput(true); return }
+    if (presetName.trim()) {
+      onSavePreset(presetName.trim(), draftFilters, draftToggles)
+      setShowNameInput(false)
+      setPresetName('')
+    }
+  }
 
   return (
     <>
       {/* Backdrop */}
       <div
-        className="fixed inset-0 bg-black/30 z-40"
-        style={{ animation: 'toastIn 0.4s cubic-bezier(0.32,0.72,0,1) both' }}
+        className="fixed inset-0 z-40"
+        style={{
+          background: 'rgba(0,0,0,0.7)',
+          backdropFilter: 'blur(4px)',
+          WebkitBackdropFilter: 'blur(4px)',
+          animation: 'toastIn 0.3s ease both',
+        }}
         onClick={onClose}
       />
 
       {/* Sheet */}
       <div
-        className="fixed bottom-0 left-0 right-0 z-50
-                   bg-page rounded-t-[2rem]
-                   ring-1 ring-black/[0.08]
-                   shadow-[0_-8px_40px_rgba(0,0,0,0.1),inset_0_1px_1px_rgba(255,255,255,1)]
-                   max-h-[88vh] flex flex-col"
-        style={{ animation: 'sheetUp 0.55s cubic-bezier(0.32,0.72,0,1) both' }}
+        className="fixed bottom-0 left-0 right-0 z-50 bg-card rounded-t-[1.75rem] border-t border-border-subtle max-h-[88vh] flex flex-col"
+        style={{ animation: 'sheetUp 0.45s cubic-bezier(0.32,0.72,0,1) both' }}
       >
         {/* Drag pill */}
         <div className="flex justify-center pt-3 pb-1 flex-shrink-0">
-          <div className="w-10 h-1 rounded-full bg-black/10" />
+          <div className="w-10 h-1 rounded-full bg-card-raised" />
         </div>
 
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-3 flex-shrink-0">
-          <div className="flex items-center gap-2">
-            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full
-                             bg-accent-dim ring-1 ring-accent/20 text-accent-text
-                             text-[9px] font-bold uppercase tracking-widest">
-              FILTERS
-            </span>
-            {draftCount > 0 && (
-              <span className="text-[11px] text-ink-muted">{draftCount} active</span>
-            )}
-          </div>
+        <div className="flex items-center justify-between px-5 py-3 flex-shrink-0 border-b border-border-subtle">
+          <span className="text-[15px] font-semibold text-ink">Filters</span>
           <button
             onClick={onClose}
-            className="w-8 h-8 rounded-full bg-chip-inactive ring-1 ring-black/5
-                       flex items-center justify-center text-ink-muted text-[18px] leading-none
-                       active:scale-[0.92] transition-transform duration-300"
+            className="w-8 h-8 rounded-full bg-card-raised flex items-center justify-center text-ink-secondary text-[18px] leading-none active:scale-[0.92] transition-transform duration-200"
           >
             ×
           </button>
         </div>
 
-        {/* Scrollable content — staggered sections */}
-        <div className="overflow-y-auto flex-1 px-5 pb-2 space-y-5">
+        {/* Scrollable content */}
+        <div className="overflow-y-auto flex-1 px-5 pb-2 space-y-5 pt-4">
 
           {/* Decades */}
-          <div style={{ animation: 'sheetUp 0.55s cubic-bezier(0.32,0.72,0,1) 0.05s both' }}>
+          <div>
             <p className="text-[9px] font-bold text-ink-muted uppercase tracking-widest mb-3">Decades</p>
             <div className="flex flex-wrap gap-2">
-              {DECADES.map(d => (
-                <button
-                  key={d}
-                  onClick={() => toggleDraftFilter(d)}
-                  style={{ transitionTimingFunction: 'cubic-bezier(0.32,0.72,0,1)' }}
-                  className={`px-3.5 py-1.5 rounded-full text-[11px] font-medium transition-all duration-700 active:scale-[0.96]
-                    ${draftFilters.has(d)
-                      ? 'bg-chip-active text-white ring-1 ring-accent/30 shadow-[0_0_8px_rgba(29,185,84,0.15)]'
-                      : 'bg-chip-inactive text-gray-600 ring-1 ring-black/5 hover:ring-black/10'}`}
-                >
-                  {d}
-                </button>
-              ))}
+              {DECADES.map(d => {
+                const active = draftFilters.has(d)
+                return (
+                  <button
+                    key={d}
+                    onClick={() => toggleDraftFilter(d)}
+                    className={`px-3.5 py-1.5 rounded-full text-[11px] border transition-all duration-200 active:scale-[0.96] ${
+                      active
+                        ? 'border-accent bg-accent text-black font-semibold'
+                        : 'border-border-subtle bg-card-raised text-ink-secondary font-medium'
+                    }`}
+                  >
+                    {d}
+                  </button>
+                )
+              })}
             </div>
           </div>
 
           {/* Genres */}
-          <div style={{ animation: 'sheetUp 0.55s cubic-bezier(0.32,0.72,0,1) 0.10s both' }}>
+          <div>
             <p className="text-[9px] font-bold text-ink-muted uppercase tracking-widest mb-3">Genres</p>
             <div className="flex flex-wrap gap-2">
-              {GENRE_CLUSTERS.map(c => (
-                <button
-                  key={c.id}
-                  onClick={() => toggleDraftFilter(c.id)}
-                  style={{ transitionTimingFunction: 'cubic-bezier(0.32,0.72,0,1)' }}
-                  className={`flex items-center gap-1 px-3.5 py-1.5 rounded-full text-[11px] font-medium
-                              transition-all duration-700 active:scale-[0.96]
-                    ${draftFilters.has(c.id)
-                      ? 'bg-chip-active text-white ring-1 ring-accent/30 shadow-[0_0_8px_rgba(29,185,84,0.15)]'
-                      : 'bg-chip-inactive text-gray-600 ring-1 ring-black/5 hover:ring-black/10'}`}
-                >
-                  <span>{c.icon}</span><span>{c.label}</span>
-                </button>
-              ))}
+              {GENRE_CLUSTERS.map(c => {
+                const active = draftFilters.has(c.id)
+                return (
+                  <button
+                    key={c.id}
+                    onClick={() => toggleDraftFilter(c.id)}
+                    className={`flex items-center gap-1 px-3.5 py-1.5 rounded-full text-[11px] border transition-all duration-200 active:scale-[0.96] ${
+                      active
+                        ? 'border-accent bg-accent text-black font-semibold'
+                        : 'border-border-subtle bg-card-raised text-ink-secondary font-medium'
+                    }`}
+                  >
+                    <span>{c.icon}</span><span>{c.label}</span>
+                  </button>
+                )
+              })}
             </div>
           </div>
 
-          {/* Heard status */}
-          <div style={{ animation: 'sheetUp 0.55s cubic-bezier(0.32,0.72,0,1) 0.15s both' }}>
-            <p className="text-[9px] font-bold text-ink-muted uppercase tracking-widest mb-3">Listening history</p>
+          {/* Listening history */}
+          <div>
+            <p className="text-[9px] font-bold text-ink-muted uppercase tracking-widest mb-3">Listening History</p>
             <div className="flex flex-wrap gap-2">
-              {['Never heard', 'Not recently played'].map(label => (
-                <button
-                  key={label}
-                  onClick={() => toggleDraftFilter(label)}
-                  style={{ transitionTimingFunction: 'cubic-bezier(0.32,0.72,0,1)' }}
-                  className={`px-3.5 py-1.5 rounded-full text-[11px] font-medium transition-all duration-700 active:scale-[0.96]
-                    ${draftFilters.has(label)
-                      ? 'bg-chip-active text-white ring-1 ring-accent/30 shadow-[0_0_8px_rgba(29,185,84,0.15)]'
-                      : 'bg-chip-inactive text-gray-600 ring-1 ring-black/5 hover:ring-black/10'}`}
-                >
-                  {label}
-                </button>
-              ))}
+              {['Never heard', 'Not recently played'].map(label => {
+                const active = draftFilters.has(label)
+                return (
+                  <button
+                    key={label}
+                    onClick={() => toggleDraftFilter(label)}
+                    className={`px-3.5 py-1.5 rounded-full text-[11px] border transition-all duration-200 active:scale-[0.96] ${
+                      active
+                        ? 'border-accent bg-accent text-black font-semibold'
+                        : 'border-border-subtle bg-card-raised text-ink-secondary font-medium'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                )
+              })}
             </div>
           </div>
 
           {/* Preferences */}
-          <div style={{ animation: 'sheetUp 0.55s cubic-bezier(0.32,0.72,0,1) 0.20s both' }}>
+          <div>
             <p className="text-[9px] font-bold text-ink-muted uppercase tracking-widest mb-3">Preferences</p>
             <div className="space-y-2">
               {[
@@ -527,24 +537,21 @@ function FilterModal({ draftFilters, draftToggles, setDraftFilters, setDraftTogg
                 <button
                   key={key}
                   onClick={() => toggleDraftToggle(key)}
-                  style={{ transitionTimingFunction: 'cubic-bezier(0.32,0.72,0,1)' }}
-                  className="w-full flex items-center justify-between px-4 py-3 rounded-2xl
-                             bg-white ring-1 ring-black/[0.06] active:opacity-70 transition-all duration-500"
+                  className="w-full flex items-center justify-between px-4 py-3 rounded-2xl bg-card-raised border border-border-subtle active:opacity-70 transition-all duration-200"
                 >
                   <div className="text-left">
                     <p className="text-[12px] font-medium text-ink">{label}</p>
                     <p className="text-[10px] text-ink-muted mt-0.5">{desc}</p>
                   </div>
-                  {/* Sliding pill toggle */}
                   <div
-                    style={{ transitionTimingFunction: 'cubic-bezier(0.32,0.72,0,1)' }}
-                    className={`w-11 h-6 rounded-full relative flex-shrink-0 ring-1 transition-all duration-500
-                      ${draftToggles[key] ? 'bg-chip-active ring-accent/30' : 'bg-chip-inactive ring-black/10'}`}
+                    className={`w-11 h-6 rounded-full relative flex-shrink-0 border transition-all duration-300 ${
+                      draftToggles[key] ? 'bg-accent border-accent' : 'bg-card border-border-subtle'
+                    }`}
                   >
                     <div
-                      style={{ transitionTimingFunction: 'cubic-bezier(0.32,0.72,0,1)' }}
-                      className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-all duration-500
-                        ${draftToggles[key] ? 'left-[22px]' : 'left-0.5'}`}
+                      className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-all duration-300 ${
+                        draftToggles[key] ? 'left-[22px]' : 'left-0.5'
+                      }`}
                     />
                   </div>
                 </button>
@@ -553,31 +560,44 @@ function FilterModal({ draftFilters, draftToggles, setDraftFilters, setDraftTogg
           </div>
         </div>
 
-        {/* Apply — Button-in-Button */}
-        <div className="px-4 py-4 flex-shrink-0 pb-safe border-t border-border-subtle">
+        {/* Footer */}
+        <div className="px-4 pt-3 pb-4 flex-shrink-0 pb-safe border-t border-border-subtle space-y-2">
+          {draftCount > 0 && (
+            showNameInput ? (
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  value={presetName}
+                  onChange={e => setPresetName(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && handleSavePreset()}
+                  placeholder="Preset name…"
+                  autoFocus
+                  className="flex-1 px-3 py-2 rounded-xl bg-card-raised border border-border-subtle text-ink text-[13px] outline-none focus:border-accent"
+                />
+                <button
+                  onClick={handleSavePreset}
+                  className="px-4 py-2 rounded-xl text-[13px] font-semibold border border-accent text-accent transition-colors active:opacity-70"
+                >
+                  Save
+                </button>
+              </div>
+            ) : (
+              <button
+                onClick={handleSavePreset}
+                className="w-full py-3 rounded-xl text-[13px] font-semibold border border-border-subtle text-ink-secondary transition-colors active:opacity-70"
+                style={{ background: 'transparent' }}
+              >
+                + Save as Preset
+              </button>
+            )
+          )}
+
           <button
             onClick={onApply}
-            style={{ transitionTimingFunction: 'cubic-bezier(0.32,0.72,0,1)' }}
-            className="group w-full flex items-center justify-between
-                       bg-ink text-white font-semibold
-                       pl-5 pr-2 py-2 rounded-2xl
-                       transition-all duration-700 active:scale-[0.98]
-                       hover:shadow-[0_4px_20px_rgba(0,0,0,0.15)]"
+            className="w-full py-3.5 rounded-xl text-[15px] font-bold transition-all duration-200 active:scale-[0.98]"
+            style={{ background: '#1ed760', color: '#000' }}
           >
-            <span className="text-[15px]">
-              {draftCount > 0 ? `Apply ${draftCount} filter${draftCount > 1 ? 's' : ''}` : 'Apply'}
-            </span>
-            <span
-              className="flex items-center justify-center w-9 h-9 rounded-full bg-white/15
-                         transition-transform duration-700
-                         group-hover:translate-x-1 group-hover:-translate-y-[1px]"
-              style={{ transitionTimingFunction: 'cubic-bezier(0.32,0.72,0,1)' }}
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
-                   stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M5 12h14M12 5l7 7-7 7"/>
-              </svg>
-            </span>
+            {draftCount > 0 ? `Apply ${draftCount} filter${draftCount > 1 ? 's' : ''} →` : 'Apply →'}
           </button>
         </div>
       </div>
@@ -597,8 +617,6 @@ export default function DiscoverTab({ albums, getAlbumStats, saveLater, removeLa
   const [queueHistory,    setQueueHistory]   = useState(
     () => JSON.parse(localStorage.getItem('discover_queue_history') || '{}')
   )
-  const [showSavePreset,  setShowSavePreset] = useState(false)
-  const [presetName,      setPresetName]     = useState('')
   const [pickCount,       setPickCount]      = useState(1)
   const [pickedAlbums,    setPickedAlbums]   = useState([])
   const [selectedAlbum,   setSelectedAlbum]  = useState(null)
@@ -640,29 +658,25 @@ export default function DiscoverTab({ albums, getAlbumStats, saveLater, removeLa
     } else {
       const cp = customPresets.find(p => p.id === id)
       if (cp) {
-        setActiveFilters(new Set(cp.savedFilters))
-        setToggles(cp.savedToggles)
+        setActiveFilters(new Set(cp.filters ?? cp.savedFilters ?? []))
+        setToggles(cp.toggles ?? cp.savedToggles ?? { weightUnheard: false, excludeKeywords: false, avoidRecent: false })
       }
     }
     setActivePreset(id)
     setPickedAlbums([])
   }
 
-  function savePreset() {
-    const name = presetName.trim()
-    if (!name) return
+  function savePreset(name, filters, toggleState) {
     const preset = {
-      id: 'c_' + Date.now(),
-      name,
-      savedFilters: [...activeFilters],
-      savedToggles: { ...toggles },
+      id: Date.now().toString(),
+      icon: '⭐',
+      label: name,
+      filters: [...filters],
+      toggles: { ...toggleState },
     }
-    const updated = [...customPresets, preset]
-    setCustomPresets(updated)
-    localStorage.setItem('discover_presets', JSON.stringify(updated))
-    setActivePreset(preset.id)
-    setShowSavePreset(false)
-    setPresetName('')
+    const next = [...customPresets, preset]
+    setCustomPresets(next)
+    localStorage.setItem('discover_presets', JSON.stringify(next))
   }
 
   function deleteCustomPreset(id) {
@@ -828,7 +842,7 @@ export default function DiscoverTab({ albums, getAlbumStats, saveLater, removeLa
                   ? 'bg-chip-active text-white ring-1 ring-accent/30 shadow-[0_0_10px_rgba(29,185,84,0.2)]'
                   : 'bg-accent-dim text-accent-text ring-1 ring-accent/20'}`}
             >
-              ⭐ {p.name}
+              ⭐ {p.label ?? p.name}
               <span
                 onClick={e => { e.stopPropagation(); deleteCustomPreset(p.id) }}
                 className="ml-0.5 opacity-50 hover:opacity-100 text-[10px] leading-none"
@@ -901,37 +915,7 @@ export default function DiscoverTab({ albums, getAlbumStats, saveLater, removeLa
             </button>
           )}
 
-          {/* Save preset button — only when custom filter combo active without preset */}
-          {activeFilterCount > 0 && !activePreset && (
-            <button
-              onClick={() => setShowSavePreset(v => !v)}
-              className="flex-shrink-0 px-3 py-1.5 rounded-full text-[11px] font-medium
-                         ring-1 ring-dashed ring-gray-300 text-gray-500 hover:ring-gray-400"
-            >
-              + Save
-            </button>
-          )}
         </div>
-
-        {/* Save preset inline input */}
-        {showSavePreset && (
-          <div className="flex gap-2 items-center">
-            <input
-              autoFocus
-              value={presetName}
-              onChange={e => setPresetName(e.target.value)}
-              onKeyDown={e => { if (e.key === 'Enter') savePreset(); if (e.key === 'Escape') setShowSavePreset(false) }}
-              placeholder="Preset name…"
-              maxLength={24}
-              className="flex-1 bg-white border border-border-subtle rounded-xl px-3 py-1.5
-                         text-[12px] text-ink outline-none focus:border-accent transition-all duration-500
-                         placeholder:text-ink-muted"
-              style={{ transitionTimingFunction: 'cubic-bezier(0.32,0.72,0,1)' }}
-            />
-            <button onClick={savePreset} className="text-[11px] font-medium text-ink px-2 py-1.5">Save</button>
-            <button onClick={() => setShowSavePreset(false)} className="text-[11px] text-ink-muted px-1 py-1.5">✕</button>
-          </div>
-        )}
       </div>
 
       {/* ── Queue status toast (fixed bottom) ──────────────────────── */}
@@ -1081,6 +1065,7 @@ export default function DiscoverTab({ albums, getAlbumStats, saveLater, removeLa
           setDraftToggles={setDraftToggles}
           onApply={applyFilters}
           onClose={() => setFilterModalOpen(false)}
+          onSavePreset={savePreset}
           activeFilterCount={activeFilterCount}
         />
       )}
