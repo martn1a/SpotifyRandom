@@ -84,12 +84,11 @@ function Chip({ label, active, onClick, children }) {
   return (
     <button
       onClick={onClick}
-      style={{ transitionTimingFunction: 'cubic-bezier(0.32,0.72,0,1)' }}
       className={`flex-shrink-0 flex items-center gap-1 px-3.5 py-1.5 rounded-full
-                  text-[11px] font-medium transition-all duration-700 active:scale-[0.97]
+                  text-[12px] font-medium transition-all duration-200 active:scale-[0.97] border
         ${active
-          ? 'bg-chip-active text-white ring-1 ring-accent/30 shadow-[0_0_10px_rgba(29,185,84,0.2)]'
-          : 'bg-chip-inactive text-gray-600 ring-1 ring-black/5 hover:ring-black/10'
+          ? 'bg-accent border-accent text-black font-semibold'
+          : 'bg-card-raised border-border-subtle text-ink-secondary hover:text-ink'
         }`}
     >
       {children || label}
@@ -819,244 +818,142 @@ export default function DiscoverTab({ albums, getAlbumStats, saveLater, removeLa
   // ── Render ─────────────────────────────────────────────────────────
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col min-h-full">
+      {/* In-tab header */}
+      <div className="px-5 pt-6 pb-2">
+        <h1 className="text-[26px] font-bold text-ink tracking-tight">Discover</h1>
+      </div>
 
-      {/* ── Filter section ─────────────────────────────────────────── */}
-      <div className="sticky top-0 z-20 bg-page/95 px-4 pt-3 pb-2 space-y-1.5 border-b border-border-subtle">
-
-        {/* Row A: Presets */}
-        <div className="flex gap-2 overflow-x-auto scrollbar-hide">
-          {BUILTIN_PRESETS.map(p => (
-            <Chip key={p.id} active={activePreset === p.id} onClick={() => applyPreset(p.id)}>
-              {p.icon} {p.label}
-            </Chip>
-          ))}
-          {customPresets.map(p => (
-            <button
-              key={p.id}
-              onClick={() => applyPreset(p.id)}
-              style={{ transitionTimingFunction: 'cubic-bezier(0.32,0.72,0,1)' }}
-              className={`flex-shrink-0 flex items-center gap-1 px-3.5 py-1.5 rounded-full text-[11px] font-medium
-                          transition-all duration-700 active:scale-[0.97]
-                ${activePreset === p.id
-                  ? 'bg-chip-active text-white ring-1 ring-accent/30 shadow-[0_0_10px_rgba(29,185,84,0.2)]'
-                  : 'bg-accent-dim text-accent-text ring-1 ring-accent/20'}`}
-            >
-              ⭐ {p.label ?? p.name}
-              <span
-                onClick={e => { e.stopPropagation(); deleteCustomPreset(p.id) }}
-                className="ml-0.5 opacity-50 hover:opacity-100 text-[10px] leading-none"
-              >
-                ✕
-              </span>
-            </button>
-          ))}
-        </div>
-
-        {/* Row B: Filter button + active chips */}
-        <div className="flex gap-2 items-center overflow-x-auto scrollbar-hide">
-          {/* Filter trigger */}
-          <button
-            onClick={openFilterModal}
-            style={{ transitionTimingFunction: 'cubic-bezier(0.32,0.72,0,1)' }}
-            className={`flex-shrink-0 flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-[11px] font-medium
-                        transition-all duration-700 active:scale-[0.97]
-              ${activeFilterCount > 0
-                ? 'bg-ink text-white ring-1 ring-black/20'
-                : 'bg-chip-inactive text-gray-600 ring-1 ring-black/5 hover:ring-black/10'}`}
+      {/* Preset row + filter button */}
+      <div className="flex items-center gap-2 px-5 pb-3 overflow-x-auto scrollbar-hide">
+        {BUILTIN_PRESETS.map(p => (
+          <Chip
+            key={p.id}
+            active={activePreset === p.id}
+            onClick={() => applyPreset(p.id)}
           >
-            ⚙ Filters
-            {activeFilterCount > 0 && (
-              <span className="bg-white/25 text-white rounded-full px-1.5 py-0.5 text-[9px] font-bold leading-none">
-                {activeFilterCount}
-              </span>
-            )}
-          </button>
+            {p.icon} {p.label}
+          </Chip>
+        ))}
 
-          {/* Active filter chips (dismissible) */}
-          {[...activeFilters].map(f => (
-            <button
-              key={f}
-              onClick={() => removeActiveFilter(f)}
-              style={{ transitionTimingFunction: 'cubic-bezier(0.32,0.72,0,1)' }}
-              className="flex-shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-full text-[11px] font-medium
-                         bg-accent-dim text-accent-text ring-1 ring-accent/20
-                         transition-all duration-500 active:scale-[0.96]"
-            >
-              {f}
-              <span className="text-[9px] opacity-60">✕</span>
-            </button>
-          ))}
-          {toggles.weightUnheard && (
-            <button onClick={() => removeActiveToggle('weightUnheard')}
-              style={{ transitionTimingFunction: 'cubic-bezier(0.32,0.72,0,1)' }}
-              className="flex-shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-full text-[11px] font-medium
-                         bg-accent-dim text-accent-text ring-1 ring-accent/20
-                         transition-all duration-500 active:scale-[0.96]">
-              ⚖ Weighted <span className="text-[9px] opacity-60">✕</span>
-            </button>
-          )}
-          {toggles.excludeKeywords && (
-            <button onClick={() => removeActiveToggle('excludeKeywords')}
-              style={{ transitionTimingFunction: 'cubic-bezier(0.32,0.72,0,1)' }}
-              className="flex-shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-full text-[11px] font-medium
-                         bg-accent-dim text-accent-text ring-1 ring-accent/20
-                         transition-all duration-500 active:scale-[0.96]">
-              🚫 No Remixes <span className="text-[9px] opacity-60">✕</span>
-            </button>
-          )}
-          {toggles.avoidRecent && (
-            <button onClick={() => removeActiveToggle('avoidRecent')}
-              style={{ transitionTimingFunction: 'cubic-bezier(0.32,0.72,0,1)' }}
-              className="flex-shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-full text-[11px] font-medium
-                         bg-accent-dim text-accent-text ring-1 ring-accent/20
-                         transition-all duration-500 active:scale-[0.96]">
-              🕐 Not Recently Queued <span className="text-[9px] opacity-60">✕</span>
-            </button>
-          )}
-
-        </div>
-      </div>
-
-      {/* ── Queue status toast (fixed bottom) ──────────────────────── */}
-      {queueStatus && (
-        <div
-          className={`fixed bottom-[calc(4rem+env(safe-area-inset-bottom,0px))] left-4 right-4 z-50
-                      rounded-2xl px-4 py-2.5 text-[12px] font-medium text-center shadow-lg
-            ${queueStatus.error
-              ? 'bg-white border border-red-200 text-red-600'
-              : 'bg-white border border-accent/20 text-accent-text'
-            }`}
-          style={{ animation: 'toastIn 0.4s cubic-bezier(0.32,0.72,0,1) both' }}
+        {/* ⚙ Filter button with badge */}
+        <button
+          onClick={openFilterModal}
+          className="flex-shrink-0 flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border border-border-subtle bg-card-raised text-ink-secondary text-[12px] font-medium transition-all duration-200 active:scale-[0.97]"
         >
-          {queueStatus.msg}
-        </div>
-      )}
-
-      {/* ── Scrollable body ─────────────────────────────────────────── */}
-      <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-6">
-
-        {/* Random Picker */}
-        <section className="pt-4">
-
-          {/* Eyebrow + pool count */}
-          <div className="flex items-center gap-2 mb-3">
-            <span className="inline-flex items-center px-2.5 py-0.5 rounded-full
-                             bg-accent-dim ring-1 ring-accent/20 text-accent-text
-                             text-[9px] font-bold uppercase tracking-widest">
-              RANDOM PICK
+          ⚙
+          {activeFilterCount > 0 && (
+            <span
+              className="flex items-center justify-center w-4 h-4 rounded-full text-[9px] font-bold text-black"
+              style={{ background: '#1ed760' }}
+            >
+              {activeFilterCount}
             </span>
-            <span className="text-[10px] text-ink-muted">{filteredAlbums.length} in pool</span>
-          </div>
+          )}
+        </button>
 
-          {filteredAlbums.length === 0
-            ? (
-              <div className="text-center py-16">
-                <div className="w-16 h-16 rounded-full bg-chip-inactive ring-1 ring-black/5
-                                flex items-center justify-center text-3xl mx-auto mb-4">🔍</div>
-                <p className="text-[9px] font-bold text-ink-muted uppercase tracking-widest mb-2">No results</p>
-                <p className="text-[15px] font-semibold text-ink">No albums match</p>
-                <p className="text-[12px] text-ink-muted mt-1">Try removing some filters</p>
-              </div>
-            )
-            : (
-              <>
-                {/* Count selector — segmented pill */}
-                <div className="inline-flex items-center bg-chip-inactive ring-1 ring-black/5 rounded-full p-1 gap-0.5 mb-4">
-                  {PICK_COUNTS.map(n => (
-                    <button
-                      key={n}
-                      onClick={() => { setPickCount(n); setPickedAlbums([]) }}
-                      style={{ transitionTimingFunction: 'cubic-bezier(0.32,0.72,0,1)' }}
-                      className={`w-10 h-8 rounded-full text-[12px] font-semibold transition-all duration-500 active:scale-[0.96]
-                        ${pickCount === n
-                          ? 'bg-white text-ink shadow-sm ring-1 ring-black/5'
-                          : 'text-gray-500 hover:text-gray-700'
-                        }`}
-                    >
-                      {n}
-                    </button>
-                  ))}
-                </div>
-
-                {/* Pick CTA — Button-in-Button */}
-                <button
-                  onClick={pickRandom}
-                  style={{ transitionTimingFunction: 'cubic-bezier(0.32,0.72,0,1)' }}
-                  className="group w-full flex items-center justify-between
-                             bg-ink text-white font-semibold
-                             pl-5 pr-2 py-2 rounded-2xl mb-5
-                             transition-all duration-700
-                             hover:shadow-[0_4px_20px_rgba(0,0,0,0.15)]
-                             active:scale-[0.98]"
-                >
-                  <span className="text-[15px]">
-                    {pickCount === 1 ? 'Pick an Album' : `Pick ${pickCount} Albums`}
-                  </span>
-                  <span
-                    className="flex items-center justify-center w-9 h-9 rounded-full bg-white/15
-                               transition-transform duration-700
-                               group-hover:translate-x-1 group-hover:-translate-y-[1px]"
-                    style={{ transitionTimingFunction: 'cubic-bezier(0.32,0.72,0,1)' }}
-                  >
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
-                         stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M5 12h14M12 5l7 7-7 7"/>
-                    </svg>
-                  </span>
-                </button>
-
-                {/* Results */}
-                {pickedAlbums.length > 0 && (
-                  <div style={{ animation: 'fadeUp 0.6s cubic-bezier(0.32,0.72,0,1) both' }}>
-                    {pickCount === 1
-                      ? (
-                        <FeaturedAlbumCard
-                          album={pickedAlbums[0]}
-                          stats={getAlbumStats(pickedAlbums[0])}
-                          onQueue={handleQueue}
-                          onSave={handleSave}
-                          onRemove={handleRemove}
-                          saved={isSaved(pickedAlbums[0].id)}
-                          onTap={() => setSelectedAlbum(pickedAlbums[0])}
-                        />
-                      )
-                      : (
-                        <MultiPickList
-                          albums={pickedAlbums}
-                          getAlbumStats={getAlbumStats}
-                          onQueue={handleQueue}
-                          onSave={handleSave}
-                          onRemove={handleRemove}
-                          isSaved={isSaved}
-                          onTap={setSelectedAlbum}
-                          onQueueAll={handleQueueAll}
-                          onSaveAll={handleSaveAll}
-                        />
-                      )
-                    }
-                  </div>
-                )}
-              </>
-            )
-          }
-        </section>
-
-        <div className="h-8 pb-safe" />
+        {/* Custom presets */}
+        {customPresets.map(p => (
+          <Chip
+            key={p.id}
+            active={activePreset === p.id}
+            onClick={() => applyPreset(p.id)}
+          >
+            {p.icon} {p.label}
+          </Chip>
+        ))}
       </div>
 
+      {/* Count selector */}
+      <div className="flex items-center gap-2 px-5 pb-4">
+        <span className="text-[12px] text-ink-muted mr-1">Pick</span>
+        {PICK_COUNTS.map(n => (
+          <button
+            key={n}
+            onClick={() => setPickCount(n)}
+            className={`w-9 h-9 rounded-full text-[13px] font-semibold border transition-all duration-200 active:scale-[0.95] ${
+              pickCount === n
+                ? 'bg-card-raised border-ink-muted text-ink'
+                : 'bg-card border-border-subtle text-ink-muted'
+            }`}
+          >
+            {n}
+          </button>
+        ))}
+      </div>
+
+      {/* Picker area */}
+      <div className="px-5 flex-1">
+        <p className="text-[10px] font-bold text-ink-muted uppercase tracking-widest mb-3">
+          {pickedAlbums.length > 1 ? `Your Picks · ${pickedAlbums.length}` : 'Your Pick'}
+        </p>
+
+        {pickedAlbums.length === 0 && (
+          <div className="flex flex-col items-center justify-center py-16 gap-3">
+            <p className="text-ink-muted text-sm">No albums match your filters</p>
+            <button
+              onClick={() => { setActiveFilters(new Set()); setToggles({ weightUnheard: false, excludeKeywords: false, avoidRecent: false }) }}
+              className="text-accent text-sm font-medium"
+            >
+              Clear filters
+            </button>
+          </div>
+        )}
+
+        {pickedAlbums.length === 1 && (
+          <FeaturedAlbumCard
+            album={pickedAlbums[0]}
+            stats={getAlbumStats(pickedAlbums[0])}
+            onQueue={handleQueue}
+            onSave={handleSave}
+            onRemove={handleRemove}
+            saved={isSaved(pickedAlbums[0].id)}
+            onTap={() => setSelectedAlbum(pickedAlbums[0])}
+          />
+        )}
+
+        {pickedAlbums.length > 1 && (
+          <MultiPickList
+            albums={pickedAlbums}
+            getAlbumStats={getAlbumStats}
+            onQueue={handleQueue}
+            onSave={handleSave}
+            onRemove={handleRemove}
+            isSaved={isSaved}
+            onTap={setSelectedAlbum}
+            onQueueAll={handleQueueAll}
+            onSaveAll={handleSaveAll}
+          />
+        )}
+
+        {pickedAlbums.length > 0 && (
+          <button
+            onClick={pickRandom}
+            className="w-full mt-4 py-3.5 rounded-xl text-[14px] font-semibold border border-border-subtle text-ink-secondary transition-all duration-200 active:scale-[0.98]"
+            style={{ background: 'transparent' }}
+          >
+            🎲 Show Another
+          </button>
+        )}
+      </div>
+
+      {/* Bottom padding */}
+      <div className="h-6" />
+
+      {/* AlbumModal */}
       {selectedAlbum && (
         <AlbumModal
           album={selectedAlbum}
           stats={getAlbumStats(selectedAlbum)}
-          saved={isSaved(selectedAlbum.id)}
-          onSave={(album) => { handleSave(album); setSelectedAlbum(null) }}
-          onRemove={handleRemove}
           onClose={() => setSelectedAlbum(null)}
           onQueue={(album) => { handleQueue(album); setSelectedAlbum(null) }}
+          onSave={(album) => { handleSave(album); setSelectedAlbum(null) }}
+          onRemove={handleRemove}
+          saved={isSaved(selectedAlbum.id)}
         />
       )}
 
+      {/* Filter sheet */}
       {filterModalOpen && (
         <FilterModal
           draftFilters={draftFilters}
@@ -1068,6 +965,16 @@ export default function DiscoverTab({ albums, getAlbumStats, saveLater, removeLa
           onSavePreset={savePreset}
           activeFilterCount={activeFilterCount}
         />
+      )}
+
+      {/* Toast */}
+      {queueStatus && (
+        <div
+          className="fixed bottom-24 left-1/2 -translate-x-1/2 z-50 px-4 py-2.5 rounded-2xl text-[12px] font-semibold text-black"
+          style={{ background: '#1ed760', animation: 'toastIn 0.3s ease both' }}
+        >
+          {queueStatus.msg ?? queueStatus}
+        </div>
       )}
     </div>
   )
