@@ -28429,5 +28429,35 @@
     "source": "lastfm",
     "fetchedAt": 1775473875667,
     "releaseYear": null
+  },
+  "christopher schwarzwälder||out the window": {
+    "trackCount": 8,
+    "source": "lastfm",
+    "fetchedAt": 1775639209663,
+    "releaseYear": null
+  },
+  "st germain||tourist (remastered)": {
+    "trackCount": 9,
+    "source": "lastfm",
+    "fetchedAt": 1775639209855,
+    "releaseYear": null
+  },
+  "st germain||from detroit to st germain (the complete series for connoisseurs)": {
+    "trackCount": 18,
+    "source": "lastfm",
+    "fetchedAt": 1775639209999,
+    "releaseYear": null
+  },
+  "st germain||st germain": {
+    "trackCount": 8,
+    "source": "lastfm",
+    "fetchedAt": 1775639210148,
+    "releaseYear": null
+  },
+  "bombad||desierto": {
+    "trackCount": 1,
+    "source": "lastfm",
+    "fetchedAt": 1775639210503,
+    "releaseYear": null
   }
 }
