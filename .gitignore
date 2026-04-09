@@ -2,6 +2,7 @@ parser/.env
 node_modules/
 dist/
 .claude/
+.worktrees/
 
 # Claude / Planning meta
 .agents/
