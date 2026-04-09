@@ -96,13 +96,57 @@ function Chip({ label, active, onClick, children }) {
   )
 }
 
-function FeaturedAlbumCard({ album, stats, onQueue, onSave, onRemove, saved, onTap }) {
+function FeaturedAlbumCard({ album, stats, onQueue, onSkip, onTap }) {
   const art     = album.images?.[0]?.url
   const artist  = (album.artists || []).map(a => a.name).join(', ')
   const cluster = getGenreCluster(album)
   const count   = stats?.listenCount ?? 0
   const year    = (album.release_date || '').substring(0, 4)
   const [revealRef, revealed] = useScrollReveal()
+
+  const [offsetX, setOffsetX] = useState(0)
+  const [swiping, setSwiping] = useState(false)
+  const [gone,    setGone]    = useState(false)
+  const startXRef             = useRef(null)
+
+  const THRESHOLD = 80
+  const MAX_DRAG  = 140
+
+  function onPointerDown(e) {
+    startXRef.current = e.clientX
+    e.currentTarget.setPointerCapture(e.pointerId)
+    setSwiping(true)
+  }
+
+  function onPointerMove(e) {
+    if (startXRef.current === null) return
+    const dx = Math.max(-MAX_DRAG, Math.min(MAX_DRAG, e.clientX - startXRef.current))
+    setOffsetX(dx)
+  }
+
+  function onPointerUp() {
+    if (startXRef.current === null) return
+    const dx = offsetX
+    startXRef.current = null
+    setSwiping(false)
+    if (dx < -THRESHOLD) {
+      setGone(true)
+      onSkip()
+    } else if (dx > THRESHOLD) {
+      setGone(true)
+      onQueue(album)
+    } else {
+      setOffsetX(0)
+    }
+  }
+
+  if (gone) return null
+
+  const progress     = Math.abs(offsetX) / THRESHOLD
+  const isLeft       = offsetX < -8
+  const isRight      = offsetX > 8
+  const leftOpacity  = isLeft  ? Math.min(1, progress) : 0
+  const rightOpacity = isRight ? Math.min(1, progress) : 0
 
   return (
     <div
@@ -113,13 +157,23 @@ function FeaturedAlbumCard({ album, stats, onQueue, onSave, onRemove, saved, onT
       }}
       className="bg-card rounded-2xl border border-border-subtle overflow-hidden"
     >
-      {/* Cover with badges overlay */}
+      {/* Cover with swipe gesture + badges overlay */}
       <div
-        className="relative w-full aspect-square cursor-pointer active:opacity-90 transition-opacity duration-200"
-        onClick={onTap}
+        className="relative w-full aspect-square overflow-hidden"
+        style={{
+          transform: `translateX(${offsetX}px)`,
+          transition: swiping ? 'none' : 'transform 0.15s ease',
+          touchAction: 'pan-y',
+          cursor: 'grab',
+        }}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerCancel={onPointerUp}
+        onClick={() => { if (Math.abs(offsetX) < 5) onTap() }}
       >
         {art
-          ? <img src={art} alt="" className="w-full h-full object-cover block" loading="lazy" />
+          ? <img src={art} alt="" className="w-full h-full object-cover block select-none" draggable={false} loading="lazy" />
           : <div className="w-full h-full flex items-center justify-center text-5xl bg-card-raised">💿</div>
         }
 
@@ -155,37 +209,55 @@ function FeaturedAlbumCard({ album, stats, onQueue, onSave, onRemove, saved, onT
           )}
         </div>
 
-        {/* Swipe hints — bottom */}
-        <div className="absolute bottom-2.5 left-2.5 right-2.5 flex justify-between pointer-events-none">
-          <span
-            className="px-2 py-1 rounded-md text-[11px] font-semibold"
-            style={{
-              background: 'rgba(255,255,255,0.1)',
-              color: '#8a8a8a',
-              border: '1px solid rgba(255,255,255,0.08)',
-              backdropFilter: 'blur(8px)',
-              WebkitBackdropFilter: 'blur(8px)',
-            }}
-          >
+        {/* Swipe overlays */}
+        <div className="absolute inset-0 flex items-center justify-start px-4 pointer-events-none"
+             style={{ opacity: leftOpacity }}>
+          <span className="text-[13px] font-bold px-3 py-1.5 rounded-lg"
+                style={{ color: '#8a8a8a', background: 'rgba(255,255,255,0.12)', backdropFilter: 'blur(8px)' }}>
             ← Skip
           </span>
-          <span
-            className="px-2 py-1 rounded-md text-[11px] font-semibold"
-            style={{
-              background: 'rgba(30,215,96,0.2)',
-              color: '#1ed760',
-              border: '1px solid rgba(30,215,96,0.3)',
-              backdropFilter: 'blur(8px)',
-              WebkitBackdropFilter: 'blur(8px)',
-            }}
-          >
+        </div>
+        <div className="absolute inset-0 flex items-center justify-end px-4 pointer-events-none"
+             style={{ opacity: rightOpacity }}>
+          <span className="text-[13px] font-bold px-3 py-1.5 rounded-lg"
+                style={{ color: '#1ed760', background: 'rgba(30,215,96,0.2)', backdropFilter: 'blur(8px)' }}>
             Queue →
           </span>
         </div>
+
+        {/* Static swipe hints — bottom (visible at rest) */}
+        {leftOpacity === 0 && rightOpacity === 0 && (
+          <div className="absolute bottom-2.5 left-2.5 right-2.5 flex justify-between pointer-events-none">
+            <span
+              className="px-2 py-1 rounded-md text-[11px] font-semibold"
+              style={{
+                background: 'rgba(255,255,255,0.1)',
+                color: '#8a8a8a',
+                border: '1px solid rgba(255,255,255,0.08)',
+                backdropFilter: 'blur(8px)',
+                WebkitBackdropFilter: 'blur(8px)',
+              }}
+            >
+              ← Skip
+            </span>
+            <span
+              className="px-2 py-1 rounded-md text-[11px] font-semibold"
+              style={{
+                background: 'rgba(30,215,96,0.2)',
+                color: '#1ed760',
+                border: '1px solid rgba(30,215,96,0.3)',
+                backdropFilter: 'blur(8px)',
+                WebkitBackdropFilter: 'blur(8px)',
+              }}
+            >
+              Queue →
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Metadata */}
-      <div className="px-4 pt-3 pb-1 cursor-pointer" onClick={onTap}>
+      <div className="px-4 pt-3 pb-4 cursor-pointer" onClick={() => { if (Math.abs(offsetX) < 5) onTap() }}>
         <p className="text-[17px] font-bold text-ink leading-snug line-clamp-2">{album.name}</p>
         <p className="text-[13px] text-ink-secondary mt-1 truncate">{artist}</p>
         {cluster && (
@@ -198,24 +270,6 @@ function FeaturedAlbumCard({ album, stats, onQueue, onSave, onRemove, saved, onT
             </span>
           </div>
         )}
-      </div>
-
-      {/* Actions */}
-      <div className="px-4 pt-3 pb-4 flex flex-col gap-2.5">
-        <button
-          onClick={(e) => { e.stopPropagation(); onQueue(album) }}
-          className="w-full py-3.5 rounded-xl text-[15px] font-bold transition-all duration-200 active:scale-[0.98]"
-          style={{ background: '#1ed760', color: '#000' }}
-        >
-          ▶ Queue to Spotify
-        </button>
-        <button
-          onClick={(e) => { e.stopPropagation(); saved ? onRemove(album.id) : onSave(album) }}
-          className="w-full py-3.5 rounded-xl text-[14px] font-semibold border border-border-subtle text-ink transition-all duration-200 active:scale-[0.98]"
-          style={{ background: 'transparent' }}
-        >
-          {saved ? 'Saved ✓' : '⏰ Save for Later'}
-        </button>
       </div>
     </div>
   )
@@ -276,10 +330,7 @@ function SwipeableAlbumRow({ album, stats, onQueue, onSave, onRemove, saved, onT
   const rightOpacity = isRight ? Math.min(1, progress) : 0
 
   return (
-    <div
-      className="bg-card rounded-2xl border border-border-subtle overflow-hidden flex-shrink-0"
-      style={{ minWidth: 'calc(50% - 6px)' }}
-    >
+    <div className="bg-card rounded-2xl border border-border-subtle overflow-hidden">
       {/* Cover with swipe gesture */}
       <div
         className="relative w-full aspect-square overflow-hidden"
@@ -332,10 +383,10 @@ function SwipeableAlbumRow({ album, stats, onQueue, onSave, onRemove, saved, onT
       </div>
 
       {/* Metadata */}
-      <div className="px-3 py-2.5 cursor-pointer" onClick={() => onTap(album)}>
-        <p className="text-[13px] font-semibold text-ink leading-tight line-clamp-1">{album.name}</p>
-        <p className="text-[11px] text-ink-secondary mt-0.5 truncate">{artist}</p>
-        {year && <p className="text-[10px] text-ink-muted mt-0.5">{year}</p>}
+      <div className="px-4 pt-3 pb-4 cursor-pointer" onClick={() => onTap(album)}>
+        <p className="text-[15px] font-bold text-ink leading-snug line-clamp-2">{album.name}</p>
+        <p className="text-[12px] text-ink-secondary mt-0.5 truncate">{artist}</p>
+        {year && <p className="text-[11px] text-ink-muted mt-0.5">{year}</p>}
       </div>
     </div>
   )
@@ -347,8 +398,8 @@ function MultiPickList({ albums, getAlbumStats, onQueue, onSave, onRemove, isSav
   if (!albums.length) return null
   return (
     <div>
-      {/* Horizontal scroll row */}
-      <div className="flex gap-3 overflow-x-auto scrollbar-hide pb-1" style={{ paddingRight: 20 }}>
+      {/* Vertical list */}
+      <div className="flex flex-col gap-4">
         {albums.map(album => (
           <SwipeableAlbumRow
             key={album.id}
@@ -364,7 +415,7 @@ function MultiPickList({ albums, getAlbumStats, onQueue, onSave, onRemove, isSav
       </div>
 
       {albums.length > 1 && (
-        <div className="flex gap-3 pt-3">
+        <div className="flex gap-3 pt-4">
           <button
             onClick={onQueueAll}
             className="flex-1 py-3.5 rounded-xl text-[14px] font-bold transition-all duration-200 active:scale-[0.98]"
@@ -768,14 +819,14 @@ export default function DiscoverTab({ albums, getAlbumStats, saveLater, removeLa
     setPickedAlbums(picks)
   }
 
-  // Auto-pick when the album pool is ready and nothing is shown yet
+  // Auto-pick when pool is ready and nothing is shown (also fires after swipe removes last album)
   // Must be after filteredAlbums (useMemo) and pickRandom — both used below
   useEffect(() => {
     if (filteredAlbums.length > 0 && pickedAlbums.length === 0) {
       pickRandom()
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filteredAlbums.length, pickCount])
+  }, [filteredAlbums.length, pickCount, pickedAlbums.length])
 
   const handleQueue = useCallback(async (album) => {
     const tracks = (album.tracks?.items || []).filter(t => t?.uri)
@@ -911,12 +962,11 @@ export default function DiscoverTab({ albums, getAlbumStats, saveLater, removeLa
 
         {pickedAlbums.length === 1 && (
           <FeaturedAlbumCard
+            key={pickedAlbums[0].id}
             album={pickedAlbums[0]}
             stats={getAlbumStats(pickedAlbums[0])}
             onQueue={handleQueue}
-            onSave={handleSave}
-            onRemove={handleRemove}
-            saved={isSaved(pickedAlbums[0].id)}
+            onSkip={pickRandom}
             onTap={() => setSelectedAlbum(pickedAlbums[0])}
           />
         )}
