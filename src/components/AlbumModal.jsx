@@ -57,7 +57,7 @@ export default function AlbumModal({
   const triggerBurn = useCallback(async (action) => {
     setIsBurning(true)
     await new Promise(r => setTimeout(r, 400))
-    action()
+    await action()
     onClose()
   }, [onClose])
 
