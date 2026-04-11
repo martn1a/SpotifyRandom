@@ -81,7 +81,7 @@ const TYPE_OPTIONS = [
   { id: 'compilation', label: 'Compilations' },
 ]
 
-export default function LibraryTab({ albums, getAlbumStats, genresLoading, saveLater, removeLater, isSaved }) {
+export default function LibraryTab({ albums, getAlbumStats, genresLoading, saveLater, removeLater, isSaved, onBadgeClick }) {
   const [search,        setSearch]        = useState('')
   const [activeCluster, setActiveCluster] = useState(null)
   const [typeFilter,    setTypeFilter]    = useState('all')
@@ -279,6 +279,8 @@ export default function LibraryTab({ albums, getAlbumStats, genresLoading, saveL
           onSave={saveLater}
           onRemove={removeLater}
           onClose={() => setSelectedAlbum(null)}
+          library={albums}
+          onBadgeClick={onBadgeClick}
         />
       )}
     </div>

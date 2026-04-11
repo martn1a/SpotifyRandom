@@ -148,7 +148,7 @@ function Carousel({ title, items, onTap, onReset, burnedCount, lastBurnedAt, com
 
 // ── Main ──────────────────────────────────────────────────────────────
 
-export default function StatsTab({ albums, getAlbumStats, lastfmMap, lastfmLoaded, onThisDay = [], saveLater, removeLater, isSaved }) {
+export default function StatsTab({ albums, getAlbumStats, lastfmMap, lastfmLoaded, onThisDay = [], saveLater, removeLater, isSaved, onBadgeClick }) {
   const [selectedAlbum,     setSelectedAlbum]     = useState(null)
   const [selectedCarouselId, setSelectedCarouselId] = useState(null)
   const { isBurned, burnAlbum, resetCarousel, burnStats, burnedMap } = useBurnTracking()
@@ -496,6 +496,8 @@ export default function StatsTab({ albums, getAlbumStats, lastfmMap, lastfmLoade
           onRemove={removeLater}
           onClose={() => { setSelectedAlbum(null); setSelectedCarouselId(null) }}
           onQueue={(album) => burnAlbum(album, selectedCarouselId, 'queue')}
+          library={albums}
+          onBadgeClick={onBadgeClick}
         />
       )}
 

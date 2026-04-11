@@ -657,7 +657,7 @@ function FilterModal({ draftFilters, draftToggles, setDraftFilters, setDraftTogg
 
 // ── Main component ────────────────────────────────────────────────────
 
-export default function DiscoverTab({ albums, getAlbumStats, saveLater, removeLater, isSaved }) {
+export default function DiscoverTab({ albums, getAlbumStats, saveLater, removeLater, isSaved, onBadgeClick }) {
   const [activeFilters,   setActiveFilters]  = useState(new Set())
   const [toggles,         setToggles]        = useState({ weightUnheard: false, excludeKeywords: false, avoidRecent: false })
   const [activePreset,    setActivePreset]   = useState(null)
@@ -1009,6 +1009,8 @@ export default function DiscoverTab({ albums, getAlbumStats, saveLater, removeLa
           onSave={(album) => { handleSave(album); setSelectedAlbum(null) }}
           onRemove={handleRemove}
           saved={isSaved(selectedAlbum.id)}
+          library={albums}
+          onBadgeClick={onBadgeClick}
         />
       )}
 

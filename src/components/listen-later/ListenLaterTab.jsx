@@ -69,7 +69,7 @@ function AlbumRow({ album, listenCount, onQueue, onRemove, onClick }) {
 
 // ── Main ──────────────────────────────────────────────────────────────
 
-export default function ListenLaterTab({ items, saveLater, removeLater, isSaved, getAlbumStats }) {
+export default function ListenLaterTab({ items, saveLater, removeLater, isSaved, getAlbumStats, albums, onBadgeClick }) {
   const [sort,          setSort]          = useState('added')
   const [queueStatus,   setQueueStatus]   = useState(null)
   const [selectedAlbum, setSelectedAlbum] = useState(null)
@@ -190,6 +190,8 @@ export default function ListenLaterTab({ items, saveLater, removeLater, isSaved,
           onSave={saveLater}
           onRemove={removeLater}
           onClose={() => setSelectedAlbum(null)}
+          library={albums}
+          onBadgeClick={onBadgeClick}
         />
       )}
     </div>
