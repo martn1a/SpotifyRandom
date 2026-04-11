@@ -66,7 +66,7 @@ function normalizeAlbumKey(artist, album) {
 
 function MetricCard({ label, value, sub }) {
   return (
-    <div className="bg-white rounded-xl p-3 border border-border-subtle flex-1 min-w-0">
+    <div className="bg-card rounded-xl p-3 border border-border-subtle flex-1 min-w-0">
       <p className="text-[10px] font-medium text-ink-muted">{label}</p>
       <p className="text-[22px] font-semibold text-ink mt-0.5 leading-tight tabular-nums">{value}</p>
       {sub && <p className="text-[11px] text-ink-muted mt-0.5 truncate">{sub}</p>}
@@ -85,9 +85,9 @@ function CarouselItem({ entry, onTap }) {
       className={`flex-shrink-0 w-[calc(50%-8px)] ${onTap ? 'cursor-pointer active:opacity-80 transition-opacity' : ''}`}
       onClick={onTap ? () => onTap(entry) : undefined}
     >
-      <div className="w-full aspect-square rounded-xl overflow-hidden bg-gray-100 mb-2">
+      <div className="w-full aspect-square rounded-xl overflow-hidden bg-card-raised mb-2">
         {art
-          ? <img src={art} alt="" className="w-full h-full object-cover" loading="lazy" />
+          ? <img src={art} alt="" className="w-full h-full object-cover" loading="lazy" decoding="async" />
           : <div className="w-full h-full flex items-center justify-center text-3xl">💿</div>
         }
       </div>
@@ -115,7 +115,7 @@ function Carousel({ title, items, onTap, onReset, burnedCount, lastBurnedAt, com
           {onReset && (
             <button onClick={onReset} className="text-[11px] text-ink-muted active:text-ink flex items-center gap-1">
               {burnedCount > 0 && (
-                <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-gray-200 text-[9px] font-semibold text-ink-muted">{burnedCount}</span>
+                <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-card-raised text-[9px] font-semibold text-ink-secondary">{burnedCount}</span>
               )}
               Reset
             </button>
@@ -123,7 +123,7 @@ function Carousel({ title, items, onTap, onReset, burnedCount, lastBurnedAt, com
         </div>
       </div>
       {completionPct > 0 && (
-        <div className="h-[2px] bg-gray-100 rounded-full overflow-hidden mb-2.5">
+        <div className="h-[2px] bg-card-raised rounded-full overflow-hidden mb-2.5">
           <div className="h-full bg-accent rounded-full transition-all" style={{ width: `${completionPct}%` }} />
         </div>
       )}
@@ -418,7 +418,7 @@ export default function StatsTab({ albums, getAlbumStats, lastfmMap, lastfmLoade
           )}
           {/* Per-carousel breakdown */}
           {burnStats.perCarousel.size > 0 && (
-            <div className="bg-white rounded-xl border border-border-subtle divide-y divide-border-subtle overflow-hidden">
+            <div className="bg-card rounded-xl border border-border-subtle divide-y divide-border-subtle overflow-hidden">
               {Object.entries(CAROUSEL_NAMES).map(([id, label]) => {
                 const stats = burnStats.perCarousel.get(id)
                 if (!stats) return null
@@ -428,8 +428,8 @@ export default function StatsTab({ albums, getAlbumStats, lastfmMap, lastfmLoade
                 return (
                   <div key={id} className="px-3 py-2.5 flex items-center gap-2">
                     <span className="text-[11px] text-ink flex-1 truncate">{label}</span>
-                    <div className="w-16 h-1.5 bg-gray-100 rounded-full overflow-hidden flex-shrink-0">
-                      <div className="h-full bg-[#0F6E56] rounded-full" style={{ width: `${pct}%` }} />
+                    <div className="w-16 h-1.5 bg-card-raised rounded-full overflow-hidden flex-shrink-0">
+                      <div className="h-full bg-accent rounded-full" style={{ width: `${pct}%` }} />
                     </div>
                     <span className="text-[11px] font-medium text-ink-muted w-5 text-right flex-shrink-0">{stats.burnedCount}</span>
                     {stats.resetCount > 0 && (
@@ -459,8 +459,8 @@ export default function StatsTab({ albums, getAlbumStats, lastfmMap, lastfmLoade
             {decadeData.map(({ label, count, pct }) => (
               <div key={label} className="flex items-center gap-2">
                 <span className="text-[11px] text-ink-muted w-7 flex-shrink-0 text-right">{label}</span>
-                <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
-                  <div className="h-full bg-[#0F6E56] rounded-full" style={{ width: `${pct}%` }} />
+                <div className="flex-1 h-2 bg-card-raised rounded-full overflow-hidden">
+                  <div className="h-full bg-accent rounded-full" style={{ width: `${pct}%` }} />
                 </div>
                 <span className="text-[11px] text-ink-muted w-8 text-right flex-shrink-0">{count}</span>
               </div>
@@ -477,8 +477,8 @@ export default function StatsTab({ albums, getAlbumStats, lastfmMap, lastfmLoade
             {genreData.map(({ label, count, pct }) => (
               <div key={label} className="flex items-center gap-2">
                 <span className="text-[11px] text-ink-muted w-24 flex-shrink-0 truncate">{label}</span>
-                <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
-                  <div className="h-full bg-[#534AB7] rounded-full" style={{ width: `${pct}%` }} />
+                <div className="flex-1 h-2 bg-card-raised rounded-full overflow-hidden">
+                  <div className="h-full bg-badge-genre rounded-full" style={{ width: `${pct}%` }} />
                 </div>
                 <span className="text-[11px] text-ink-muted w-8 text-right flex-shrink-0">{count}</span>
               </div>

@@ -33,11 +33,11 @@ function AlbumRow({ album, listenCount, saved, onSave, onRemove, onClick }) {
   const art = album.images?.[album.images.length - 1]?.url || album.images?.[0]?.url
 
   return (
-    <div className="flex items-center gap-3 px-4 py-2.5 active:bg-gray-50 transition-colors cursor-pointer" onClick={onClick}>
+    <div className="flex items-center gap-3 px-4 py-2.5 active:bg-card-raised transition-colors cursor-pointer" onClick={onClick}>
       {/* Cover art */}
-      <div className="w-12 h-12 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0">
+      <div className="w-12 h-12 rounded-lg overflow-hidden bg-card-raised flex-shrink-0">
         {art
-          ? <img src={art} alt="" className="w-full h-full object-cover" loading="lazy" />
+          ? <img src={art} alt="" className="w-full h-full object-cover" loading="lazy" decoding="async" />
           : <div className="w-full h-full flex items-center justify-center text-xl">💿</div>
         }
       </div>
@@ -159,9 +159,9 @@ export default function LibraryTab({ albums, getAlbumStats, genresLoading, saveL
             value={search}
             onChange={e => setSearch(e.target.value)}
             placeholder="Search albums or artists…"
-            className="w-full bg-white border border-border-subtle rounded-xl
+            className="w-full bg-card-raised border border-border-subtle rounded-xl
                        pl-8 pr-3 py-2.5 text-[13px] text-ink placeholder:text-ink-muted
-                       outline-none focus:border-gray-300 transition-colors"
+                       outline-none focus:border-ink-muted transition-colors"
           />
         </div>
       </div>
@@ -175,7 +175,7 @@ export default function LibraryTab({ albums, getAlbumStats, genresLoading, saveL
             className={`flex-shrink-0 px-3 py-1.5 rounded-full text-[11px] font-medium transition-colors
               ${sort === opt.id
                 ? 'bg-chip-active text-white'
-                : 'bg-chip-inactive text-gray-600'
+                : 'bg-chip-inactive text-ink-secondary'
               }`}
           >
             {opt.label}
@@ -192,7 +192,7 @@ export default function LibraryTab({ albums, getAlbumStats, genresLoading, saveL
             className={`flex-shrink-0 px-3 py-1.5 rounded-full text-[11px] font-medium transition-colors
               ${typeFilter === opt.id
                 ? 'bg-chip-active text-white'
-                : 'bg-chip-inactive text-gray-600'
+                : 'bg-chip-inactive text-ink-secondary'
               }`}
           >
             {opt.label}
@@ -220,7 +220,7 @@ export default function LibraryTab({ albums, getAlbumStats, genresLoading, saveL
                           text-[11px] font-medium transition-colors
                 ${activeCluster === c.id
                   ? 'bg-chip-active text-white'
-                  : 'bg-chip-inactive text-gray-600'
+                  : 'bg-chip-inactive text-ink-secondary'
                 }`}
             >
               <span>{c.icon}</span>
@@ -246,7 +246,7 @@ export default function LibraryTab({ albums, getAlbumStats, genresLoading, saveL
       </div>
 
       {/* ── Album list ─────────────────────────────────────────────── */}
-      <div className="flex-1 overflow-y-auto divide-y divide-gray-50">
+      <div className="flex-1 overflow-y-auto divide-y divide-border-subtle">
         {filtered.map(album => (
           <AlbumRow
             key={album.id}

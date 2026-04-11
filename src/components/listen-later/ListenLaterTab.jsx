@@ -17,13 +17,13 @@ function AlbumRow({ album, listenCount, onQueue, onRemove, onClick }) {
 
   return (
     <div
-      className="flex items-center gap-3 px-4 py-2.5 active:bg-gray-50 transition-colors cursor-pointer"
+      className="flex items-center gap-3 px-4 py-2.5 active:bg-card-raised transition-colors cursor-pointer"
       onClick={onClick}
     >
       {/* Cover art */}
-      <div className="w-12 h-12 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0">
+      <div className="w-12 h-12 rounded-lg overflow-hidden bg-card-raised flex-shrink-0">
         {art
-          ? <img src={art} alt="" className="w-full h-full object-cover" loading="lazy" />
+          ? <img src={art} alt="" className="w-full h-full object-cover" loading="lazy" decoding="async" />
           : <div className="w-full h-full flex items-center justify-center text-xl">💿</div>
         }
       </div>
@@ -48,7 +48,7 @@ function AlbumRow({ album, listenCount, onQueue, onRemove, onClick }) {
       <button
         onClick={e => { e.stopPropagation(); onQueue(album) }}
         className="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-lg
-                   bg-chip-inactive text-ink text-[14px] active:bg-gray-200 transition-colors"
+                   bg-chip-inactive text-ink text-[14px] active:bg-card-raised transition-colors"
         aria-label="Queue to Spotify"
       >
         ▶
@@ -58,7 +58,7 @@ function AlbumRow({ album, listenCount, onQueue, onRemove, onClick }) {
       <button
         onClick={e => { e.stopPropagation(); onRemove(album.id) }}
         className="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-lg
-                   text-ink-muted text-[16px] active:bg-gray-100 transition-colors"
+                   text-ink-muted text-[16px] active:bg-card-raised transition-colors"
         aria-label="Remove"
       >
         ×
@@ -122,8 +122,8 @@ export default function ListenLaterTab({ items, saveLater, removeLater, isSaved,
               onClick={() => setSort(opt.id)}
               className={`flex-shrink-0 px-3 py-1.5 rounded-full text-[11px] font-medium transition-colors
                 ${sort === opt.id
-                  ? 'bg-chip-active text-white'
-                  : 'bg-chip-inactive text-gray-600'
+                  ? 'bg-chip-active text-black'
+                  : 'bg-chip-inactive text-ink-secondary'
                 }`}
             >
               {opt.label}
@@ -144,7 +144,7 @@ export default function ListenLaterTab({ items, saveLater, removeLater, isSaved,
       {queueStatus && (
         <div className={`mx-4 mb-1 px-3 py-2 rounded-xl text-[12px] font-medium
           ${queueStatus.error
-            ? 'bg-[#FCEBEB] text-[#A32D2D]'
+            ? 'bg-badge-falling-bg text-badge-falling'
             : 'bg-badge-listen-bg text-badge-listen'
           }`}>
           {queueStatus.msg}
@@ -157,7 +157,7 @@ export default function ListenLaterTab({ items, saveLater, removeLater, isSaved,
       )}
 
       {/* ── List ───────────────────────────────────────────────────── */}
-      <div className="flex-1 overflow-y-auto divide-y divide-gray-50">
+      <div className="flex-1 overflow-y-auto divide-y divide-border-subtle">
         {sorted.map(album => (
           <AlbumRow
             key={album.id}
