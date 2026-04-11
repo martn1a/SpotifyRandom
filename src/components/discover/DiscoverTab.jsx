@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react'
+import { motion, AnimatePresence } from 'motion/react'
 import { GENRE_CLUSTERS, clusterOf } from '../../data/genre-clusters.js'
 import { addToQueue } from '../../lib/spotify-api.js'
 import AlbumModal from '../AlbumModal.jsx'
@@ -65,21 +66,6 @@ function weightedPickIndex(albums, getAlbumStats) {
 
 // ── Sub-components ────────────────────────────────────────────────────
 
-function useScrollReveal(threshold = 0.1) {
-  const ref = useRef(null)
-  const [visible, setVisible] = useState(false)
-  useEffect(() => {
-    if (!ref.current) return
-    const observer = new IntersectionObserver(
-      ([entry]) => { if (entry.isIntersecting) setVisible(true) },
-      { threshold }
-    )
-    observer.observe(ref.current)
-    return () => observer.disconnect()
-  }, [])
-  return [ref, visible]
-}
-
 function Chip({ label, active, onClick, children }) {
   return (
     <button
@@ -102,7 +88,6 @@ function FeaturedAlbumCard({ album, stats, onQueue, onSkip, onTap }) {
   const cluster = getGenreCluster(album)
   const count   = stats?.listenCount ?? 0
   const year    = (album.release_date || '').substring(0, 4)
-  const [revealRef, revealed] = useScrollReveal()
 
   const [offsetX, setOffsetX] = useState(0)
   const [swiping, setSwiping] = useState(false)
@@ -150,122 +135,81 @@ function FeaturedAlbumCard({ album, stats, onQueue, onSkip, onTap }) {
 
   return (
     <div
-      ref={revealRef}
+      className="relative rounded-2xl overflow-hidden aspect-[4/5] select-none cursor-grab active:cursor-grabbing"
       style={{
-        transitionTimingFunction: 'cubic-bezier(0.32,0.72,0,1)',
-        animation: revealed ? 'cardIn 0.4s cubic-bezier(0.32,0.72,0,1) both' : 'none',
+        transform: `translateX(${offsetX}px)`,
+        transition: swiping ? 'none' : 'transform 0.15s ease',
+        touchAction: 'pan-y',
       }}
-      className="bg-card rounded-2xl border border-border-subtle overflow-hidden"
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onPointerCancel={onPointerUp}
+      onClick={() => { if (Math.abs(offsetX) < 5) onTap() }}
     >
-      {/* Cover with swipe gesture + badges overlay */}
-      <div
-        className="relative w-full aspect-square overflow-hidden"
-        style={{
-          transform: `translateX(${offsetX}px)`,
-          transition: swiping ? 'none' : 'transform 0.15s ease',
-          touchAction: 'pan-y',
-          cursor: 'grab',
-        }}
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={onPointerUp}
-        onPointerCancel={onPointerUp}
-        onClick={() => { if (Math.abs(offsetX) < 5) onTap() }}
-      >
-        {art
-          ? <img src={art} alt="" className="w-full h-full object-cover block select-none" draggable={false} loading="lazy" />
-          : <div className="w-full h-full flex items-center justify-center text-5xl bg-card-raised">💿</div>
-        }
+      {/* Cover image — full bleed */}
+      {art
+        ? <img src={art} alt="" className="absolute inset-0 w-full h-full object-cover block" draggable={false} loading="lazy" decoding="async" fetchPriority="high" />
+        : <div className="absolute inset-0 flex items-center justify-center text-5xl bg-card-raised">💿</div>
+      }
 
-        {/* Top-left badges */}
-        <div className="absolute top-2.5 left-2.5 flex gap-1.5">
-          {count > 0 && (
-            <span
-              className="px-2 py-1 rounded-md text-[11px] font-semibold"
-              style={{
-                background: 'rgba(30,215,96,0.2)',
-                color: '#1ed760',
-                border: '1px solid rgba(30,215,96,0.3)',
-                backdropFilter: 'blur(8px)',
-                WebkitBackdropFilter: 'blur(8px)',
-              }}
-            >
-              {count}×
-            </span>
-          )}
-          {year && (
-            <span
-              className="px-2 py-1 rounded-md text-[11px] font-semibold"
-              style={{
-                background: 'rgba(255,255,255,0.12)',
-                color: '#f0f0f0',
-                border: '1px solid rgba(255,255,255,0.1)',
-                backdropFilter: 'blur(8px)',
-                WebkitBackdropFilter: 'blur(8px)',
-              }}
-            >
-              {year}
-            </span>
-          )}
-        </div>
+      {/* Gradient overlay */}
+      <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/20 to-transparent pointer-events-none" />
 
-        {/* Swipe overlays */}
-        <div className="absolute inset-0 flex items-center justify-start px-4 pointer-events-none"
-             style={{ opacity: leftOpacity }}>
-          <span className="text-[13px] font-bold px-3 py-1.5 rounded-lg"
-                style={{ color: '#8a8a8a', background: 'rgba(255,255,255,0.12)', backdropFilter: 'blur(8px)' }}>
-            ← Skip
+      {/* Top-left badges */}
+      <div className="absolute top-3 left-3 flex gap-1.5 z-10">
+        {count > 0 && (
+          <span className="px-2 py-1 rounded-md text-[11px] font-semibold"
+            style={{ background: 'rgba(30,215,96,0.2)', color: '#1ed760', border: '1px solid rgba(30,215,96,0.3)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)' }}>
+            {count}×
           </span>
-        </div>
-        <div className="absolute inset-0 flex items-center justify-end px-4 pointer-events-none"
-             style={{ opacity: rightOpacity }}>
-          <span className="text-[13px] font-bold px-3 py-1.5 rounded-lg"
-                style={{ color: '#1ed760', background: 'rgba(30,215,96,0.2)', backdropFilter: 'blur(8px)' }}>
-            Queue →
+        )}
+        {year && (
+          <span className="px-2 py-1 rounded-md text-[11px] font-semibold"
+            style={{ background: 'rgba(255,255,255,0.12)', color: '#f0f0f0', border: '1px solid rgba(255,255,255,0.1)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)' }}>
+            {year}
           </span>
-        </div>
-
-        {/* Static swipe hints — bottom (visible at rest) */}
-        {leftOpacity === 0 && rightOpacity === 0 && (
-          <div className="absolute bottom-2.5 left-2.5 right-2.5 flex justify-between pointer-events-none">
-            <span
-              className="px-2 py-1 rounded-md text-[11px] font-semibold"
-              style={{
-                background: 'rgba(255,255,255,0.1)',
-                color: '#8a8a8a',
-                border: '1px solid rgba(255,255,255,0.08)',
-                backdropFilter: 'blur(8px)',
-                WebkitBackdropFilter: 'blur(8px)',
-              }}
-            >
-              ← Skip
-            </span>
-            <span
-              className="px-2 py-1 rounded-md text-[11px] font-semibold"
-              style={{
-                background: 'rgba(30,215,96,0.2)',
-                color: '#1ed760',
-                border: '1px solid rgba(30,215,96,0.3)',
-                backdropFilter: 'blur(8px)',
-                WebkitBackdropFilter: 'blur(8px)',
-              }}
-            >
-              Queue →
-            </span>
-          </div>
         )}
       </div>
 
-      {/* Metadata */}
-      <div className="px-4 pt-3 pb-4 cursor-pointer" onClick={() => { if (Math.abs(offsetX) < 5) onTap() }}>
-        <p className="text-[17px] font-bold text-ink leading-snug line-clamp-2">{album.name}</p>
-        <p className="text-[13px] text-ink-secondary mt-1 truncate">{artist}</p>
+      {/* Swipe overlays */}
+      <div className="absolute inset-0 flex items-center justify-start px-4 pointer-events-none z-10"
+           style={{ opacity: leftOpacity }}>
+        <span className="text-[13px] font-bold px-3 py-1.5 rounded-lg"
+              style={{ color: '#8a8a8a', background: 'rgba(255,255,255,0.12)', backdropFilter: 'blur(8px)' }}>
+          ← Skip
+        </span>
+      </div>
+      <div className="absolute inset-0 flex items-center justify-end px-4 pointer-events-none z-10"
+           style={{ opacity: rightOpacity }}>
+        <span className="text-[13px] font-bold px-3 py-1.5 rounded-lg"
+              style={{ color: '#1ed760', background: 'rgba(30,215,96,0.2)', backdropFilter: 'blur(8px)' }}>
+          Queue →
+        </span>
+      </div>
+
+      {/* Static swipe hints — visible at rest */}
+      {leftOpacity === 0 && rightOpacity === 0 && (
+        <div className="absolute bottom-[5.5rem] left-3 right-3 flex justify-between pointer-events-none z-10">
+          <span className="px-2 py-1 rounded-md text-[11px] font-semibold"
+            style={{ background: 'rgba(255,255,255,0.1)', color: '#8a8a8a', border: '1px solid rgba(255,255,255,0.08)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)' }}>
+            ← Skip
+          </span>
+          <span className="px-2 py-1 rounded-md text-[11px] font-semibold"
+            style={{ background: 'rgba(30,215,96,0.2)', color: '#1ed760', border: '1px solid rgba(30,215,96,0.3)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)' }}>
+            Queue →
+          </span>
+        </div>
+      )}
+
+      {/* Bottom metadata overlay */}
+      <div className="absolute bottom-0 left-0 right-0 p-4 z-10">
+        <p className="text-[20px] font-bold text-white leading-snug line-clamp-2">{album.name}</p>
+        <p className="text-[14px] text-white/70 mt-1 truncate">{artist}</p>
         {cluster && (
-          <div className="flex gap-1.5 mt-2 flex-wrap">
-            <span
-              className="px-2 py-0.5 rounded-md text-[10px] font-semibold"
-              style={{ background: 'rgba(138,138,255,0.15)', color: '#a0a0ff' }}
-            >
+          <div className="flex gap-1.5 mt-2">
+            <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold"
+              style={{ background: 'rgba(138,138,255,0.15)', color: '#a0a0ff' }}>
               {cluster.icon} {cluster.label}
             </span>
           </div>
@@ -416,20 +360,22 @@ function MultiPickList({ albums, getAlbumStats, onQueue, onSave, onRemove, isSav
 
       {albums.length > 1 && (
         <div className="flex gap-3 pt-4">
-          <button
+          <motion.button
+            whileTap={{ scale: 0.96 }}
             onClick={onQueueAll}
-            className="flex-1 py-3.5 rounded-xl text-[14px] font-bold transition-all duration-200 active:scale-[0.98]"
+            className="flex-1 py-3.5 rounded-xl text-[14px] font-bold"
             style={{ background: '#1ed760', color: '#000' }}
           >
             ▶ Queue All
-          </button>
-          <button
+          </motion.button>
+          <motion.button
+            whileTap={{ scale: 0.96 }}
             onClick={onSaveAll}
-            className="flex-1 py-3.5 rounded-xl text-[14px] font-semibold border border-border-subtle text-ink transition-all duration-200 active:scale-[0.98]"
+            className="flex-1 py-3.5 rounded-xl text-[14px] font-semibold border border-border-subtle text-ink"
             style={{ background: 'transparent' }}
           >
             Save All
-          </button>
+          </motion.button>
         </div>
       )}
     </div>
@@ -471,21 +417,23 @@ function FilterModal({ draftFilters, draftToggles, setDraftFilters, setDraftTogg
   return (
     <>
       {/* Backdrop */}
-      <div
+      <motion.div
         className="fixed inset-0 z-40"
-        style={{
-          background: 'rgba(0,0,0,0.7)',
-          backdropFilter: 'blur(4px)',
-          WebkitBackdropFilter: 'blur(4px)',
-          animation: 'toastIn 0.3s ease both',
-        }}
+        style={{ background: 'rgba(0,0,0,0.7)', backdropFilter: 'blur(4px)', WebkitBackdropFilter: 'blur(4px)' }}
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        transition={{ duration: 0.2 }}
         onClick={onClose}
       />
 
       {/* Sheet */}
-      <div
+      <motion.div
         className="fixed bottom-0 left-0 right-0 z-50 bg-card rounded-t-[1.75rem] border-t border-border-subtle max-h-[88vh] flex flex-col"
-        style={{ animation: 'sheetUp 0.45s cubic-bezier(0.32,0.72,0,1) both' }}
+        initial={{ y: '100%' }}
+        animate={{ y: 0 }}
+        exit={{ y: '100%' }}
+        transition={{ type: 'spring', damping: 25, stiffness: 200 }}
       >
         {/* Drag pill */}
         <div className="flex justify-center pt-3 pb-1 flex-shrink-0">
@@ -650,7 +598,7 @@ function FilterModal({ draftFilters, draftToggles, setDraftFilters, setDraftTogg
             {draftCount > 0 ? `Apply ${draftCount} filter${draftCount > 1 ? 's' : ''} →` : 'Apply →'}
           </button>
         </div>
-      </div>
+      </motion.div>
     </>
   )
 }
@@ -661,12 +609,12 @@ export default function DiscoverTab({ albums, getAlbumStats, saveLater, removeLa
   const [activeFilters,   setActiveFilters]  = useState(new Set())
   const [toggles,         setToggles]        = useState({ weightUnheard: false, excludeKeywords: false, avoidRecent: false })
   const [activePreset,    setActivePreset]   = useState(null)
-  const [customPresets,   setCustomPresets]  = useState(
-    () => JSON.parse(localStorage.getItem('discover_presets') || '[]')
-  )
-  const [queueHistory,    setQueueHistory]   = useState(
-    () => JSON.parse(localStorage.getItem('discover_queue_history') || '{}')
-  )
+  const [customPresets,   setCustomPresets]  = useState(() => {
+    try { return JSON.parse(localStorage.getItem('discover_presets') || '[]') } catch { return [] }
+  })
+  const [queueHistory,    setQueueHistory]   = useState(() => {
+    try { return JSON.parse(localStorage.getItem('discover_queue_history') || '{}') } catch { return {} }
+  })
   const [pickCount,       setPickCount]      = useState(1)
   const [pickedAlbums,    setPickedAlbums]   = useState([])
   const [selectedAlbum,   setSelectedAlbum]  = useState(null)
@@ -1013,18 +961,20 @@ export default function DiscoverTab({ albums, getAlbumStats, saveLater, removeLa
       )}
 
       {/* Filter sheet */}
-      {filterModalOpen && (
-        <FilterModal
-          draftFilters={draftFilters}
-          draftToggles={draftToggles}
-          setDraftFilters={setDraftFilters}
-          setDraftToggles={setDraftToggles}
-          onApply={applyFilters}
-          onClose={() => setFilterModalOpen(false)}
-          onSavePreset={savePreset}
-          activeFilterCount={activeFilterCount}
-        />
-      )}
+      <AnimatePresence>
+        {filterModalOpen && (
+          <FilterModal
+            draftFilters={draftFilters}
+            draftToggles={draftToggles}
+            setDraftFilters={setDraftFilters}
+            setDraftToggles={setDraftToggles}
+            onApply={applyFilters}
+            onClose={() => setFilterModalOpen(false)}
+            onSavePreset={savePreset}
+            activeFilterCount={activeFilterCount}
+          />
+        )}
+      </AnimatePresence>
 
       {/* Toast */}
       {queueStatus && (
