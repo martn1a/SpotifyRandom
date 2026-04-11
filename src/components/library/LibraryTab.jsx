@@ -36,9 +36,9 @@ function AlbumRow({ album, listenCount, saved, onSave, onRemove, onClick }) {
   const art = album.images?.[album.images.length - 1]?.url || album.images?.[0]?.url
 
   return (
-    <div className="flex items-center gap-3 px-4 py-2.5 active:bg-gray-50 transition-colors cursor-pointer" onClick={onClick}>
+    <div className="flex items-center gap-3 px-4 py-2.5 active:bg-card-raised transition-colors cursor-pointer" onClick={onClick}>
       {/* Cover art */}
-      <div className="w-12 h-12 rounded-lg overflow-hidden bg-gray-100 flex-shrink-0">
+      <div className="w-12 h-12 rounded-lg overflow-hidden bg-card flex-shrink-0">
         {art
           ? <img src={art} alt="" className="w-full h-full object-cover" loading="lazy" />
           : <div className="w-full h-full flex items-center justify-center text-xl">💿</div>
@@ -84,7 +84,7 @@ const TYPE_OPTIONS = [
   { id: 'compilation', label: 'Compilations' },
 ]
 
-export default function LibraryTab({ albums, getAlbumStats, genresLoading, saveLater, removeLater, isSaved, libraryFilter, onClearFilter, onBadgeClick }) {
+export default function LibraryTab({ albums, getAlbumStats, genresLoading, saveLater, removeLater, isSaved, libraryFilter, onClearFilter = () => {}, onBadgeClick }) {
   const [search,        setSearch]        = useState('')
   const [activeCluster, setActiveCluster] = useState(null)
   const [typeFilter,    setTypeFilter]    = useState('all')
@@ -176,6 +176,7 @@ export default function LibraryTab({ albums, getAlbumStats, genresLoading, saveL
           </div>
           <button
             onClick={onClearFilter}
+            aria-label="Clear filter"
             className="w-8 h-8 rounded-full bg-accent/20 text-accent flex items-center justify-center hover:bg-accent/30 transition-colors"
           >
             ✕
@@ -314,7 +315,7 @@ export default function LibraryTab({ albums, getAlbumStats, genresLoading, saveL
       </div>
 
       {/* ── Album list ─────────────────────────────────────────────── */}
-      <div className="flex-1 overflow-y-auto divide-y divide-gray-50">
+      <div className="flex-1 overflow-y-auto divide-y divide-border-subtle">
         {filtered.map(album => (
           <AlbumRow
             key={album.id}
