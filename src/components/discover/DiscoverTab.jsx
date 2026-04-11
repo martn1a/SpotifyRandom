@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react'
+import { motion, useMotionValue, useTransform } from 'motion/react'
 import { GENRE_CLUSTERS, clusterOf } from '../../data/genre-clusters.js'
 import { addToQueue } from '../../lib/spotify-api.js'
 import AlbumModal from '../AlbumModal.jsx'
@@ -103,50 +104,13 @@ function FeaturedAlbumCard({ album, stats, onQueue, onSkip, onTap }) {
   const count   = stats?.listenCount ?? 0
   const year    = (album.release_date || '').substring(0, 4)
   const [revealRef, revealed] = useScrollReveal()
+  const [gone, setGone] = useState(false)
 
-  const [offsetX, setOffsetX] = useState(0)
-  const [swiping, setSwiping] = useState(false)
-  const [gone,    setGone]    = useState(false)
-  const startXRef             = useRef(null)
-
-  const THRESHOLD = 80
-  const MAX_DRAG  = 140
-
-  function onPointerDown(e) {
-    startXRef.current = e.clientX
-    e.currentTarget.setPointerCapture(e.pointerId)
-    setSwiping(true)
-  }
-
-  function onPointerMove(e) {
-    if (startXRef.current === null) return
-    const dx = Math.max(-MAX_DRAG, Math.min(MAX_DRAG, e.clientX - startXRef.current))
-    setOffsetX(dx)
-  }
-
-  function onPointerUp() {
-    if (startXRef.current === null) return
-    const dx = offsetX
-    startXRef.current = null
-    setSwiping(false)
-    if (dx < -THRESHOLD) {
-      setGone(true)
-      onSkip()
-    } else if (dx > THRESHOLD) {
-      setGone(true)
-      onQueue(album)
-    } else {
-      setOffsetX(0)
-    }
-  }
+  const x            = useMotionValue(0)
+  const leftOpacity  = useTransform(x, [-80, -20], [1, 0])
+  const rightOpacity = useTransform(x, [20, 80], [0, 1])
 
   if (gone) return null
-
-  const progress     = Math.abs(offsetX) / THRESHOLD
-  const isLeft       = offsetX < -8
-  const isRight      = offsetX > 8
-  const leftOpacity  = isLeft  ? Math.min(1, progress) : 0
-  const rightOpacity = isRight ? Math.min(1, progress) : 0
 
   return (
     <div
@@ -157,20 +121,23 @@ function FeaturedAlbumCard({ album, stats, onQueue, onSkip, onTap }) {
       }}
       className="bg-card rounded-2xl border border-border-subtle overflow-hidden"
     >
-      {/* Cover with swipe gesture + badges overlay */}
-      <div
-        className="relative w-full aspect-square overflow-hidden"
-        style={{
-          transform: `translateX(${offsetX}px)`,
-          transition: swiping ? 'none' : 'transform 0.15s ease',
-          touchAction: 'pan-y',
-          cursor: 'grab',
+      {/* Cover with framer-motion drag + badges overlay */}
+      <motion.div
+        className="relative w-full aspect-square overflow-hidden cursor-grab active:cursor-grabbing touch-none"
+        style={{ x }}
+        drag="x"
+        dragConstraints={{ left: 0, right: 0 }}
+        dragElastic={0.7}
+        onDragEnd={(_, info) => {
+          if (info.offset.x < -80 || info.velocity.x < -500) {
+            setGone(true)
+            onSkip()
+          } else if (info.offset.x > 80 || info.velocity.x > 500) {
+            setGone(true)
+            onQueue(album)
+          }
         }}
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={onPointerUp}
-        onPointerCancel={onPointerUp}
-        onClick={() => { if (Math.abs(offsetX) < 5) onTap() }}
+        onClick={() => { if (Math.abs(x.get()) < 5) onTap() }}
       >
         {art
           ? <img src={art} alt="" className="w-full h-full object-cover block select-none" draggable={false} loading="lazy" />
@@ -180,92 +147,56 @@ function FeaturedAlbumCard({ album, stats, onQueue, onSkip, onTap }) {
         {/* Top-left badges */}
         <div className="absolute top-2.5 left-2.5 flex gap-1.5">
           {count > 0 && (
-            <span
-              className="px-2 py-1 rounded-md text-[11px] font-semibold"
-              style={{
-                background: 'rgba(30,215,96,0.2)',
-                color: '#1ed760',
-                border: '1px solid rgba(30,215,96,0.3)',
-                backdropFilter: 'blur(8px)',
-                WebkitBackdropFilter: 'blur(8px)',
-              }}
-            >
+            <span className="px-2 py-1 rounded-md text-[11px] font-semibold"
+              style={{ background: 'rgba(30,215,96,0.2)', color: '#1ed760', border: '1px solid rgba(30,215,96,0.3)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)' }}>
               {count}×
             </span>
           )}
           {year && (
-            <span
-              className="px-2 py-1 rounded-md text-[11px] font-semibold"
-              style={{
-                background: 'rgba(255,255,255,0.12)',
-                color: '#f0f0f0',
-                border: '1px solid rgba(255,255,255,0.1)',
-                backdropFilter: 'blur(8px)',
-                WebkitBackdropFilter: 'blur(8px)',
-              }}
-            >
+            <span className="px-2 py-1 rounded-md text-[11px] font-semibold"
+              style={{ background: 'rgba(255,255,255,0.12)', color: '#f0f0f0', border: '1px solid rgba(255,255,255,0.1)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)' }}>
               {year}
             </span>
           )}
         </div>
 
-        {/* Swipe overlays */}
-        <div className="absolute inset-0 flex items-center justify-start px-4 pointer-events-none"
+        {/* Swipe overlays (driven by motion value) */}
+        <motion.div className="absolute inset-0 flex items-center justify-start px-4 pointer-events-none"
              style={{ opacity: leftOpacity }}>
           <span className="text-[13px] font-bold px-3 py-1.5 rounded-lg"
                 style={{ color: '#8a8a8a', background: 'rgba(255,255,255,0.12)', backdropFilter: 'blur(8px)' }}>
             ← Skip
           </span>
-        </div>
-        <div className="absolute inset-0 flex items-center justify-end px-4 pointer-events-none"
+        </motion.div>
+        <motion.div className="absolute inset-0 flex items-center justify-end px-4 pointer-events-none"
              style={{ opacity: rightOpacity }}>
           <span className="text-[13px] font-bold px-3 py-1.5 rounded-lg"
                 style={{ color: '#1ed760', background: 'rgba(30,215,96,0.2)', backdropFilter: 'blur(8px)' }}>
             Queue →
           </span>
-        </div>
+        </motion.div>
 
         {/* Static swipe hints — bottom (visible at rest) */}
-        {leftOpacity === 0 && rightOpacity === 0 && (
-          <div className="absolute bottom-2.5 left-2.5 right-2.5 flex justify-between pointer-events-none">
-            <span
-              className="px-2 py-1 rounded-md text-[11px] font-semibold"
-              style={{
-                background: 'rgba(255,255,255,0.1)',
-                color: '#8a8a8a',
-                border: '1px solid rgba(255,255,255,0.08)',
-                backdropFilter: 'blur(8px)',
-                WebkitBackdropFilter: 'blur(8px)',
-              }}
-            >
-              ← Skip
-            </span>
-            <span
-              className="px-2 py-1 rounded-md text-[11px] font-semibold"
-              style={{
-                background: 'rgba(30,215,96,0.2)',
-                color: '#1ed760',
-                border: '1px solid rgba(30,215,96,0.3)',
-                backdropFilter: 'blur(8px)',
-                WebkitBackdropFilter: 'blur(8px)',
-              }}
-            >
-              Queue →
-            </span>
-          </div>
-        )}
-      </div>
+        <div className="absolute bottom-2.5 left-2.5 right-2.5 flex justify-between pointer-events-none">
+          <span className="px-2 py-1 rounded-md text-[11px] font-semibold"
+            style={{ background: 'rgba(255,255,255,0.1)', color: '#8a8a8a', border: '1px solid rgba(255,255,255,0.08)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)' }}>
+            ← Skip
+          </span>
+          <span className="px-2 py-1 rounded-md text-[11px] font-semibold"
+            style={{ background: 'rgba(30,215,96,0.2)', color: '#1ed760', border: '1px solid rgba(30,215,96,0.3)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)' }}>
+            Queue →
+          </span>
+        </div>
+      </motion.div>
 
       {/* Metadata */}
-      <div className="px-4 pt-3 pb-4 cursor-pointer" onClick={() => { if (Math.abs(offsetX) < 5) onTap() }}>
+      <div className="px-4 pt-3 pb-4 cursor-pointer" onClick={() => { if (Math.abs(x.get()) < 5) onTap() }}>
         <p className="text-[17px] font-bold text-ink leading-snug line-clamp-2">{album.name}</p>
         <p className="text-[13px] text-ink-secondary mt-1 truncate">{artist}</p>
         {cluster && (
           <div className="flex gap-1.5 mt-2 flex-wrap">
-            <span
-              className="px-2 py-0.5 rounded-md text-[10px] font-semibold"
-              style={{ background: 'rgba(138,138,255,0.15)', color: '#a0a0ff' }}
-            >
+            <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold"
+              style={{ background: 'rgba(138,138,255,0.15)', color: '#a0a0ff' }}>
               {cluster.icon} {cluster.label}
             </span>
           </div>
@@ -282,69 +213,34 @@ function SwipeableAlbumRow({ album, stats, onQueue, onSave, onRemove, saved, onT
   const artist = (album.artists || []).map(a => a.name).join(', ')
   const count  = stats?.listenCount ?? 0
   const year   = (album.release_date || '').substring(0, 4)
+  const [done, setDone] = useState(false)
 
-  const [offsetX, setOffsetX] = useState(0)
-  const [swiping, setSwiping] = useState(false)
-  const [done,    setDone]    = useState(false)
-  const startXRef             = useRef(null)
-
-  const THRESHOLD = 80
-  const MAX_DRAG  = 120
-
-  function onPointerDown(e) {
-    startXRef.current = e.clientX
-    e.currentTarget.setPointerCapture(e.pointerId)
-    setSwiping(true)
-  }
-
-  function onPointerMove(e) {
-    if (startXRef.current === null) return
-    const dx = Math.max(-MAX_DRAG, Math.min(MAX_DRAG, e.clientX - startXRef.current))
-    setOffsetX(dx)
-  }
-
-  function onPointerUp() {
-    if (startXRef.current === null) return
-    const dx = offsetX
-    startXRef.current = null
-    setSwiping(false)
-
-    if (dx < -THRESHOLD) {
-      // Left swipe → Skip
-      setDone(true)
-    } else if (dx > THRESHOLD) {
-      // Right swipe → Queue
-      setDone(true)
-      onQueue(album)
-    } else {
-      setOffsetX(0)
-    }
-  }
+  const x            = useMotionValue(0)
+  const leftOpacity  = useTransform(x, [-80, -20], [1, 0])
+  const rightOpacity = useTransform(x, [20, 80], [0, 1])
 
   if (done) return null
 
-  const progress     = Math.abs(offsetX) / THRESHOLD
-  const isLeft       = offsetX < -8
-  const isRight      = offsetX > 8
-  const leftOpacity  = isLeft  ? Math.min(1, progress) : 0
-  const rightOpacity = isRight ? Math.min(1, progress) : 0
-
   return (
     <div className="bg-card rounded-2xl border border-border-subtle overflow-hidden">
-      {/* Cover with swipe gesture */}
-      <div
-        className="relative w-full aspect-square overflow-hidden"
-        style={{
-          transform: `translateX(${offsetX}px)`,
-          transition: swiping ? 'none' : 'transform 0.15s ease',
-          touchAction: 'pan-y',
-          cursor: 'grab',
+      {/* Cover with framer-motion drag */}
+      <motion.div
+        className="relative w-full aspect-square overflow-hidden cursor-grab active:cursor-grabbing touch-none"
+        style={{ x }}
+        drag="x"
+        dragConstraints={{ left: 0, right: 0 }}
+        dragElastic={0.7}
+        onDragEnd={(_, info) => {
+          if (info.offset.x < -80 || info.velocity.x < -500) {
+            // Left swipe → Skip
+            setDone(true)
+          } else if (info.offset.x > 80 || info.velocity.x > 500) {
+            // Right swipe → Queue
+            setDone(true)
+            onQueue(album)
+          }
         }}
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={onPointerUp}
-        onPointerCancel={onPointerUp}
-        onClick={() => { if (Math.abs(offsetX) < 5) onTap(album) }}
+        onClick={() => { if (Math.abs(x.get()) < 5) onTap(album) }}
       >
         {art
           ? <img src={art} alt="" className="w-full h-full object-cover block select-none" draggable={false} loading="lazy" />
@@ -354,33 +250,29 @@ function SwipeableAlbumRow({ album, stats, onQueue, onSave, onRemove, saved, onT
         {/* Top badge */}
         {count > 0 && (
           <div className="absolute top-2 left-2">
-            <span
-              className="px-1.5 py-0.5 rounded text-[10px] font-semibold"
-              style={{
-                background: 'rgba(30,215,96,0.2)', color: '#1ed760',
-                border: '1px solid rgba(30,215,96,0.3)',
-                backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)',
-              }}
-            >{count}×</span>
+            <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold"
+              style={{ background: 'rgba(30,215,96,0.2)', color: '#1ed760', border: '1px solid rgba(30,215,96,0.3)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)' }}>
+              {count}×
+            </span>
           </div>
         )}
 
-        {/* Swipe overlays */}
-        <div className="absolute inset-0 flex items-center justify-start px-3 pointer-events-none"
+        {/* Swipe overlays (driven by motion value) */}
+        <motion.div className="absolute inset-0 flex items-center justify-start px-3 pointer-events-none"
              style={{ opacity: leftOpacity }}>
           <span className="text-[11px] font-bold px-2 py-1 rounded-md"
                 style={{ color: '#8a8a8a', background: 'rgba(255,255,255,0.1)', backdropFilter: 'blur(8px)' }}>
             ← Skip
           </span>
-        </div>
-        <div className="absolute inset-0 flex items-center justify-end px-3 pointer-events-none"
+        </motion.div>
+        <motion.div className="absolute inset-0 flex items-center justify-end px-3 pointer-events-none"
              style={{ opacity: rightOpacity }}>
           <span className="text-[11px] font-bold px-2 py-1 rounded-md"
                 style={{ color: '#1ed760', background: 'rgba(30,215,96,0.2)', backdropFilter: 'blur(8px)' }}>
             Queue →
           </span>
-        </div>
-      </div>
+        </motion.div>
+      </motion.div>
 
       {/* Metadata */}
       <div className="px-4 pt-3 pb-4 cursor-pointer" onClick={() => onTap(album)}>
