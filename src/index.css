@@ -60,10 +60,6 @@ html, body, #root {
   padding-top: env(safe-area-inset-top, 0px);
 }
 
-@keyframes sheetUp {
-  from { transform: translateY(100%); opacity: 0.7; }
-  to   { transform: translateY(0);    opacity: 1;   }
-}
 @keyframes toastIn {
   from { transform: translateY(1rem); opacity: 0; }
   to   { transform: translateY(0);    opacity: 1; }
