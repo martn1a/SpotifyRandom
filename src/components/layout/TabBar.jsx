@@ -1,4 +1,4 @@
-import { motion } from 'motion/react'
+import { motion, AnimatePresence } from 'motion/react'
 import { cn } from '../../lib/utils.js'
 
 const MAIN_TABS = [
@@ -45,28 +45,37 @@ export default function TabBar({ activeTab, onTabChange, browseSubTab, onBrowseS
   return (
     <div className="flex-shrink-0 pb-safe border-t border-border-subtle" style={{ background: 'rgba(10,10,10,0.92)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)' }}>
       {/* Browse sub-tabs (only visible when Browse is active) */}
-      {activeTab === 'browse' && (
-        <div className="flex border-b border-border-subtle px-4 pt-2">
-          {BROWSE_SUB_TABS.map(sub => (
-            <button
-              key={sub.id}
-              onClick={() => onBrowseSubTabChange(sub.id)}
-              className={cn(
-                'flex-1 pb-2 text-xs font-bold uppercase tracking-widest transition-colors relative',
-                browseSubTab === sub.id ? 'text-accent' : 'text-ink-muted'
-              )}
-            >
-              {sub.label}
-              {browseSubTab === sub.id && (
-                <motion.div
-                  layoutId="browse-sub-indicator"
-                  className="absolute bottom-0 left-1/2 -translate-x-1/2 w-6 h-0.5 bg-accent rounded-full"
-                />
-              )}
-            </button>
-          ))}
-        </div>
-      )}
+      <AnimatePresence>
+        {activeTab === 'browse' && (
+          <motion.div
+            key="sub-strip"
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.15 }}
+            className="flex border-b border-border-subtle px-4 pt-2 overflow-hidden"
+          >
+            {BROWSE_SUB_TABS.map(sub => (
+              <button
+                key={sub.id}
+                onClick={() => onBrowseSubTabChange(sub.id)}
+                className={cn(
+                  'flex-1 pb-2 text-xs font-bold uppercase tracking-widest transition-colors relative',
+                  browseSubTab === sub.id ? 'text-accent' : 'text-ink-muted'
+                )}
+              >
+                {sub.label}
+                {browseSubTab === sub.id && (
+                  <motion.div
+                    layoutId="browse-sub-indicator"
+                    className="absolute bottom-0 left-1/2 -translate-x-1/2 w-6 h-0.5 bg-accent rounded-full"
+                  />
+                )}
+              </button>
+            ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Main tabs */}
       <nav className="flex h-16">
