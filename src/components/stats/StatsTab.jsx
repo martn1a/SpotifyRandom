@@ -84,7 +84,7 @@ function normalizeAlbumKey(artist, album) {
 
 function MetricCard({ label, value, sub }) {
   return (
-    <div className="bg-white rounded-xl p-3 border border-border-subtle flex-1 min-w-0">
+    <div className="bg-card rounded-xl p-3 border border-border-subtle flex-1 min-w-0">
       <p className="text-[10px] font-medium text-ink-muted">{label}</p>
       <p className="text-[22px] font-semibold text-ink mt-0.5 leading-tight tabular-nums">{value}</p>
       {sub && <p className="text-[11px] text-ink-muted mt-0.5 truncate">{sub}</p>}
@@ -103,7 +103,7 @@ function CarouselItem({ entry, onTap }) {
       className={`flex-shrink-0 w-[calc(50%-8px)] ${onTap ? 'cursor-pointer active:opacity-80 transition-opacity' : ''}`}
       onClick={onTap ? () => onTap(entry) : undefined}
     >
-      <div className="w-full aspect-square rounded-xl overflow-hidden bg-gray-100 mb-2">
+      <div className="w-full aspect-square rounded-xl overflow-hidden bg-card mb-2">
         {art
           ? <img src={art} alt="" className="w-full h-full object-cover" loading="lazy" />
           : <div className="w-full h-full flex items-center justify-center text-3xl">💿</div>
@@ -133,7 +133,7 @@ function Carousel({ title, items, onTap, onReset, burnedCount, lastBurnedAt, com
           {onReset && (
             <button onClick={onReset} className="text-[11px] text-ink-muted active:text-ink flex items-center gap-1">
               {burnedCount > 0 && (
-                <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-gray-200 text-[9px] font-semibold text-ink-muted">{burnedCount}</span>
+                <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-card-raised text-[9px] font-semibold text-ink-muted">{burnedCount}</span>
               )}
               Reset
             </button>
@@ -141,7 +141,7 @@ function Carousel({ title, items, onTap, onReset, burnedCount, lastBurnedAt, com
         </div>
       </div>
       {completionPct > 0 && (
-        <div className="h-[2px] bg-gray-100 rounded-full overflow-hidden mb-2.5">
+        <div className="h-[2px] bg-card-raised rounded-full overflow-hidden mb-2.5">
           <div className="h-full bg-accent rounded-full transition-all" style={{ width: `${completionPct}%` }} />
         </div>
       )}
@@ -512,11 +512,10 @@ export default function StatsTab({ albums, getAlbumStats, lastfmMap, lastfmLoade
             )}
             {filteredMostPlayed.length > 0 ? (
               <div className="flex gap-4 overflow-x-auto scrollbar-hide pb-1 -mx-4 px-4">
-                <AnimatePresence mode="popLayout">
+                <AnimatePresence>
                   {applySortToItems(filteredMostPlayed, carouselSettings?.['most-played']?.sort || 'original', getAlbumStats).map((item) => (
                     <motion.div
                       key={`${item.artist}||${item.name}`}
-                      layout
                       initial={{ opacity: 0, scale: 0.8 }}
                       animate={{ opacity: 1, scale: 1 }}
                       exit={{ opacity: 0, scale: 0.5, filter: 'blur(8px)' }}
