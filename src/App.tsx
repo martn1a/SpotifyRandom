@@ -1,8 +1,13 @@
 import { useState, useEffect, Suspense, lazy } from 'react'
 import { AnimatePresence } from 'framer-motion'
-import { isLoggedIn, handleCallback, login } from './lib/auth.js'
+import { isLoggedIn, handleCallback, login, logout } from './lib/auth.js'
 import TabBar, { type Tab } from './components/TabBar'
 import Toast from './components/Toast'
+import MenuSheet from './components/menu/MenuSheet'
+import SettingsSheet from './components/settings/SettingsSheet'
+import { useBurnTracking } from './hooks/useBurnTracking.js'
+import { useSettings } from './hooks/useSettings.js'
+import { usePlaylists } from './hooks/usePlaylists.js'
 
 const DiscoverTab = lazy(() => import('./components/discover/DiscoverTab'))
 const BrowseTab   = lazy(() => import('./components/browse/BrowseTab'))
@@ -30,6 +35,11 @@ export default function App() {
   const [loggedIn, setLoggedIn] = useState(false)
   const [activeTab, setActiveTab] = useState<Tab>('discover')
   const [toast, setToast] = useState<string | null>(null)
+  const [menuOpen, setMenuOpen] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false)
+  const { burnStats } = useBurnTracking()
+  const { carouselConfig, selectedPlaylistIds, reorderCarousels, togglePlaylist } = useSettings()
+  const { playlists } = usePlaylists()
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -51,7 +61,7 @@ export default function App() {
     <div className="h-dvh bg-page flex flex-col overflow-hidden">
       <div className="flex-1 overflow-hidden pb-14">
         <Suspense fallback={<div className="h-full flex items-center justify-center"><div className="w-6 h-6 border-2 border-accent border-t-transparent rounded-full animate-spin" /></div>}>
-          {activeTab === 'discover' && <DiscoverTab onToast={setToast} />}
+          {activeTab === 'discover' && <DiscoverTab onToast={setToast} onMenuOpen={() => setMenuOpen(true)} />}
           {activeTab === 'browse'   && <BrowseTab   onToast={setToast} />}
           {activeTab === 'later'    && <LaterTab    onToast={setToast} />}
         </Suspense>
@@ -62,6 +72,28 @@ export default function App() {
       <AnimatePresence>
         {toast && <Toast message={toast} onClear={() => setToast(null)} />}
       </AnimatePresence>
+
+      <MenuSheet
+        open={menuOpen}
+        onClose={() => setMenuOpen(false)}
+        onOpenSettings={() => setSettingsOpen(true)}
+        onSignOut={() => { logout(); setLoggedIn(false) }}
+        burnStats={{
+          burned: burnStats?.totalBurned ?? 0,
+          resets: 0,
+          lastBurn: burnStats?.lastBurnedAt ? new Date(burnStats.lastBurnedAt).toLocaleDateString() : null,
+        }}
+      />
+      <SettingsSheet
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        carouselConfig={carouselConfig}
+        onCarouselChange={reorderCarousels}
+        playlists={playlists}
+        selectedPlaylistIds={selectedPlaylistIds}
+        onTogglePlaylist={togglePlaylist}
+        onSpotifySync={() => { /* wired in Task 20 */ }}
+      />
     </div>
   )
 }

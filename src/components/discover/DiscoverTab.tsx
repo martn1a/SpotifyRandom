@@ -56,9 +56,10 @@ function pickRandom(pool: SpotifyAlbum[], count: number, lastfmMap: Map<string, 
 
 interface DiscoverTabProps {
   onToast: (msg: string) => void
+  onMenuOpen: () => void
 }
 
-export default function DiscoverTab({ onToast }: DiscoverTabProps) {
+export default function DiscoverTab({ onToast, onMenuOpen }: DiscoverTabProps) {
   const { albums, loading } = useLibrary()
   const { lastfmMap } = useLastfm()
   const { listenLater, toggleSave } = useListenLater()
@@ -140,7 +141,7 @@ export default function DiscoverTab({ onToast }: DiscoverTabProps) {
     <div className="h-full flex flex-col overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between px-4 pt-safe pt-4 pb-3 shrink-0">
-        <button className="w-8 h-8 flex items-center justify-center text-ink-muted">
+        <button onClick={onMenuOpen} className="w-8 h-8 flex items-center justify-center text-ink-muted">
           <Menu size={20} />
         </button>
         <p className="text-base font-black tracking-widest text-ink">SONAR</p>
