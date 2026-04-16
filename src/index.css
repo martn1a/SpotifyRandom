@@ -1,64 +1,35 @@
 @import "tailwindcss";
 
 @theme {
-  /* Typography */
-  --font-family-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-
-  /* Surfaces — dark theme */
-  --color-page:          #0a0a0a;
-  --color-card:          #141414;
-  --color-card-raised:   #1e1e1e;
-  --color-border-subtle: #2a2a2a;
-
-  /* Text */
-  --color-ink:           #f0f0f0;
-  --color-ink-secondary: #8a8a8a;
-  --color-ink-muted:     #4a4a4a;
-
-  /* Accent — Spotify Green */
-  --color-accent:      #1ed760;
-  --color-accent-dim:  rgba(30,215,96,0.15);
-  --color-accent-text: #1ed760;
-
-  /* Badges (listen count) */
-  --color-badge-listen-bg: rgba(30,215,96,0.15);
-  --color-badge-listen:    #1ed760;
-
-  /* Genre badge */
-  --color-badge-genre-bg: rgba(138,138,255,0.15);
-  --color-badge-genre:    #a0a0ff;
-
-  /* Trend badges */
-  --color-badge-rising-bg:  rgba(100,180,50,0.15);
-  --color-badge-rising:     #7ec84a;
-  --color-badge-falling-bg: rgba(200,60,60,0.15);
-  --color-badge-falling:    #e06060;
-
-  /* Filter chips */
-  --color-chip-active:   #1ed760;
-  --color-chip-inactive: #1e1e1e;
+  --color-page: #0a0a0a;
+  --color-card: #141414;
+  --color-card-raised: #1a1a1a;
+  --color-border: #2a2a2a;
+  --color-ink: #e8e8e8;
+  --color-ink-muted: #888888;
+  --color-ink-subtle: #555555;
+  --color-accent: #1db954;
+  --color-accent-dim: rgba(29, 185, 84, 0.15);
+  --color-accent-border: rgba(29, 185, 84, 0.4);
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
 
-html, body, #root {
-  height: 100%;
+* {
+  box-sizing: border-box;
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  background-color: #0a0a0a;
+  color: #e8e8e8;
+  font-family: var(--font-sans);
+  margin: 0;
   overscroll-behavior: none;
-  background: #0a0a0a;
-  color-scheme: dark;
 }
 
-@utility scrollbar-hide {
-  scrollbar-width: none;
-  &::-webkit-scrollbar { display: none; }
-}
-
-/* iOS safe area inset for home indicator */
-@utility pb-safe {
-  padding-bottom: env(safe-area-inset-bottom, 0px);
-}
-
-@utility pt-safe {
-  padding-top: env(safe-area-inset-top, 0px);
-}
+/* Safe area helpers */
+.pb-safe { padding-bottom: env(safe-area-inset-bottom); }
+.pt-safe { padding-top: env(safe-area-inset-top); }
 
 @keyframes toastIn {
   from { transform: translateY(1rem); opacity: 0; }
