@@ -1,6 +1,7 @@
 import { useState, useEffect, Suspense, lazy } from 'react'
 import { AnimatePresence } from 'framer-motion'
 import { isLoggedIn, handleCallback, login, logout } from './lib/auth.js'
+import { getDb } from './lib/db.js'
 import TabBar, { type Tab } from './components/TabBar'
 import Toast from './components/Toast'
 import MenuSheet from './components/menu/MenuSheet'
@@ -92,7 +93,7 @@ export default function App() {
         playlists={playlists}
         selectedPlaylistIds={selectedPlaylistIds}
         onTogglePlaylist={togglePlaylist}
-        onSpotifySync={() => { /* wired in Task 20 */ }}
+        onSpotifySync={async () => { const db = await getDb(); await db.delete('library', 'albums'); window.location.reload() }}
       />
     </div>
   )

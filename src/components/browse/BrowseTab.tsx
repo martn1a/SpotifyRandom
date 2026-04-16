@@ -3,12 +3,13 @@ import { useLibrary } from '../../hooks/useLibrary.js'
 import { useLastfm } from '../../hooks/useLastfm.js'
 import { useListenLater } from '../../hooks/useListenLater.js'
 import { useBurnTracking } from '../../hooks/useBurnTracking.js'
+import { usePlaylists } from '../../hooks/usePlaylists.js'
+import { useSettings } from '../../hooks/useSettings.js'
 import AlbumModal from '../AlbumModal'
 import LibraryGrid from './LibraryGrid'
 import CarouselSection from './CarouselSection'
 import ExploreTab from './ExploreTab'
 import { cn } from '../../lib/utils'
-import { CAROUSEL_DEFAULTS } from '../../lib/constants'
 import type { SpotifyAlbum } from '../../lib/types'
 
 type SubTab = 'library' | 'browse' | 'explore'
@@ -28,9 +29,18 @@ export default function BrowseTab({ onToast }: BrowseTabProps) {
   const { lastfmMap } = useLastfm()
   const { listenLater, toggleSave } = useListenLater()
   const { burnedMap, burnAlbum, resetCarousel } = useBurnTracking()
+  const { playlists, loading: playlistsLoading, getPlaylistAlbums } = usePlaylists()
+  const { carouselConfig, selectedPlaylistIds } = useSettings()
 
   const [subTab, setSubTab] = useState<SubTab>('library')
   const [selectedAlbum, setSelectedAlbum] = useState<SpotifyAlbum | null>(null)
+  const [playlistAlbumCache, setPlaylistAlbumCache] = useState<Record<string, SpotifyAlbum[]>>({})
+
+  async function loadPlaylistAlbums(id: string) {
+    if (playlistAlbumCache[id]) return
+    const result = await getPlaylistAlbums(id)
+    setPlaylistAlbumCache(prev => ({ ...prev, [id]: result }))
+  }
 
   const carouselAlbums = useMemo(() => {
     const withStats = albums
@@ -93,26 +103,32 @@ export default function BrowseTab({ onToast }: BrowseTabProps) {
         )}
         {subTab === 'browse' && (
           <div className="overflow-y-auto h-full pt-4">
-            {CAROUSEL_DEFAULTS.map(config => (
-              <CarouselSection
-                key={config.id}
-                config={config}
-                albums={carouselAlbums[config.id] ?? []}
-                burnedIds={new Set<string>([...(burnedMap.get(config.id) ?? [])] as string[])}
-                onSelect={setSelectedAlbum}
-                onReset={resetCarousel}
-                showArrow={config.id === 'climbers' ? 'up' : config.id === 'fallers' ? 'down' : null}
-              />
-            ))}
+            {carouselConfig
+              .filter(c => c.visible)
+              .sort((a, b) => a.order - b.order)
+              .map(config => (
+                <CarouselSection
+                  key={config.id}
+                  config={config}
+                  albums={carouselAlbums[config.id] ?? []}
+                  burnedIds={new Set<string>([...(burnedMap.get(config.id) ?? [])] as string[])}
+                  onSelect={setSelectedAlbum}
+                  onReset={resetCarousel}
+                  showArrow={config.id === 'climbers' ? 'up' : config.id === 'fallers' ? 'down' : null}
+                />
+              ))}
           </div>
         )}
         {subTab === 'explore' && (
           <ExploreTab
-            playlists={[]}
-            selectedPlaylistIds={[]}
+            playlists={playlists}
+            selectedPlaylistIds={selectedPlaylistIds}
             onSelectAlbum={setSelectedAlbum}
-            getPlaylistAlbums={() => []}
-            loading={false}
+            getPlaylistAlbums={(id) => {
+              if (!playlistAlbumCache[id]) loadPlaylistAlbums(id)
+              return playlistAlbumCache[id] ?? []
+            }}
+            loading={playlistsLoading}
           />
         )}
       </div>
