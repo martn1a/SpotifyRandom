@@ -6,12 +6,6 @@ import { getAlbumBadges, getSimilarAlbums } from '../lib/badge-utils.js'
 
 // ── Helpers ───────────────────────────────────────────────────────────
 
-function fmtDuration(ms) {
-  if (!ms) return ''
-  const s = Math.floor(ms / 1000)
-  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
-}
-
 function fmtDate(ts) {
   if (!ts) return null
   return new Date(ts).toLocaleDateString('en', { month: 'short', year: 'numeric' })
@@ -271,24 +265,6 @@ export default function AlbumModal({
             </div>
           )}
 
-          {/* Track list */}
-          <div>
-            <h3 className="text-ink-muted text-[10px] font-bold uppercase tracking-widest mb-3">Tracks</h3>
-            <div className="space-y-1">
-              {tracks.map((t, i) => (
-                <div
-                  key={t.id || i}
-                  className="flex items-center gap-3 py-2 border-b border-border-subtle/50 last:border-0"
-                >
-                  <span className="w-5 text-ink-muted text-xs text-right flex-shrink-0">{i + 1}</span>
-                  <span className="flex-1 text-sm truncate">{t.name}</span>
-                  {t.duration_ms && (
-                    <span className="text-ink-muted text-xs flex-shrink-0">{fmtDuration(t.duration_ms)}</span>
-                  )}
-                </div>
-              ))}
-            </div>
-          </div>
         </div>
       </motion.div>
     </AnimatePresence>
