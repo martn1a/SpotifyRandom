@@ -1,6 +1,5 @@
 import { useState, useMemo } from 'react'
 import { motion, AnimatePresence } from 'motion/react'
-import { GENRE_CLUSTERS, clusterOf } from '../../data/genre-clusters.js'
 import AlbumModal from '../AlbumModal.jsx'
 import { useBurnTracking } from '../../hooks/useBurnTracking.js'
 import { cn } from '../../lib/utils.js'
@@ -17,15 +16,6 @@ const TIME_RANGES = [
   { id: '1y',  label: '1Y',  ms: 365 * 24 * 60 * 60 * 1000 },
   { id: 'all', label: 'ALL', ms: null },
 ]
-
-const CAROUSEL_NAMES = {
-  'most-played':        '👑 Most Played',
-  'latest-discoveries': '🔭 Latest Discoveries',
-  'golden-oldies':      '🕰️ Golden Oldies',
-  'climbers':           '📈 Climbers',
-  'fallers':            '📉 Fallers',
-  'on-this-day':        '📅 On This Day',
-}
 
 // ── Helpers ───────────────────────────────────────────────────────────
 
@@ -48,18 +38,6 @@ function fmtAgo(ts) {
   return fmtDate(ts)
 }
 
-function fmtCount(n) {
-  return n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n)
-}
-
-function decadeOf(peakMonth) {
-  if (!peakMonth) return null
-  const year = parseInt(peakMonth.substring(0, 4))
-  if (isNaN(year)) return null
-  const d = Math.floor(year / 10) * 10
-  return { decade: d, label: d % 100 === 0 ? '00s' : `${d % 100}s` }
-}
-
 // ── Sort helper ───────────────────────────────────────────────────────
 
 function applySortToItems(items, sort, getAlbumStats) {
@@ -78,18 +56,6 @@ function normalizeAlbumKey(artist, album) {
     .replace(/\s+/g, ' ')
     .trim()
   return `${norm(artist)}||${norm(album)}`
-}
-
-// ── Metric card ───────────────────────────────────────────────────────
-
-function MetricCard({ label, value, sub }) {
-  return (
-    <div className="bg-card rounded-xl p-3 border border-border-subtle flex-1 min-w-0">
-      <p className="text-[10px] font-medium text-ink-muted">{label}</p>
-      <p className="text-[22px] font-semibold text-ink mt-0.5 leading-tight tabular-nums">{value}</p>
-      {sub && <p className="text-[11px] text-ink-muted mt-0.5 truncate">{sub}</p>}
-    </div>
-  )
 }
 
 // ── Carousel ──────────────────────────────────────────────────────────
@@ -200,28 +166,6 @@ export default function StatsTab({ albums, getAlbumStats, lastfmMap, lastfmLoade
       }))
       .filter(e => e.spotifyAlbum !== null)
   , [lastfmMap, spotifyLookup])
-
-  // ── Summary metrics ──────────────────────────────────────────────────
-
-  const totalScrobbles = useMemo(() =>
-    [...lastfmMap.values()].reduce((s, e) => s + (e.rawScrobbles || 0), 0)
-  , [lastfmMap])
-
-  const totalListens = useMemo(() =>
-    enriched.reduce((s, e) => s + (e.listenCount || 0), 0)
-  , [enriched])
-
-  const topAlbum = useMemo(() =>
-    enriched.reduce((best, e) => (!best || e.listenCount > best.listenCount) ? e : best, null)
-  , [enriched])
-
-  const listeningSince = useMemo(() => {
-    let min = Infinity
-    for (const e of lastfmMap.values()) {
-      if (e.firstHeard && e.firstHeard < min) min = e.firstHeard
-    }
-    return min === Infinity ? null : new Date(min).getFullYear()
-  }, [lastfmMap])
 
   // ── Carousels ────────────────────────────────────────────────────────
 
@@ -338,47 +282,6 @@ export default function StatsTab({ albums, getAlbumStats, lastfmMap, lastfmLoade
     }
   }
 
-  // ── Genre breakdown ───────────────────────────────────────────────────
-
-  const genreData = useMemo(() => {
-    const counts = new Map()
-    for (const e of enriched) {
-      if (!e.spotifyAlbum) continue
-      const seen = new Set()
-      for (const g of (e.spotifyAlbum._genres || [])) {
-        const id = clusterOf(g)
-        if (id === 'other' || seen.has(id)) continue
-        seen.add(id)
-        const cluster = GENRE_CLUSTERS.find(c => c.id === id)
-        if (!cluster) continue
-        counts.set(id, {
-          label: `${cluster.icon} ${cluster.label}`,
-          count: (counts.get(id)?.count || 0) + e.listenCount,
-        })
-      }
-    }
-    const entries = [...counts.values()].sort((a, b) => b.count - a.count)
-    const max = Math.max(...entries.map(e => e.count), 1)
-    return entries.map(e => ({ ...e, pct: Math.round((e.count / max) * 100) }))
-  }, [enriched])
-
-  // ── Decade breakdown ──────────────────────────────────────────────────
-
-  const decadeData = useMemo(() => {
-    const counts = new Map()
-    for (const e of enriched) {
-      const d = decadeOf(e.peakMonth)
-      if (!d) continue
-      const prev = counts.get(d.decade)
-      counts.set(d.decade, { label: d.label, count: (prev?.count || 0) + e.listenCount })
-    }
-    const entries = [...counts.entries()]
-      .sort((a, b) => a[0] - b[0])
-      .map(([, v]) => v)
-    const max = Math.max(...entries.map(v => v.count), 1)
-    return entries.map(v => ({ ...v, pct: Math.round((v.count / max) * 100) }))
-  }, [enriched])
-
   // ── Loading / empty ───────────────────────────────────────────────────
 
   if (!lastfmLoaded) {
@@ -410,62 +313,6 @@ export default function StatsTab({ albums, getAlbumStats, lastfmMap, lastfmLoade
 
   return (
     <div className="px-4 pt-4 pb-20 space-y-6">
-
-      {/* Summary metrics */}
-      <div className="space-y-2">
-        <div className="flex gap-2">
-          <MetricCard label="Scrobbles" value={fmtCount(totalScrobbles)} />
-          <MetricCard label="Listens"   value={fmtCount(totalListens)}   />
-        </div>
-        <div className="flex gap-2">
-          <MetricCard
-            label="Top album"
-            value={topAlbum ? `${topAlbum.listenCount}×` : '—'}
-            sub={topAlbum?.name}
-          />
-          <MetricCard label="Since" value={listeningSince ?? '—'} />
-        </div>
-      </div>
-
-      {/* Burn stats */}
-      {burnStats.totalBurned > 0 && (
-        <div className="space-y-2">
-          <div className="flex gap-2">
-            <MetricCard label="Burned" value={burnStats.totalBurned} />
-            <MetricCard
-              label="Most burned"
-              value={burnStats.mostBurnedCarouselId ? CAROUSEL_NAMES[burnStats.mostBurnedCarouselId] : '—'}
-            />
-          </div>
-          {burnStats.lastBurnedAt && (
-            <MetricCard label="Last burned" value={fmtAgo(burnStats.lastBurnedAt)} />
-          )}
-          {/* Per-carousel breakdown */}
-          {burnStats.perCarousel.size > 0 && (
-            <div className="bg-card rounded-xl border border-border-subtle divide-y divide-border-subtle overflow-hidden">
-              {Object.entries(CAROUSEL_NAMES).map(([id, label]) => {
-                const stats = burnStats.perCarousel.get(id)
-                if (!stats) return null
-                const origLen = originalLengths[id] ?? 0
-                const burned  = burnedMap.get(id)?.size ?? 0
-                const pct     = origLen > 0 ? Math.round((burned / origLen) * 100) : 0
-                return (
-                  <div key={id} className="px-3 py-2.5 flex items-center gap-2">
-                    <span className="text-[11px] text-ink flex-1 truncate">{label}</span>
-                    <div className="w-16 h-1.5 bg-card-raised rounded-full overflow-hidden flex-shrink-0">
-                      <div className="h-full bg-accent rounded-full" style={{ width: `${pct}%` }} />
-                    </div>
-                    <span className="text-[11px] font-medium text-ink-muted w-5 text-right flex-shrink-0">{stats.burnedCount}</span>
-                    {stats.resetCount > 0 && (
-                      <span className="text-[10px] text-ink-muted flex-shrink-0">↺{stats.resetCount}</span>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-          )}
-        </div>
-      )}
 
       {/* Carousels */}
 
@@ -549,42 +396,6 @@ export default function StatsTab({ albums, getAlbumStats, lastfmMap, lastfmLoade
       )}
       {(carouselSettings?.['on-this-day']?.visible ?? true) && (
         <Carousel title="📅 On This Day"        items={filteredOnThisDayItems}    onTap={handleCarouselTap} onReset={() => resetCarousel('on-this-day')}         {...carouselBurnProps('on-this-day')} />
-      )}
-
-      {/* Decade breakdown */}
-      {decadeData.length > 0 && (
-        <section>
-          <h2 className="text-[13px] font-medium text-ink mb-3">Listening by decade</h2>
-          <div className="space-y-2">
-            {decadeData.map(({ label, count, pct }) => (
-              <div key={label} className="flex items-center gap-2">
-                <span className="text-[11px] text-ink-muted w-7 flex-shrink-0 text-right">{label}</span>
-                <div className="flex-1 h-2 bg-card-raised rounded-full overflow-hidden">
-                  <div className="h-full bg-accent rounded-full" style={{ width: `${pct}%` }} />
-                </div>
-                <span className="text-[11px] text-ink-muted w-8 text-right flex-shrink-0">{count}</span>
-              </div>
-            ))}
-          </div>
-        </section>
-      )}
-
-      {/* Genre breakdown */}
-      {genreData.length > 0 && (
-        <section>
-          <h2 className="text-[13px] font-medium text-ink mb-3">Listening by genre</h2>
-          <div className="space-y-2">
-            {genreData.map(({ label, count, pct }) => (
-              <div key={label} className="flex items-center gap-2">
-                <span className="text-[11px] text-ink-muted w-24 flex-shrink-0 truncate">{label}</span>
-                <div className="flex-1 h-2 bg-card-raised rounded-full overflow-hidden">
-                  <div className="h-full bg-badge-genre rounded-full" style={{ width: `${pct}%` }} />
-                </div>
-                <span className="text-[11px] text-ink-muted w-8 text-right flex-shrink-0">{count}</span>
-              </div>
-            ))}
-          </div>
-        </section>
       )}
 
       {selectedAlbum && (
