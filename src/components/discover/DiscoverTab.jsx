@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback, useRef, useEffect } from 'react'
+import { useState, useMemo, useCallback, useEffect } from 'react'
 import { motion, AnimatePresence, useMotionValue, useTransform } from 'motion/react'
 import { GENRE_CLUSTERS, clusterOf } from '../../data/genre-clusters.js'
 import { addToQueue } from '../../lib/spotify-api.js'
