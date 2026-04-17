@@ -83,7 +83,6 @@ function Chip({ label, active, onClick, children }) {
 }
 
 function PresetSheet({ open, onClose, presets, customPresets, activePreset, onSelect, onDelete }) {
-  if (!open) return null
   return (
     <AnimatePresence>
       {open && (
