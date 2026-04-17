@@ -82,6 +82,87 @@ function Chip({ label, active, onClick, children }) {
   )
 }
 
+function PresetSheet({ open, onClose, presets, customPresets, activePreset, onSelect, onDelete }) {
+  if (!open) return null
+  return (
+    <AnimatePresence>
+      {open && (
+        <>
+          <motion.div
+            key="ps-backdrop"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={onClose}
+            className="fixed inset-0 bg-black/60 z-40"
+          />
+          <motion.div
+            key="ps-sheet"
+            initial={{ y: '100%' }}
+            animate={{ y: 0 }}
+            exit={{ y: '100%' }}
+            transition={{ type: 'spring', damping: 30, stiffness: 300 }}
+            className="fixed bottom-0 left-0 right-0 max-h-[80vh] bg-card border-t border-border-subtle z-50 rounded-t-[2rem] overflow-hidden flex flex-col"
+          >
+            {/* Drag pill */}
+            <div className="flex justify-center py-3 flex-shrink-0">
+              <div className="w-10 h-1.5 bg-border-subtle rounded-full" />
+            </div>
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 pb-4 flex-shrink-0">
+              <h2 className="text-[16px] font-bold text-ink tracking-tight">Discovery Mode</h2>
+              <button onClick={onClose} className="text-ink-muted text-xl leading-none active:text-ink">✕</button>
+            </div>
+            {/* List */}
+            <div className="overflow-y-auto flex-1 px-5 pb-8">
+              {/* Built-ins */}
+              {presets.map(p => (
+                <button
+                  key={p.id}
+                  onClick={() => { onSelect(p.id); onClose() }}
+                  className={`w-full flex items-center gap-3 py-3 border-b border-border-subtle/50 last:border-0 text-left ${activePreset === p.id ? 'border-l-2 border-l-accent pl-3' : ''}`}
+                >
+                  <span className="text-xl flex-shrink-0">{p.icon}</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[14px] font-bold text-ink">{p.label}</p>
+                    <p className="text-[10px] font-bold text-ink-muted uppercase tracking-widest mt-0.5">Smart Algorithm</p>
+                  </div>
+                  {activePreset === p.id && <span className="text-accent text-lg flex-shrink-0">✓</span>}
+                </button>
+              ))}
+              {/* Custom presets */}
+              {customPresets.map(p => {
+                const filterCount = (p.filters?.length ?? 0) + Object.values(p.toggles ?? {}).filter(Boolean).length
+                return (
+                  <div key={p.id} className={`flex items-center gap-3 py-3 border-b border-border-subtle/50 last:border-0 ${activePreset === p.id ? 'border-l-2 border-l-accent pl-3' : ''}`}>
+                    <button
+                      onClick={() => { onSelect(p.id); onClose() }}
+                      className="flex items-center gap-3 flex-1 min-w-0 text-left"
+                    >
+                      <span className="text-xl flex-shrink-0">{p.icon}</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[14px] font-bold text-ink">{p.label}</p>
+                        <p className="text-[10px] font-bold text-ink-muted uppercase tracking-widest mt-0.5">{filterCount} Filter{filterCount !== 1 ? 's' : ''} Active</p>
+                      </div>
+                      {activePreset === p.id && <span className="text-accent text-lg flex-shrink-0">✓</span>}
+                    </button>
+                    <button
+                      onClick={() => onDelete(p.id)}
+                      className="flex-shrink-0 text-[11px] font-bold text-red-400 px-2 py-1 rounded active:opacity-70"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                )
+              })}
+            </div>
+          </motion.div>
+        </>
+      )}
+    </AnimatePresence>
+  )
+}
+
 function FeaturedAlbumCard({ album, stats, onQueue, onSkip, onTap }) {
   const art     = album.images?.[0]?.url
   const artist  = (album.artists || []).map(a => a.name).join(', ')
@@ -545,6 +626,7 @@ export default function DiscoverTab({ albums, getAlbumStats, saveLater, removeLa
   const [selectedAlbum,   setSelectedAlbum]  = useState(null)
   const [queueStatus,     setQueueStatus]    = useState(null)
   const [filterModalOpen, setFilterModalOpen] = useState(false)
+  const [presetSheetOpen, setPresetSheetOpen] = useState(false)
   const [draftFilters,    setDraftFilters]   = useState(new Set())
   const [draftToggles,    setDraftToggles]   = useState({ weightUnheard: false, excludeKeywords: false, avoidRecent: false })
 
@@ -613,6 +695,12 @@ export default function DiscoverTab({ albums, getAlbumStats, saveLater, removeLa
     + (toggles.weightUnheard ? 1 : 0)
     + (toggles.excludeKeywords ? 1 : 0)
     + (toggles.avoidRecent ? 1 : 0)
+
+  const activePresetObj = activePreset
+    ? ([...BUILTIN_PRESETS, ...customPresets].find(p => p.id === activePreset) ?? null)
+    : null
+  const activePresetLabel = activePresetObj?.label ?? 'Surprise Me'
+  const activePresetIcon  = activePresetObj?.icon  ?? '🎲'
 
   function openFilterModal() {
     setDraftFilters(new Set(activeFilters))
@@ -752,44 +840,33 @@ export default function DiscoverTab({ albums, getAlbumStats, saveLater, removeLa
 
   return (
     <div className="flex flex-col min-h-full">
-      {/* Preset row + filter button */}
-      <div className="flex items-center gap-2 px-5 pb-3 overflow-x-auto scrollbar-hide">
-        {BUILTIN_PRESETS.map(p => (
-          <Chip
-            key={p.id}
-            active={activePreset === p.id}
-            onClick={() => applyPreset(p.id)}
-          >
-            {p.icon} {p.label}
-          </Chip>
-        ))}
-
-        {/* ⚙ Filter button with badge */}
+      {/* Discovery Mode row + filter button */}
+      <div className="flex items-center gap-2 px-5 pb-3">
+        <button
+          onClick={() => setPresetSheetOpen(true)}
+          className="flex-1 flex items-center gap-3 bg-card-raised border border-border-subtle rounded-2xl px-4 py-3 text-left active:opacity-80 transition-opacity"
+        >
+          <span className="text-lg flex-shrink-0">🎛</span>
+          <div className="flex-1 min-w-0">
+            <p className="text-[10px] font-bold text-ink-muted uppercase tracking-widest">Discovery Mode</p>
+            <p className="text-[14px] font-semibold text-ink mt-0.5 truncate">{activePresetIcon} {activePresetLabel}</p>
+          </div>
+          <span className="text-ink-muted text-sm flex-shrink-0">›</span>
+        </button>
         <button
           onClick={openFilterModal}
-          className="flex-shrink-0 flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border border-border-subtle bg-card-raised text-ink-secondary text-[12px] font-medium transition-all duration-200 active:scale-[0.97]"
+          className="relative flex-shrink-0 w-12 h-12 flex items-center justify-center bg-card-raised border border-border-subtle rounded-2xl active:opacity-80 transition-opacity"
         >
-          ⚙
+          <span className="text-[18px]">⊽</span>
           {activeFilterCount > 0 && (
             <span
-              className="flex items-center justify-center w-4 h-4 rounded-full text-[9px] font-bold text-black"
+              className="absolute -top-1 -right-1 flex items-center justify-center w-4 h-4 rounded-full text-[9px] font-bold text-black"
               style={{ background: '#1ed760' }}
             >
               {activeFilterCount}
             </span>
           )}
         </button>
-
-        {/* Custom presets */}
-        {customPresets.map(p => (
-          <Chip
-            key={p.id}
-            active={activePreset === p.id}
-            onClick={() => applyPreset(p.id)}
-          >
-            {p.icon} {p.label}
-          </Chip>
-        ))}
       </div>
 
       {/* Count selector */}
@@ -881,6 +958,16 @@ export default function DiscoverTab({ albums, getAlbumStats, saveLater, removeLa
           onBadgeClick={onBadgeClick}
         />
       )}
+
+      <PresetSheet
+        open={presetSheetOpen}
+        onClose={() => setPresetSheetOpen(false)}
+        presets={BUILTIN_PRESETS}
+        customPresets={customPresets}
+        activePreset={activePreset}
+        onSelect={applyPreset}
+        onDelete={deleteCustomPreset}
+      />
 
       {/* Filter sheet */}
       <AnimatePresence>
