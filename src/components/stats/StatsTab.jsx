@@ -60,18 +60,21 @@ function normalizeAlbumKey(artist, album) {
 
 // ── Carousel ──────────────────────────────────────────────────────────
 
-function CarouselItem({ entry, onTap }) {
+function CarouselItem({ entry, onTap, className }) {
+  const [imgError, setImgError] = useState(false)
   const images = entry.spotifyAlbum?.images
-  const art    = images?.[0]?.url
+  const art = !imgError ? images?.[0]?.url : null
+  const itemClass = className ?? 'flex-shrink-0 w-[calc(50%-8px)]'
 
   return (
     <div
-      className={`flex-shrink-0 w-[calc(50%-8px)] ${onTap ? 'cursor-pointer active:opacity-80 transition-opacity' : ''}`}
+      className={`${itemClass} ${onTap ? 'cursor-pointer active:opacity-80 transition-opacity' : ''}`}
       onClick={onTap ? () => onTap(entry) : undefined}
     >
       <div className="w-full aspect-square rounded-xl overflow-hidden bg-card mb-2">
         {art
-          ? <img src={art} alt="" className="w-full h-full object-cover" loading="lazy" decoding="async" />
+          ? <img src={art} alt="" className="w-full h-full object-cover" loading="lazy" decoding="async"
+                 onError={() => setImgError(true)} />
           : <div className="w-full h-full flex items-center justify-center text-3xl">💿</div>
         }
       </div>
@@ -367,10 +370,9 @@ export default function StatsTab({ albums, getAlbumStats, lastfmMap, lastfmLoade
                       animate={{ opacity: 1, scale: 1 }}
                       exit={{ opacity: 0, scale: 0.5, filter: 'blur(8px)' }}
                       transition={{ type: 'spring', damping: 20, stiffness: 300 }}
-                      className="flex-shrink-0 w-[calc(50%-8px)] cursor-pointer active:opacity-80 transition-opacity"
-                      onClick={() => handleCarouselTap(item)}
+                      className="flex-shrink-0 w-[calc(50%-8px)]"
                     >
-                      <CarouselItem entry={item} />
+                      <CarouselItem entry={item} onTap={handleCarouselTap} className="w-full" />
                     </motion.div>
                   ))}
                 </AnimatePresence>
