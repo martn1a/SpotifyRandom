@@ -97,19 +97,7 @@ function FeaturedAlbumCard({ album, stats, onQueue, onSkip, onTap }) {
   if (gone) return null
 
   return (
-    <div
-      className="relative rounded-2xl overflow-hidden aspect-[4/5] select-none cursor-grab active:cursor-grabbing"
-      style={{
-        transform: `translateX(${offsetX}px)`,
-        transition: swiping ? 'none' : 'transform 0.15s ease',
-        touchAction: 'pan-y',
-      }}
-      onPointerDown={onPointerDown}
-      onPointerMove={onPointerMove}
-      onPointerUp={onPointerUp}
-      onPointerCancel={onPointerUp}
-      onClick={() => { if (Math.abs(offsetX) < 5) onTap() }}
-    >
+    <div className="relative rounded-2xl overflow-hidden select-none">
       {/* Cover with framer-motion drag + badges overlay */}
       <motion.div
         className="relative w-full aspect-square overflow-hidden cursor-grab active:cursor-grabbing touch-none"

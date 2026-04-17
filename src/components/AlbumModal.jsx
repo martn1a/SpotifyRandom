@@ -49,7 +49,7 @@ export default function AlbumModal({
 
   // Trigger exit animation, then call parent onClose via onExitComplete
   function dismiss() {
-    setVisible(false)
+    onClose()
   }
 
   const art     = currentAlbum.images?.[0]?.url
