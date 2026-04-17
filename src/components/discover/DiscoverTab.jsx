@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from 'react'
-import { motion, useMotionValue, useTransform } from 'motion/react'
+import { motion, AnimatePresence, useMotionValue, useTransform } from 'motion/react'
 import { GENRE_CLUSTERS, clusterOf } from '../../data/genre-clusters.js'
 import { addToQueue } from '../../lib/spotify-api.js'
 import AlbumModal from '../AlbumModal.jsx'
