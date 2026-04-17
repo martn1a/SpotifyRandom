@@ -52,15 +52,6 @@ export default function AlbumModal({
     setVisible(false)
   }
 
-  // Burning: animate modal away, then dismiss
-  function triggerBurn(action) {
-    setBurning(true)
-    setTimeout(() => {
-      action()
-      dismiss()
-    }, 350)
-  }
-
   const art     = currentAlbum.images?.[0]?.url
   const artist  = (currentAlbum.artists || []).map(a => a.name).join(', ')
   const year    = (currentAlbum.release_date || '').substring(0, 4)
@@ -185,6 +176,8 @@ export default function AlbumModal({
                   {stats.listenCount}× heard
                 </span>
               )}
+            </div>
+          </div>
 
           {/* Actions */}
           <div className="grid grid-cols-2 gap-3 mb-6">
@@ -238,8 +231,10 @@ export default function AlbumModal({
                     <p className="text-ink-muted text-[9px] font-bold uppercase tracking-wider mb-1">{item.label}</p>
                     <p className="text-ink text-sm font-medium">{item.value}</p>
                   </div>
-                </div>
-              )}
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Similar To */}
           {similar.length > 0 && (
