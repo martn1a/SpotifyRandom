@@ -752,11 +752,6 @@ export default function DiscoverTab({ albums, getAlbumStats, saveLater, removeLa
 
   return (
     <div className="flex flex-col min-h-full">
-      {/* In-tab header */}
-      <div className="px-5 pt-6 pb-2">
-        <h1 className="text-[26px] font-bold text-ink tracking-tight">Discover</h1>
-      </div>
-
       {/* Preset row + filter button */}
       <div className="flex items-center gap-2 px-5 pb-3 overflow-x-auto scrollbar-hide">
         {BUILTIN_PRESETS.map(p => (
