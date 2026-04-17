@@ -88,7 +88,6 @@ function FeaturedAlbumCard({ album, stats, onQueue, onSkip, onTap }) {
   const cluster = getGenreCluster(album)
   const count   = stats?.listenCount ?? 0
   const year    = (album.release_date || '').substring(0, 4)
-  const [revealRef, revealed] = useScrollReveal()
   const [gone, setGone] = useState(false)
 
   const x            = useMotionValue(0)
