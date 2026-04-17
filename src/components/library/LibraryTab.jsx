@@ -1,6 +1,9 @@
 import { useState, useMemo } from 'react'
+import { motion, AnimatePresence } from 'motion/react'
 import { GENRE_CLUSTERS, clusterOf } from '../../data/genre-clusters.js'
 import AlbumModal from '../AlbumModal.jsx'
+import { cn } from '../../lib/utils.js'
+import { getAlbumBadges } from '../../lib/badge-utils.js'
 
 // ── Sub-components ────────────────────────────────────────────────────
 
@@ -35,7 +38,7 @@ function AlbumRow({ album, listenCount, saved, onSave, onRemove, onClick }) {
   return (
     <div className="flex items-center gap-3 px-4 py-2.5 active:bg-card-raised transition-colors cursor-pointer" onClick={onClick}>
       {/* Cover art */}
-      <div className="w-12 h-12 rounded-lg overflow-hidden bg-card-raised flex-shrink-0">
+      <div className="w-12 h-12 rounded-lg overflow-hidden bg-card flex-shrink-0">
         {art
           ? <img src={art} alt="" className="w-full h-full object-cover" loading="lazy" decoding="async" />
           : <div className="w-full h-full flex items-center justify-center text-xl">💿</div>
@@ -81,12 +84,13 @@ const TYPE_OPTIONS = [
   { id: 'compilation', label: 'Compilations' },
 ]
 
-export default function LibraryTab({ albums, getAlbumStats, genresLoading, saveLater, removeLater, isSaved }) {
+export default function LibraryTab({ albums, getAlbumStats, genresLoading, saveLater, removeLater, isSaved, libraryFilter, onClearFilter = () => {}, onBadgeClick }) {
   const [search,        setSearch]        = useState('')
   const [activeCluster, setActiveCluster] = useState(null)
   const [typeFilter,    setTypeFilter]    = useState('all')
   const [sort,          setSort]          = useState('recently_added')
   const [selectedAlbum, setSelectedAlbum] = useState(null)
+  const [isFilterOpen,  setIsFilterOpen]  = useState(false)
 
   // Build cluster → album count map (only includes clusters with ≥1 album)
   const clusterCounts = useMemo(() => {
@@ -129,6 +133,14 @@ export default function LibraryTab({ albums, getAlbumStats, genresLoading, saveL
       })
     }
 
+    if (libraryFilter) {
+      list = list.filter(album => {
+        const stats = getAlbumStats(album)
+        const badges = getAlbumBadges(album, stats)
+        return badges.some(b => b.value === libraryFilter.value)
+      })
+    }
+
     if (sort === 'name') {
       list.sort((a, b) => a.name.localeCompare(b.name))
     } else if (sort === 'year') {
@@ -145,91 +157,148 @@ export default function LibraryTab({ albums, getAlbumStats, genresLoading, saveL
     }
 
     return list
-  }, [albums, search, typeFilter, activeCluster, sort, getAlbumStats])
+  }, [albums, search, typeFilter, activeCluster, sort, getAlbumStats, libraryFilter])
 
   return (
     <div className="flex flex-col h-full">
 
-      {/* ── Search bar ─────────────────────────────────────────────── */}
-      <div className="px-4 pt-3 pb-2 bg-page">
-        <div className="relative">
-          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted text-sm">⌕</span>
-          <input
-            type="search"
-            value={search}
-            onChange={e => setSearch(e.target.value)}
-            placeholder="Search albums or artists…"
-            className="w-full bg-card-raised border border-border-subtle rounded-xl
-                       pl-8 pr-3 py-2.5 text-[13px] text-ink placeholder:text-ink-muted
-                       outline-none focus:border-ink-muted transition-colors"
-          />
-        </div>
-      </div>
-
-      {/* ── Sort chips ─────────────────────────────────────────────── */}
-      <div className="flex gap-2 px-4 pb-2 overflow-x-auto scrollbar-hide">
-        {SORT_OPTIONS.map(opt => (
+      {/* Badge filter banner */}
+      {libraryFilter && (
+        <div className="flex items-center justify-between bg-accent/10 border border-accent/20 p-4 rounded-2xl mb-4 mx-4 mt-3">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 bg-accent rounded-xl flex items-center justify-center text-page text-base shadow-lg">
+              {libraryFilter.icon || '🏷'}
+            </div>
+            <div>
+              <p className="text-[10px] font-bold uppercase tracking-widest text-accent/60">Filtered by</p>
+              <p className="font-bold text-sm text-ink">{libraryFilter.label}</p>
+            </div>
+          </div>
           <button
-            key={opt.id}
-            onClick={() => setSort(opt.id)}
-            className={`flex-shrink-0 px-3 py-1.5 rounded-full text-[11px] font-medium transition-colors
-              ${sort === opt.id
-                ? 'bg-chip-active text-white'
-                : 'bg-chip-inactive text-ink-secondary'
-              }`}
+            onClick={onClearFilter}
+            aria-label="Clear filter"
+            className="w-8 h-8 rounded-full bg-accent/20 text-accent flex items-center justify-center hover:bg-accent/30 transition-colors"
           >
-            {opt.label}
+            ✕
           </button>
-        ))}
-      </div>
-
-      {/* ── Type filter chips ──────────────────────────────────────── */}
-      <div className="flex gap-2 px-4 pb-2 overflow-x-auto scrollbar-hide">
-        {TYPE_OPTIONS.map(opt => (
-          <button
-            key={opt.id}
-            onClick={() => setTypeFilter(opt.id)}
-            className={`flex-shrink-0 px-3 py-1.5 rounded-full text-[11px] font-medium transition-colors
-              ${typeFilter === opt.id
-                ? 'bg-chip-active text-white'
-                : 'bg-chip-inactive text-ink-secondary'
-              }`}
-          >
-            {opt.label}
-          </button>
-        ))}
-      </div>
-
-      {/* ── Genre cluster chips ────────────────────────────────────── */}
-      {visibleClusters.length > 0 && (
-        <div className="flex gap-2 px-4 pb-3 overflow-x-auto scrollbar-hide">
-          {activeCluster && (
-            <button
-              onClick={() => setActiveCluster(null)}
-              className="flex-shrink-0 px-3 py-1.5 rounded-full text-[11px] font-medium
-                         bg-chip-active text-white"
-            >
-              ✕ All
-            </button>
-          )}
-          {visibleClusters.map(c => (
-            <button
-              key={c.id}
-              onClick={() => setActiveCluster(activeCluster === c.id ? null : c.id)}
-              className={`flex-shrink-0 flex items-center gap-1 px-3 py-1.5 rounded-full
-                          text-[11px] font-medium transition-colors
-                ${activeCluster === c.id
-                  ? 'bg-chip-active text-white'
-                  : 'bg-chip-inactive text-ink-secondary'
-                }`}
-            >
-              <span>{c.icon}</span>
-              <span>{c.label}</span>
-              <span className="opacity-50">{clusterCounts.get(c.id)}</span>
-            </button>
-          ))}
         </div>
       )}
+
+      {/* ── Search bar ─────────────────────────────────────────────── */}
+      <div className="px-4 pt-3 pb-2 bg-page">
+        <div className="relative flex gap-2">
+          <div className="relative flex-1">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-muted text-sm">⌕</span>
+            <input
+              type="search"
+              value={search}
+              onChange={e => setSearch(e.target.value)}
+              placeholder="Search albums or artists…"
+              className="w-full bg-white border border-border-subtle rounded-xl
+                         pl-8 pr-3 py-2.5 text-[13px] text-ink placeholder:text-ink-muted
+                         outline-none focus:border-gray-300 transition-colors"
+            />
+          </div>
+          <button
+            onClick={() => setIsFilterOpen(prev => !prev)}
+            className={cn(
+              'w-11 h-11 rounded-2xl border flex items-center justify-center transition-all flex-shrink-0',
+              isFilterOpen
+                ? 'bg-accent text-page border-accent'
+                : 'bg-card-raised text-ink-muted border-border-subtle'
+            )}
+            aria-label="Toggle filters"
+          >
+            ⊞
+          </button>
+        </div>
+      </div>
+
+      {/* Collapsible filter panel */}
+      <AnimatePresence>
+        {isFilterOpen && (
+          <motion.div
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.2 }}
+            className="overflow-hidden"
+          >
+            <div className="bg-card-raised border border-border-subtle rounded-2xl mx-4 mb-3 p-4 space-y-3">
+              {/* Sort chips */}
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-ink-muted mb-2">Sort</p>
+                <div className="flex gap-2 flex-wrap">
+                  {SORT_OPTIONS.map(opt => (
+                    <button
+                      key={opt.id}
+                      onClick={() => setSort(opt.id)}
+                      className={cn(
+                        'px-3 py-1.5 rounded-full text-[11px] font-medium transition-colors',
+                        sort === opt.id ? 'bg-accent text-page' : 'bg-card text-ink-muted border border-border-subtle'
+                      )}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Type filter chips */}
+              <div>
+                <p className="text-[10px] font-bold uppercase tracking-widest text-ink-muted mb-2">Type</p>
+                <div className="flex gap-2 flex-wrap">
+                  {TYPE_OPTIONS.map(opt => (
+                    <button
+                      key={opt.id}
+                      onClick={() => setTypeFilter(opt.id)}
+                      className={cn(
+                        'px-3 py-1.5 rounded-full text-[11px] font-medium transition-colors',
+                        typeFilter === opt.id ? 'bg-accent text-page' : 'bg-card text-ink-muted border border-border-subtle'
+                      )}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Genre cluster chips */}
+              {visibleClusters.length > 0 && (
+                <div>
+                  <p className="text-[10px] font-bold uppercase tracking-widest text-ink-muted mb-2">Genre</p>
+                  <div className="flex gap-2 flex-wrap">
+                    {activeCluster && (
+                      <button
+                        onClick={() => setActiveCluster(null)}
+                        className="px-3 py-1.5 rounded-full text-[11px] font-medium bg-accent text-page"
+                      >
+                        ✕ All
+                      </button>
+                    )}
+                    {visibleClusters.map(c => (
+                      <button
+                        key={c.id}
+                        onClick={() => setActiveCluster(activeCluster === c.id ? null : c.id)}
+                        className={cn(
+                          'flex items-center gap-1 px-3 py-1.5 rounded-full text-[11px] font-medium transition-colors',
+                          activeCluster === c.id
+                            ? 'bg-accent text-page'
+                            : 'bg-card text-ink-muted border border-border-subtle'
+                        )}
+                      >
+                        <span>{c.icon}</span>
+                        <span>{c.label}</span>
+                        <span className="opacity-50">{clusterCounts.get(c.id)}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* ── Genre loading indicator ────────────────────────────────── */}
       {genresLoading && visibleClusters.length === 0 && (
@@ -279,6 +348,8 @@ export default function LibraryTab({ albums, getAlbumStats, genresLoading, saveL
           onSave={saveLater}
           onRemove={removeLater}
           onClose={() => setSelectedAlbum(null)}
+          library={albums}
+          onBadgeClick={onBadgeClick}
         />
       )}
     </div>

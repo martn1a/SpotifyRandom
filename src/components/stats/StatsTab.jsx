@@ -1,12 +1,22 @@
 import { useState, useMemo } from 'react'
+import { motion, AnimatePresence } from 'motion/react'
 import { GENRE_CLUSTERS, clusterOf } from '../../data/genre-clusters.js'
 import AlbumModal from '../AlbumModal.jsx'
 import { useBurnTracking } from '../../hooks/useBurnTracking.js'
+import { cn } from '../../lib/utils.js'
 
 // ── Constants ─────────────────────────────────────────────────────────
 
 const TWO_YEARS_MS = 2 * 365.25 * 24 * 60 * 60 * 1000
 const ONE_YEAR_MS  = 365.25 * 24 * 60 * 60 * 1000
+
+const TIME_RANGES = [
+  { id: '7d',  label: '7D',  ms: 7   * 24 * 60 * 60 * 1000 },
+  { id: '3m',  label: '3M',  ms: 90  * 24 * 60 * 60 * 1000 },
+  { id: '6m',  label: '6M',  ms: 180 * 24 * 60 * 60 * 1000 },
+  { id: '1y',  label: '1Y',  ms: 365 * 24 * 60 * 60 * 1000 },
+  { id: 'all', label: 'ALL', ms: null },
+]
 
 const CAROUSEL_NAMES = {
   'most-played':        '👑 Most Played',
@@ -50,6 +60,14 @@ function decadeOf(peakMonth) {
   return { decade: d, label: d % 100 === 0 ? '00s' : `${d % 100}s` }
 }
 
+// ── Sort helper ───────────────────────────────────────────────────────
+
+function applySortToItems(items, sort, getAlbumStats) {
+  if (sort === 'added')     return [...items].sort((a, b) => new Date(b.spotifyAlbum?._added_at || 0) - new Date(a.spotifyAlbum?._added_at || 0))
+  if (sort === 'relevance') return [...items].sort((a, b) => (b.listenCount || 0) - (a.listenCount || 0))
+  return items // 'original' — keep existing sort
+}
+
 // Normalize artist/album names for fuzzy matching:
 // strips (Remastered 2011) / [Deluxe Edition] suffixes, collapses punctuation
 function normalizeAlbumKey(artist, album) {
@@ -85,7 +103,7 @@ function CarouselItem({ entry, onTap }) {
       className={`flex-shrink-0 w-[calc(50%-8px)] ${onTap ? 'cursor-pointer active:opacity-80 transition-opacity' : ''}`}
       onClick={onTap ? () => onTap(entry) : undefined}
     >
-      <div className="w-full aspect-square rounded-xl overflow-hidden bg-card-raised mb-2">
+      <div className="w-full aspect-square rounded-xl overflow-hidden bg-card mb-2">
         {art
           ? <img src={art} alt="" className="w-full h-full object-cover" loading="lazy" decoding="async" />
           : <div className="w-full h-full flex items-center justify-center text-3xl">💿</div>
@@ -115,7 +133,7 @@ function Carousel({ title, items, onTap, onReset, burnedCount, lastBurnedAt, com
           {onReset && (
             <button onClick={onReset} className="text-[11px] text-ink-muted active:text-ink flex items-center gap-1">
               {burnedCount > 0 && (
-                <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-card-raised text-[9px] font-semibold text-ink-secondary">{burnedCount}</span>
+                <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-card-raised text-[9px] font-semibold text-ink-muted">{burnedCount}</span>
               )}
               Reset
             </button>
@@ -148,9 +166,10 @@ function Carousel({ title, items, onTap, onReset, burnedCount, lastBurnedAt, com
 
 // ── Main ──────────────────────────────────────────────────────────────
 
-export default function StatsTab({ albums, getAlbumStats, lastfmMap, lastfmLoaded, onThisDay = [], saveLater, removeLater, isSaved }) {
+export default function StatsTab({ albums, getAlbumStats, lastfmMap, lastfmLoaded, onThisDay = [], saveLater, removeLater, isSaved, onBadgeClick, carouselSettings, onUpdateCarouselSettings }) {
   const [selectedAlbum,     setSelectedAlbum]     = useState(null)
   const [selectedCarouselId, setSelectedCarouselId] = useState(null)
+  const [mostPlayedRange, setMostPlayedRange] = useState('all')
   const { isBurned, burnAlbum, resetCarousel, burnStats, burnedMap } = useBurnTracking()
   const now = Date.now()
 
@@ -206,12 +225,17 @@ export default function StatsTab({ albums, getAlbumStats, lastfmMap, lastfmLoade
 
   // ── Carousels ────────────────────────────────────────────────────────
 
-  const mostPlayed = useMemo(() =>
-    [...enriched]
+  const mostPlayed = useMemo(() => {
+    const range = TIME_RANGES.find(r => r.id === mostPlayedRange)
+    return [...enriched]
+      .filter(e => {
+        if (!range || range.ms === null) return true
+        return (e.lastHeard || 0) > Date.now() - range.ms
+      })
       .sort((a, b) => b.listenCount - a.listenCount)
       .slice(0, 20)
       .map(e => ({ ...e, _stat: `${e.listenCount}×`, _carouselId: 'most-played' }))
-  , [enriched])
+  }, [enriched, mostPlayedRange])
 
   const latestDiscoveries = useMemo(() =>
     [...enriched]
@@ -444,12 +468,88 @@ export default function StatsTab({ albums, getAlbumStats, lastfmMap, lastfmLoade
       )}
 
       {/* Carousels */}
-      <Carousel title="👑 Most Played"        items={filteredMostPlayed}        onTap={handleCarouselTap} onReset={() => resetCarousel('most-played')}        {...carouselBurnProps('most-played')} />
-      <Carousel title="🔭 Latest Discoveries" items={filteredLatestDiscoveries} onTap={handleCarouselTap} onReset={() => resetCarousel('latest-discoveries')} {...carouselBurnProps('latest-discoveries')} />
-      <Carousel title="🕰️ Golden Oldies"      items={filteredGoldenOldies}      onTap={handleCarouselTap} onReset={() => resetCarousel('golden-oldies')}      {...carouselBurnProps('golden-oldies')} />
-      <Carousel title="📈 Climbers"           items={filteredClimbers}          onTap={handleCarouselTap} onReset={() => resetCarousel('climbers')}            {...carouselBurnProps('climbers')} />
-      <Carousel title="📉 Fallers"            items={filteredFallers}           onTap={handleCarouselTap} onReset={() => resetCarousel('fallers')}             {...carouselBurnProps('fallers')} />
-      <Carousel title="📅 On This Day"        items={filteredOnThisDayItems}    onTap={handleCarouselTap} onReset={() => resetCarousel('on-this-day')}         {...carouselBurnProps('on-this-day')} />
+
+      {/* Most Played */}
+      {(carouselSettings?.['most-played']?.visible ?? true) && (() => {
+        const bp = carouselBurnProps('most-played')
+        return (
+          <section>
+            <div className="flex items-center justify-between mb-1">
+              <h2 className="text-[13px] font-medium text-ink">👑 Most Played</h2>
+              <div className="flex items-center gap-2">
+                {bp.lastBurnedAt != null && (
+                  <span className="text-[10px] text-ink-muted">{fmtAgo(bp.lastBurnedAt)}</span>
+                )}
+                <button onClick={() => resetCarousel('most-played')} className="text-[11px] text-ink-muted active:text-ink flex items-center gap-1">
+                  {bp.burnedCount > 0 && (
+                    <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-card-raised text-[9px] font-semibold text-ink-muted">{bp.burnedCount}</span>
+                  )}
+                  Reset
+                </button>
+              </div>
+            </div>
+            {/* Time-range chips */}
+            <div className="flex gap-1.5 mt-1 mb-2">
+              {TIME_RANGES.map(r => (
+                <button
+                  key={r.id}
+                  onClick={() => setMostPlayedRange(r.id)}
+                  className={cn(
+                    'text-[10px] font-bold px-2.5 py-1 rounded-full transition-all',
+                    mostPlayedRange === r.id
+                      ? 'bg-accent text-page'
+                      : 'bg-card-raised text-ink-muted hover:text-ink'
+                  )}
+                >
+                  {r.label}
+                </button>
+              ))}
+            </div>
+            {bp.completionPct > 0 && (
+              <div className="h-[2px] bg-card-raised rounded-full overflow-hidden mb-2.5">
+                <div className="h-full bg-accent rounded-full transition-all" style={{ width: `${bp.completionPct}%` }} />
+              </div>
+            )}
+            {filteredMostPlayed.length > 0 ? (
+              <div className="flex gap-4 overflow-x-auto scrollbar-hide pb-1 -mx-4 px-4">
+                <AnimatePresence>
+                  {applySortToItems(filteredMostPlayed, carouselSettings?.['most-played']?.sort || 'original', getAlbumStats).map((item) => (
+                    <motion.div
+                      key={`${item.artist}||${item.name}`}
+                      initial={{ opacity: 0, scale: 0.8 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.5, filter: 'blur(8px)' }}
+                      transition={{ type: 'spring', damping: 20, stiffness: 300 }}
+                      className="flex-shrink-0 w-[calc(50%-8px)] cursor-pointer active:opacity-80 transition-opacity"
+                      onClick={() => handleCarouselTap(item)}
+                    >
+                      <CarouselItem entry={item} />
+                    </motion.div>
+                  ))}
+                </AnimatePresence>
+              </div>
+            ) : (
+              <p className="text-[12px] text-ink-muted py-2">All burned — tap Reset to restore.</p>
+            )}
+          </section>
+        )
+      })()}
+
+      {(carouselSettings?.['latest-discoveries']?.visible ?? true) && (
+        <Carousel title="🔭 Latest Discoveries" items={filteredLatestDiscoveries} onTap={handleCarouselTap} onReset={() => resetCarousel('latest-discoveries')} {...carouselBurnProps('latest-discoveries')} />
+      )}
+      {(carouselSettings?.['golden-oldies']?.visible ?? true) && (
+        <Carousel title="🕰️ Golden Oldies"      items={filteredGoldenOldies}      onTap={handleCarouselTap} onReset={() => resetCarousel('golden-oldies')}      {...carouselBurnProps('golden-oldies')} />
+      )}
+      {(carouselSettings?.['climbers']?.visible ?? true) && (
+        <Carousel title="📈 Climbers"           items={filteredClimbers}          onTap={handleCarouselTap} onReset={() => resetCarousel('climbers')}            {...carouselBurnProps('climbers')} />
+      )}
+      {(carouselSettings?.['fallers']?.visible ?? true) && (
+        <Carousel title="📉 Fallers"            items={filteredFallers}           onTap={handleCarouselTap} onReset={() => resetCarousel('fallers')}             {...carouselBurnProps('fallers')} />
+      )}
+      {(carouselSettings?.['on-this-day']?.visible ?? true) && (
+        <Carousel title="📅 On This Day"        items={filteredOnThisDayItems}    onTap={handleCarouselTap} onReset={() => resetCarousel('on-this-day')}         {...carouselBurnProps('on-this-day')} />
+      )}
 
       {/* Decade breakdown */}
       {decadeData.length > 0 && (
@@ -496,6 +596,8 @@ export default function StatsTab({ albums, getAlbumStats, lastfmMap, lastfmLoade
           onRemove={removeLater}
           onClose={() => { setSelectedAlbum(null); setSelectedCarouselId(null) }}
           onQueue={(album) => burnAlbum(album, selectedCarouselId, 'queue')}
+          library={albums}
+          onBadgeClick={onBadgeClick}
         />
       )}
 

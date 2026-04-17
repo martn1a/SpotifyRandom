@@ -8,8 +8,7 @@ import LoginScreen from './components/LoginScreen.jsx'
 import Header from './components/layout/Header.jsx'
 import TabBar from './components/layout/TabBar.jsx'
 import DiscoverTab from './components/discover/DiscoverTab.jsx'
-import LibraryTab from './components/library/LibraryTab.jsx'
-import StatsTab from './components/stats/StatsTab.jsx'
+import BrowseTab from './components/browse/BrowseTab.jsx'
 import ListenLaterTab from './components/listen-later/ListenLaterTab.jsx'
 
 // ── Error boundary (catches render errors per tab) ────────────────────
@@ -69,10 +68,34 @@ function LoadingScreen({ progress }) {
   )
 }
 
+// ── Module-level helpers ──────────────────────────────────────────────
+
+function defaultCarouselSettings() {
+  return {
+    'most-played':        { visible: true, sort: 'original' },
+    'latest-discoveries': { visible: true, sort: 'original' },
+    'golden-oldies':      { visible: true, sort: 'original' },
+    'climbers':           { visible: true, sort: 'original' },
+    'fallers':            { visible: true, sort: 'original' },
+    'on-this-day':        { visible: true, sort: 'original' },
+  }
+}
+
 // ── Main app (post-login) ─────────────────────────────────────────────
 
 function MainApp({ onLogout }) {
-  const [activeTab, setActiveTab] = useState('library')
+  const [activeTab, setActiveTab] = useState('discover')
+  const [browseSubTab, setBrowseSubTab] = useState('library')
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false)
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false)
+  const [libraryFilter, setLibraryFilter] = useState(null)
+  const [carouselSettings, setCarouselSettings] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('sonar_carousel_settings')) ?? defaultCarouselSettings()
+    } catch {
+      return defaultCarouselSettings()
+    }
+  })
 
   const {
     albums, genresLoading, albumsLoading, albumsProgress, error: libraryError
@@ -106,6 +129,20 @@ function MainApp({ onLogout }) {
     return <LoadingScreen progress={albumsProgress} />
   }
 
+  function handleBadgeClick(badge) {
+    setLibraryFilter(badge)
+    setActiveTab('browse')
+    setBrowseSubTab('library')
+  }
+
+  function updateCarouselSettings(id, patch) {
+    setCarouselSettings(prev => {
+      const next = { ...prev, [id]: { ...prev[id], ...patch } }
+      localStorage.setItem('sonar_carousel_settings', JSON.stringify(next))
+      return next
+    })
+  }
+
   const renderTab = () => {
     switch (activeTab) {
       case 'discover': return (
@@ -115,57 +152,71 @@ function MainApp({ onLogout }) {
           saveLater={saveLater}
           removeLater={removeLater}
           isSaved={isSaved}
+          onBadgeClick={handleBadgeClick}
         />
       )
-      case 'library':  return (
-        <LibraryTab
-          albums={albums}
-          getAlbumStats={getAlbumStats}
-          genresLoading={genresLoading}
-          saveLater={saveLater}
-          removeLater={removeLater}
-          isSaved={isSaved}
-        />
-      )
-      case 'stats':    return (
-        <StatsTab
+      case 'browse': return (
+        <BrowseTab
           albums={albums}
           getAlbumStats={getAlbumStats}
           lastfmMap={lastfmMap}
           lastfmLoaded={lastfmLoaded}
           onThisDay={onThisDay}
+          genresLoading={genresLoading}
           saveLater={saveLater}
           removeLater={removeLater}
           isSaved={isSaved}
+          activeSubTab={browseSubTab}
+          onSubTabChange={setBrowseSubTab}
+          libraryFilter={libraryFilter}
+          onClearFilter={() => setLibraryFilter(null)}
+          onBadgeClick={handleBadgeClick}
+          carouselSettings={carouselSettings}
+          onUpdateCarouselSettings={updateCarouselSettings}
         />
       )
-      case 'later':    return (
+      case 'later': return (
         <ListenLaterTab
           items={listenLater}
           saveLater={saveLater}
           removeLater={removeLater}
           isSaved={isSaved}
           getAlbumStats={getAlbumStats}
+          albums={albums}
+          onBadgeClick={handleBadgeClick}
         />
       )
-      default:         return null
+      default: return null
     }
   }
 
   return (
     <div className="flex flex-col h-dvh bg-page overflow-hidden">
       <Header
-          onLogout={onLogout}
-          albumCount={albums.length}
-          lastfmMeta={lastfmMeta}
-          onRefresh={handleRefresh}
-        />
+        onLogout={onLogout}
+        albumCount={albums.length}
+        lastfmMeta={lastfmMeta}
+        onRefresh={handleRefresh}
+        isSidebarOpen={isSidebarOpen}
+        onSidebarOpen={() => setIsSidebarOpen(true)}
+        onSidebarClose={() => setIsSidebarOpen(false)}
+        isSettingsOpen={isSettingsOpen}
+        onSettingsOpen={() => setIsSettingsOpen(true)}
+        onSettingsClose={() => setIsSettingsOpen(false)}
+        carouselSettings={carouselSettings}
+        onUpdateCarouselSettings={updateCarouselSettings}
+      />
       <main className="flex-1 overflow-y-auto overflow-x-hidden">
         <ErrorBoundary key={activeTab}>
           {renderTab()}
         </ErrorBoundary>
       </main>
-      <TabBar activeTab={activeTab} onTabChange={setActiveTab} />
+      <TabBar
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+        browseSubTab={browseSubTab}
+        onBrowseSubTabChange={setBrowseSubTab}
+      />
     </div>
   )
 }
