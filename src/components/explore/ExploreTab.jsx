@@ -47,11 +47,11 @@ export default function ExploreTab({
   getAlbumStats,
   selectedPlaylists = [],
   playlistAlbums = new Map(),
-  playlistsLoading = false,
   playlists = [],
   saveLater,
   removeLater,
   isSaved,
+  onBadgeClick,
 }) {
   const [selectedAlbum, setSelectedAlbum] = useState(null)
   const [selectedInLibrary, setSelectedInLibrary] = useState(true)
@@ -195,6 +195,7 @@ export default function ExploreTab({
           onQueue={(album) => burnAlbum(album, selectedCarouselId, 'queue')}
           library={albums}
           inLibrary={selectedInLibrary}
+          onBadgeClick={onBadgeClick}
         />
       )}
     </div>

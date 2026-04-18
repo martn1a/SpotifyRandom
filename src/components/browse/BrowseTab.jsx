@@ -63,11 +63,11 @@ export default function BrowseTab({
           getAlbumStats={getAlbumStats}
           selectedPlaylists={selectedPlaylists}
           playlistAlbums={playlistAlbums}
-          playlistsLoading={playlistsLoading}
           playlists={playlists}
           saveLater={saveLater}
           removeLater={removeLater}
           isSaved={isSaved}
+          onBadgeClick={onBadgeClick}
         />
       )
   }
