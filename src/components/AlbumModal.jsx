@@ -1,6 +1,6 @@
 import { useState, useCallback, useEffect } from 'react'
 import { motion, AnimatePresence } from 'motion/react'
-import { addToQueue } from '../lib/spotify-api.js'
+import { addToQueue, fetchAlbumTracks } from '../lib/spotify-api.js'
 import { cn } from '../lib/utils.js'
 import { getAlbumBadges, getSimilarAlbums } from '../lib/badge-utils.js'
 
@@ -23,10 +23,13 @@ export default function AlbumModal({
   onQueue,
   library = [],
   onBadgeClick,
+  inLibrary = true,
 }) {
   const [queueStatus, setQueueStatus] = useState(null)
   const [isBurning,   setIsBurning]   = useState(false)
   const [currentAlbum, setCurrentAlbum] = useState(album)
+  const [loadedTracks, setLoadedTracks] = useState(null)
+  const [tracksLoading, setTracksLoading] = useState(false)
 
   // Sync current album when prop changes (new modal open)
   useEffect(() => {
@@ -41,6 +44,18 @@ export default function AlbumModal({
     return () => window.removeEventListener('keydown', handler)
   }, [])
 
+  // Lazy-load tracks for non-library albums
+  useEffect(() => {
+    setLoadedTracks(null)
+    if (!inLibrary && album?.id) {
+      setTracksLoading(true)
+      fetchAlbumTracks(album.id)
+        .then(t => setLoadedTracks(t))
+        .catch(() => setLoadedTracks([]))
+        .finally(() => setTracksLoading(false))
+    }
+  }, [album?.id, inLibrary])
+
   // Trigger exit animation, then call parent onClose via onExitComplete
   function dismiss() {
     onClose()
@@ -49,7 +64,9 @@ export default function AlbumModal({
   const art     = currentAlbum.images?.[0]?.url
   const artist  = (currentAlbum.artists || []).map(a => a.name).join(', ')
   const year    = (currentAlbum.release_date || '').substring(0, 4)
-  const tracks  = currentAlbum.tracks?.items || []
+  const tracks  = inLibrary
+    ? (currentAlbum.tracks?.items || [])
+    : (loadedTracks || [])
   const badges  = getAlbumBadges(currentAlbum, stats)
   const similar = getSimilarAlbums(currentAlbum, library, 4)
 
@@ -163,7 +180,7 @@ export default function AlbumModal({
               <h2 className="text-xl font-bold leading-tight mb-0.5 line-clamp-2">{currentAlbum.name}</h2>
               <p className="text-ink-secondary truncate">{artist}</p>
               <p className="text-ink-muted text-sm mt-1">
-                {year} · {currentAlbum.album_type} · {tracks.length} tracks
+                {year}{currentAlbum.album_type ? ` · ${currentAlbum.album_type}` : ''}{inLibrary ? ` · ${tracks.length} tracks` : ''}
               </p>
               {stats?.listenCount > 0 && (
                 <span className="mt-2 inline-flex items-center px-2.5 py-1 rounded-full bg-accent/15 text-accent text-xs font-bold">
@@ -178,10 +195,10 @@ export default function AlbumModal({
             <motion.button
               whileTap={{ scale: 0.95 }}
               onClick={handleQueue}
-              disabled={isBurning}
+              disabled={isBurning || (!inLibrary && tracksLoading)}
               className="flex items-center justify-center gap-2 bg-accent text-page py-3 rounded-xl font-bold hover:opacity-90 transition-opacity disabled:opacity-50"
             >
-              ▶ Queue
+              {!inLibrary && tracksLoading ? '⏳ Loading…' : '▶ Queue'}
             </motion.button>
             <motion.button
               whileTap={{ scale: 0.95 }}
