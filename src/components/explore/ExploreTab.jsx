@@ -103,6 +103,15 @@ export default function ExploreTab({
           )
         }
 
+        if (rawAlbums.length === 0) {
+          return (
+            <section key={playlistId}>
+              <h2 className="text-[13px] font-medium text-ink mb-1">{playlistName}</h2>
+              <p className="text-[12px] text-ink-muted py-2">No albums found in this playlist.</p>
+            </section>
+          )
+        }
+
         const enriched = rawAlbums.map(a => ({
           ...a,
           _inLibrary: libraryIdSet.has(a.id),
