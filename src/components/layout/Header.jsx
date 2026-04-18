@@ -9,6 +9,7 @@ const CAROUSEL_LABELS = {
   'climbers':           '📈 Climbers',
   'fallers':            '📉 Fallers',
   'on-this-day':        '📅 On This Day',
+  'recently-added':     '🔔 Recently Added',
 }
 
 const SORT_OPTIONS = [
@@ -21,10 +22,14 @@ function DraggableList({ items, onReorder, renderItem }) {
   const [localItems, setLocalItems] = useState(items)
   const [dragIdx, setDragIdx] = useState(null)
   const dragIdxRef = useRef(null)
+  const localItemsRef = useRef(items)
 
   useEffect(() => {
-    if (dragIdx === null) setLocalItems(items)
-  }, [items, dragIdx])
+    if (dragIdxRef.current === null) {
+      setLocalItems(items)
+      localItemsRef.current = items
+    }
+  }, [items])
 
   function handleDragStart(e, idx) {
     dragIdxRef.current = idx
@@ -32,34 +37,36 @@ function DraggableList({ items, onReorder, renderItem }) {
     e.dataTransfer.effectAllowed = 'move'
   }
 
-  function handleDragEnter(idx) {
+  function handleDragOver(e, idx) {
+    e.preventDefault()
     const current = dragIdxRef.current
     if (current === null || current === idx) return
-    const next = [...localItems]
+    const next = [...localItemsRef.current]
     const [item] = next.splice(current, 1)
     next.splice(idx, 0, item)
     dragIdxRef.current = idx
+    localItemsRef.current = next
     setLocalItems(next)
     setDragIdx(idx)
   }
 
   function handleDragEnd() {
+    const finalItems = localItemsRef.current
     dragIdxRef.current = null
     setDragIdx(null)
-    onReorder(localItems.map(i => i.id))
+    onReorder(finalItems.map(i => i.id))
   }
 
   return (
-    <div onDrop={e => e.preventDefault()}>
+    <div onDragOver={e => e.preventDefault()} onDrop={e => e.preventDefault()}>
       {localItems.map((item, idx) => (
         <div
           key={item.id}
           draggable
           onDragStart={e => handleDragStart(e, idx)}
-          onDragEnter={() => handleDragEnter(idx)}
-          onDragOver={e => e.preventDefault()}
+          onDragOver={e => handleDragOver(e, idx)}
           onDragEnd={handleDragEnd}
-          style={{ opacity: dragIdx === idx ? 0.4 : 1, transition: 'opacity 0.15s' }}
+          style={{ opacity: dragIdx === idx ? 0.4 : 1, transition: 'opacity 0.15s', userSelect: 'none' }}
         >
           {renderItem(item)}
         </div>
@@ -142,8 +149,11 @@ function SettingsModal({
   selectedPlaylists = [],
   onUpdateSelectedPlaylists,
   onRefreshPlaylists,
+  hideLibraryAlbums = false,
+  onUpdateHideLibraryAlbums,
 }) {
   const [expandedSection, setExpandedSection] = useState(null)
+  const [pickerOpen, setPickerOpen] = useState(false)
 
   const toggle = (id) => setExpandedSection(prev => prev === id ? null : id)
 
@@ -315,64 +325,100 @@ function SettingsModal({
                       className="overflow-hidden"
                     >
                       <div className="pb-4 space-y-3">
-                        {/* Header row with refresh button */}
-                        <div className="flex items-center justify-between">
-                          <p className="text-xs text-ink-muted">Select up to 5 playlists</p>
-                          <button
-                            onClick={onRefreshPlaylists}
-                            disabled={playlistsLoading}
-                            className="text-xs text-accent font-medium disabled:opacity-50"
-                          >
-                            {playlistsLoading ? 'Loading…' : 'Refresh ↻'}
-                          </button>
-                        </div>
+                        {/* Hide library albums toggle */}
+                        <button
+                          onClick={() => onUpdateHideLibraryAlbums(!hideLibraryAlbums)}
+                          className="w-full flex items-center justify-between px-4 py-3 rounded-2xl bg-card-raised border border-border-subtle active:opacity-70 transition-all duration-200"
+                        >
+                          <div className="text-left">
+                            <p className="text-[12px] font-medium text-ink">Hide library albums</p>
+                            <p className="text-[10px] text-ink-muted mt-0.5">Only show albums not already in your library</p>
+                          </div>
+                          <div className={`w-11 h-6 rounded-full relative flex-shrink-0 border transition-all duration-300 ${
+                            hideLibraryAlbums ? 'bg-accent border-accent' : 'bg-card border-border-subtle'
+                          }`}>
+                            <div className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-all duration-300 ${
+                              hideLibraryAlbums ? 'left-[22px]' : 'left-0.5'
+                            }`} />
+                          </div>
+                        </button>
+                        {/* Collapsible picker header */}
+                        <button
+                          onClick={() => setPickerOpen(p => !p)}
+                          className="w-full flex items-center justify-between"
+                        >
+                          <p className="text-xs text-ink-muted">
+                            Select playlists{selectedPlaylists.length > 0 ? ` (${selectedPlaylists.length}/5)` : ' (up to 5)'}
+                          </p>
+                          <div className="flex items-center gap-3">
+                            <button
+                              onClick={e => { e.stopPropagation(); onRefreshPlaylists() }}
+                              disabled={playlistsLoading}
+                              className="text-xs text-accent font-medium disabled:opacity-50"
+                            >
+                              {playlistsLoading ? 'Loading…' : 'Refresh ↻'}
+                            </button>
+                            <span className="text-ink-muted text-[10px]">{pickerOpen ? '▲' : '▼'}</span>
+                          </div>
+                        </button>
 
                         {/* Error state */}
                         {playlistsError && (
                           <p className="text-xs text-red-400">{playlistsError}</p>
                         )}
 
-                        {/* Playlist picker */}
-                        {!playlistsLoading && playlists.length === 0 && !playlistsError && (
-                          <p className="text-xs text-ink-muted">No playlists found. Tap Refresh to load.</p>
-                        )}
-                        {playlists.length > 0 && (
-                          <div className="max-h-60 overflow-y-auto rounded-xl border border-border-subtle bg-card-raised">
-                            {playlists.map((pl, idx) => {
-                              const isSelected = selectedPlaylists.includes(pl.id)
-                              const atMax = selectedPlaylists.length >= 5 && !isSelected
-                              return (
-                                <button
-                                  key={pl.id}
-                                  disabled={atMax}
-                                  onClick={() => {
-                                    if (isSelected) {
-                                      onUpdateSelectedPlaylists(selectedPlaylists.filter(id => id !== pl.id))
-                                    } else {
-                                      onUpdateSelectedPlaylists([...selectedPlaylists, pl.id])
-                                    }
-                                  }}
-                                  className={cn(
-                                    'w-full flex items-center gap-3 px-4 py-2.5 text-left transition-all',
-                                    idx < playlists.length - 1 ? 'border-b border-border-subtle' : '',
-                                    atMax ? 'opacity-40' : 'hover:bg-card'
-                                  )}
-                                >
-                                  <span className={cn(
-                                    'w-4 h-4 rounded flex-shrink-0 flex items-center justify-center text-[10px] border',
-                                    isSelected
-                                      ? 'bg-accent border-accent text-page'
-                                      : 'border-border-subtle'
-                                  )}>
-                                    {isSelected ? '✓' : ''}
-                                  </span>
-                                  <span className="text-sm flex-1 truncate">{pl.name}</span>
-                                  <span className="text-[11px] text-ink-muted flex-shrink-0">{pl.trackCount}</span>
-                                </button>
-                              )
-                            })}
-                          </div>
-                        )}
+                        {/* Collapsible playlist picker */}
+                        <AnimatePresence>
+                          {pickerOpen && (
+                            <motion.div
+                              initial={{ height: 0, opacity: 0 }}
+                              animate={{ height: 'auto', opacity: 1 }}
+                              exit={{ height: 0, opacity: 0 }}
+                              className="overflow-hidden"
+                            >
+                              {!playlistsLoading && playlists.length === 0 && !playlistsError && (
+                                <p className="text-xs text-ink-muted pb-2">No playlists found. Tap Refresh to load.</p>
+                              )}
+                              {playlists.length > 0 && (
+                                <div className="max-h-60 overflow-y-auto rounded-xl border border-border-subtle bg-card-raised">
+                                  {playlists.map((pl, idx) => {
+                                    const isSelected = selectedPlaylists.includes(pl.id)
+                                    const atMax = selectedPlaylists.length >= 5 && !isSelected
+                                    return (
+                                      <button
+                                        key={pl.id}
+                                        disabled={atMax}
+                                        onClick={() => {
+                                          if (isSelected) {
+                                            onUpdateSelectedPlaylists(selectedPlaylists.filter(id => id !== pl.id))
+                                          } else {
+                                            onUpdateSelectedPlaylists([...selectedPlaylists, pl.id])
+                                          }
+                                        }}
+                                        className={cn(
+                                          'w-full flex items-center gap-3 px-4 py-2.5 text-left transition-all',
+                                          idx < playlists.length - 1 ? 'border-b border-border-subtle' : '',
+                                          atMax ? 'opacity-40' : 'hover:bg-card'
+                                        )}
+                                      >
+                                        <span className={cn(
+                                          'w-4 h-4 rounded flex-shrink-0 flex items-center justify-center text-[10px] border',
+                                          isSelected
+                                            ? 'bg-accent border-accent text-page'
+                                            : 'border-border-subtle'
+                                        )}>
+                                          {isSelected ? '✓' : ''}
+                                        </span>
+                                        <span className="text-sm flex-1 truncate">{pl.name}</span>
+                                        <span className="text-[11px] text-ink-muted flex-shrink-0">{pl.trackCount}</span>
+                                      </button>
+                                    )
+                                  })}
+                                </div>
+                              )}
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
 
                         {/* Reorder selected playlists */}
                         {selectedPlaylists.length > 1 && (
@@ -426,6 +472,8 @@ export default function Header({
   selectedPlaylists,
   onUpdateSelectedPlaylists,
   onRefreshPlaylists,
+  hideLibraryAlbums,
+  onUpdateHideLibraryAlbums,
 }) {
   return (
     <>
@@ -478,6 +526,8 @@ export default function Header({
         selectedPlaylists={selectedPlaylists}
         onUpdateSelectedPlaylists={onUpdateSelectedPlaylists}
         onRefreshPlaylists={onRefreshPlaylists}
+        hideLibraryAlbums={hideLibraryAlbums}
+        onUpdateHideLibraryAlbums={onUpdateHideLibraryAlbums}
       />
     </>
   )

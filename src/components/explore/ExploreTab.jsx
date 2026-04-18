@@ -2,7 +2,6 @@ import { useState, useMemo } from 'react'
 import { AnimatePresence, motion } from 'motion/react'
 import AlbumModal from '../AlbumModal.jsx'
 import { useBurnTracking } from '../../hooks/useBurnTracking.js'
-import { cn } from '../../lib/utils.js'
 
 function fmtAgo(ts) {
   if (!ts) return null
@@ -17,11 +16,11 @@ function fmtAgo(ts) {
 
 function ExploreCarouselItem({ album, onTap, inLibrary }) {
   const [imgError, setImgError] = useState(false)
-  const art = !imgError ? album.images?.[0]?.url : null
+  const art = !imgError ? (album.images?.find(img => img?.url)?.url ?? null) : null
 
   return (
     <div
-      className="flex-shrink-0 w-[calc(50%-8px)] cursor-pointer active:opacity-80 transition-opacity"
+      className="w-full cursor-pointer active:opacity-80 transition-opacity"
       onClick={() => onTap(album, inLibrary)}
     >
       <div className="w-full aspect-square rounded-xl overflow-hidden bg-card mb-2">
@@ -32,12 +31,6 @@ function ExploreCarouselItem({ album, onTap, inLibrary }) {
       </div>
       <p className="text-[13px] font-semibold text-ink leading-tight line-clamp-2">{album.name}</p>
       <p className="text-[11px] text-ink-muted mt-0.5 truncate">{album.artists?.[0]?.name}</p>
-      <span className={cn(
-        'inline-block mt-1 text-[11px] font-medium',
-        inLibrary ? 'text-accent' : 'text-[#a0a0ff]'
-      )}>
-        {inLibrary ? '★ Library' : '+ New'}
-      </span>
     </div>
   )
 }
@@ -52,6 +45,7 @@ export default function ExploreTab({
   removeLater,
   isSaved,
   onBadgeClick,
+  hideLibraryAlbums = false,
 }) {
   const [selectedAlbum, setSelectedAlbum] = useState(null)
   const [selectedInLibrary, setSelectedInLibrary] = useState(true)
@@ -118,7 +112,7 @@ export default function ExploreTab({
         }))
 
         const burned = burnedMap.get(carouselId)
-        const visible = enriched.filter(a => !isBurned(a.id, carouselId))
+        const visible = enriched.filter(a => !isBurned(a.id, carouselId) && !(hideLibraryAlbums && libraryIdSet.has(a.id)))
         const burnedCount = burned?.size ?? 0
         const completionPct = enriched.length > 0
           ? Math.round((burnedCount / enriched.length) * 100)

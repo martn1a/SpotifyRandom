@@ -23,6 +23,7 @@ export default function BrowseTab({
   playlistAlbums,
   playlistsLoading,
   playlists,
+  hideLibraryAlbums = false,
 }) {
   switch (activeSubTab) {
     case 'library':
@@ -68,6 +69,7 @@ export default function BrowseTab({
           removeLater={removeLater}
           isSaved={isSaved}
           onBadgeClick={onBadgeClick}
+          hideLibraryAlbums={hideLibraryAlbums}
         />
       )
   }

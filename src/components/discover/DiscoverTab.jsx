@@ -10,6 +10,13 @@ const DECADES = ['60s', '70s', '80s', '90s', '00s', '10s', '20s']
 const DECADE_STARTS = { '60s': 1960, '70s': 1970, '80s': 1980, '90s': 1990, '00s': 2000, '10s': 2010, '20s': 2020 }
 const NINETY_DAYS_MS  = 90 * 24 * 60 * 60 * 1000
 const THIRTY_DAYS_MS  = 30 * 24 * 60 * 60 * 1000
+const RECENTLY_ADDED_RANGES = [
+  { id: '7d',  label: '7d',  ms: 7   * 24 * 60 * 60 * 1000 },
+  { id: '1m',  label: '1m',  ms: 30  * 24 * 60 * 60 * 1000 },
+  { id: '3m',  label: '3m',  ms: 90  * 24 * 60 * 60 * 1000 },
+  { id: '6m',  label: '6m',  ms: 180 * 24 * 60 * 60 * 1000 },
+  { id: '1y',  label: '1y',  ms: 365 * 24 * 60 * 60 * 1000 },
+]
 const BLOCKLIST_KW    = ['instrumental', 'remix', 'edit', 'live', 'reprise', 'version']
 const PICK_COUNTS     = [1, 3, 5, 10]
 
@@ -389,14 +396,41 @@ function MultiPickList({ albums, getAlbumStats, onQueue, onSave, onRemove, isSav
 
 // ── FilterModal ───────────────────────────────────────────────────────
 
-function FilterModal({ draftFilters, draftToggles, setDraftFilters, setDraftToggles, onApply, onClose, onSavePreset, activeFilterCount }) {
+function FilterModal({ draftFilters, draftToggles, setDraftFilters, setDraftToggles, onApply, onClose, onSavePreset, activeFilterCount, albums, getAlbumStats, recentlyAddedFilter, setRecentlyAddedFilter }) {
   const [presetName,     setPresetName]     = useState('')
   const [showNameInput,  setShowNameInput]  = useState(false)
+
+  const genreCounts = useMemo(() => {
+    const activeDecades = DECADES.filter(d => draftFilters.has(d))
+    const pool = albums.filter(a => {
+      if (activeDecades.length && !activeDecades.includes(albumDecade(a))) return false
+      return true
+    })
+    const counts = {}
+    let noGenreCount = 0
+    for (const a of pool) {
+      const cluster = getGenreCluster(a)
+      if (cluster) {
+        counts[cluster.id] = (counts[cluster.id] || 0) + 1
+      } else {
+        noGenreCount++
+      }
+    }
+    counts['no-genre'] = noGenreCount
+    return counts
+  }, [albums, draftFilters])
 
   function toggleDraftFilter(f) {
     setDraftFilters(prev => {
       const next = new Set(prev)
-      next.has(f) ? next.delete(f) : next.add(f)
+      if (next.has(f)) {
+        next.delete(f)
+      } else {
+        next.add(f)
+        if (GENRE_CLUSTERS.some(c => c.id === f)) {
+          next.delete('no-genre')
+        }
+      }
       return next
     })
   }
@@ -406,9 +440,10 @@ function FilterModal({ draftFilters, draftToggles, setDraftFilters, setDraftTogg
   }
 
   const draftCount = draftFilters.size
-    + (draftToggles.weightUnheard   ? 1 : 0)
-    + (draftToggles.excludeKeywords ? 1 : 0)
-    + (draftToggles.avoidRecent     ? 1 : 0)
+    + (draftToggles.weightUnheard      ? 1 : 0)
+    + (draftToggles.excludeKeywords    ? 1 : 0)
+    + (draftToggles.avoidRecent        ? 1 : 0)
+    + (draftToggles.boostRecentlyAdded ? 1 : 0)
 
   function handleSavePreset() {
     if (!showNameInput) { setShowNameInput(true); return }
@@ -488,6 +523,7 @@ function FilterModal({ draftFilters, draftToggles, setDraftFilters, setDraftTogg
             <div className="flex flex-wrap gap-2">
               {GENRE_CLUSTERS.map(c => {
                 const active = draftFilters.has(c.id)
+                const count = genreCounts[c.id] ?? 0
                 return (
                   <button
                     key={c.id}
@@ -498,10 +534,41 @@ function FilterModal({ draftFilters, draftToggles, setDraftFilters, setDraftTogg
                         : 'border-border-subtle bg-card-raised text-ink-secondary font-medium'
                     }`}
                   >
-                    <span>{c.icon}</span><span>{c.label}</span>
+                    <span>{c.icon}</span>
+                    <span>{c.label}</span>
+                    <span className={active ? 'opacity-70' : 'text-ink-muted'}>{count}</span>
                   </button>
                 )
               })}
+              {/* No Genre chip */}
+              {(() => {
+                const active = draftFilters.has('no-genre')
+                const count = genreCounts['no-genre'] ?? 0
+                return (
+                  <button
+                    onClick={() => {
+                      setDraftFilters(prev => {
+                        const next = new Set(prev)
+                        if (next.has('no-genre')) {
+                          next.delete('no-genre')
+                        } else {
+                          GENRE_CLUSTERS.forEach(c => next.delete(c.id))
+                          next.add('no-genre')
+                        }
+                        return next
+                      })
+                    }}
+                    className={`flex items-center gap-1 px-3.5 py-1.5 rounded-full text-[11px] border transition-all duration-200 active:scale-[0.96] ${
+                      active
+                        ? 'border-accent bg-accent text-black font-semibold'
+                        : 'border-border-subtle bg-card-raised text-ink-secondary font-medium'
+                    }`}
+                  >
+                    <span>No Genre</span>
+                    <span className={active ? 'opacity-70' : 'text-ink-muted'}>{count}</span>
+                  </button>
+                )
+              })()}
             </div>
           </div>
 
@@ -528,14 +595,38 @@ function FilterModal({ draftFilters, draftToggles, setDraftFilters, setDraftTogg
             </div>
           </div>
 
+          {/* Recently Added */}
+          <div>
+            <p className="text-[9px] font-bold text-ink-muted uppercase tracking-widest mb-3">Recently Added</p>
+            <div className="flex flex-wrap gap-2">
+              {RECENTLY_ADDED_RANGES.map(r => {
+                const active = recentlyAddedFilter === r.id
+                return (
+                  <button
+                    key={r.id}
+                    onClick={() => setRecentlyAddedFilter(active ? null : r.id)}
+                    className={`px-3.5 py-1.5 rounded-full text-[11px] border transition-all duration-200 active:scale-[0.96] ${
+                      active
+                        ? 'border-accent bg-accent text-black font-semibold'
+                        : 'border-border-subtle bg-card-raised text-ink-secondary font-medium'
+                    }`}
+                  >
+                    {r.label}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
           {/* Preferences */}
           <div>
             <p className="text-[9px] font-bold text-ink-muted uppercase tracking-widest mb-3">Preferences</p>
             <div className="space-y-2">
               {[
-                { key: 'weightUnheard',   label: '⚖ Weighted',            desc: 'Unheard albums 10× more likely' },
-                { key: 'excludeKeywords', label: '🚫 No Remixes',          desc: 'Filters live/remix/edit/version' },
-                { key: 'avoidRecent',     label: '🕐 Not Recently Queued', desc: 'Skips albums queued in last 30 days' },
+                { key: 'weightUnheard',      label: '⚖ Weighted',             desc: 'Unheard albums 10× more likely' },
+                { key: 'excludeKeywords',    label: '🚫 No Remixes',           desc: 'Filters live/remix/edit/version' },
+                { key: 'avoidRecent',        label: '🕐 Not Recently Queued',  desc: 'Skips albums queued in last 30 days' },
+                { key: 'boostRecentlyAdded', label: '🆕 Boost Recently Added', desc: 'Albums added in last 30 days get 5× boost' },
               ].map(({ key, label, desc }) => (
                 <button
                   key={key}
@@ -612,7 +703,7 @@ function FilterModal({ draftFilters, draftToggles, setDraftFilters, setDraftTogg
 
 export default function DiscoverTab({ albums, getAlbumStats, saveLater, removeLater, isSaved, onBadgeClick }) {
   const [activeFilters,   setActiveFilters]  = useState(new Set())
-  const [toggles,         setToggles]        = useState({ weightUnheard: false, excludeKeywords: false, avoidRecent: false })
+  const [toggles,         setToggles]        = useState({ weightUnheard: false, excludeKeywords: false, avoidRecent: false, boostRecentlyAdded: false })
   const [activePreset,    setActivePreset]   = useState(null)
   const [customPresets,   setCustomPresets]  = useState(() => {
     try { return JSON.parse(localStorage.getItem('discover_presets') || '[]') } catch { return [] }
@@ -627,7 +718,9 @@ export default function DiscoverTab({ albums, getAlbumStats, saveLater, removeLa
   const [filterModalOpen, setFilterModalOpen] = useState(false)
   const [presetSheetOpen, setPresetSheetOpen] = useState(false)
   const [draftFilters,    setDraftFilters]   = useState(new Set())
-  const [draftToggles,    setDraftToggles]   = useState({ weightUnheard: false, excludeKeywords: false, avoidRecent: false })
+  const [draftToggles,    setDraftToggles]   = useState({ weightUnheard: false, excludeKeywords: false, avoidRecent: false, boostRecentlyAdded: false })
+  const [recentlyAddedFilter,      setRecentlyAddedFilter]      = useState(null)
+  const [draftRecentlyAddedFilter, setDraftRecentlyAddedFilter] = useState(null)
 
   // ── Filter helpers ─────────────────────────────────────────────────
 
@@ -652,18 +745,22 @@ export default function DiscoverTab({ albums, getAlbumStats, saveLater, removeLa
   function applyPreset(id) {
     if (id === 'surprise') {
       setActiveFilters(new Set())
-      setToggles({ weightUnheard: false, excludeKeywords: false, avoidRecent: false })
+      setToggles({ weightUnheard: false, excludeKeywords: false, avoidRecent: false, boostRecentlyAdded: false })
+      setRecentlyAddedFilter(null)
     } else if (id === 'forgotten') {
       setActiveFilters(new Set(['Never heard']))
-      setToggles({ weightUnheard: true, excludeKeywords: true, avoidRecent: false })
+      setToggles({ weightUnheard: true, excludeKeywords: true, avoidRecent: false, boostRecentlyAdded: false })
+      setRecentlyAddedFilter(null)
     } else if (id === 'deepcuts') {
       setActiveFilters(new Set(['70s', '80s', '90s', '00s']))
-      setToggles({ weightUnheard: false, excludeKeywords: true, avoidRecent: true })
+      setToggles({ weightUnheard: false, excludeKeywords: true, avoidRecent: true, boostRecentlyAdded: false })
+      setRecentlyAddedFilter(null)
     } else {
       const cp = customPresets.find(p => p.id === id)
       if (cp) {
         setActiveFilters(new Set(cp.filters ?? cp.savedFilters ?? []))
         setToggles(cp.toggles ?? cp.savedToggles ?? { weightUnheard: false, excludeKeywords: false, avoidRecent: false })
+        setRecentlyAddedFilter(cp.recentlyAddedFilter ?? null)
       }
     }
     setActivePreset(id)
@@ -677,6 +774,7 @@ export default function DiscoverTab({ albums, getAlbumStats, saveLater, removeLa
       label: name,
       filters: [...filters],
       toggles: { ...toggleState },
+      recentlyAddedFilter: recentlyAddedFilter,
     }
     const next = [...customPresets, preset]
     setCustomPresets(next)
@@ -694,6 +792,8 @@ export default function DiscoverTab({ albums, getAlbumStats, saveLater, removeLa
     + (toggles.weightUnheard ? 1 : 0)
     + (toggles.excludeKeywords ? 1 : 0)
     + (toggles.avoidRecent ? 1 : 0)
+    + (toggles.boostRecentlyAdded ? 1 : 0)
+    + (recentlyAddedFilter ? 1 : 0)
 
   const activePresetObj = activePreset
     ? ([...BUILTIN_PRESETS, ...customPresets].find(p => p.id === activePreset) ?? null)
@@ -704,12 +804,14 @@ export default function DiscoverTab({ albums, getAlbumStats, saveLater, removeLa
   function openFilterModal() {
     setDraftFilters(new Set(activeFilters))
     setDraftToggles({ ...toggles })
+    setDraftRecentlyAddedFilter(recentlyAddedFilter)
     setFilterModalOpen(true)
   }
 
   function applyFilters() {
     setActiveFilters(draftFilters)
     setToggles(draftToggles)
+    setRecentlyAddedFilter(draftRecentlyAddedFilter)
     setActivePreset(null)
     setPickedAlbums([])
     setFilterModalOpen(false)
@@ -744,6 +846,7 @@ export default function DiscoverTab({ albums, getAlbumStats, saveLater, removeLa
         const albumClusters = new Set((a._genres || []).map(clusterOf))
         if (!activeGenreClusters.some(c => albumClusters.has(c.id))) return false
       }
+      if (activeFilters.has('no-genre') && getGenreCluster(a) !== null) return false
       const stats = getAlbumStats(a)
       if (activeFilters.has('Never heard') && (stats?.listenCount ?? 0) > 0) return false
       if (activeFilters.has('Not recently played')) {
@@ -757,9 +860,16 @@ export default function DiscoverTab({ albums, getAlbumStats, saveLater, removeLa
       if (toggles.avoidRecent && queueHistory[a.id]) {
         if (now - queueHistory[a.id] < THIRTY_DAYS_MS) return false
       }
+      if (recentlyAddedFilter) {
+        const range = RECENTLY_ADDED_RANGES.find(r => r.id === recentlyAddedFilter)
+        if (range) {
+          const addedAt = a._added_at ? new Date(a._added_at).getTime() : null
+          if (!addedAt || now - addedAt > range.ms) return false
+        }
+      }
       return true
     })
-  }, [albums, activeFilters, toggles, queueHistory, getAlbumStats])
+  }, [albums, activeFilters, toggles, queueHistory, getAlbumStats, recentlyAddedFilter])
 
   // ── Actions ────────────────────────────────────────────────────────
 
@@ -768,10 +878,33 @@ export default function DiscoverTab({ albums, getAlbumStats, saveLater, removeLa
     const pool = [...filteredAlbums]
     const picks = []
     const n = Math.min(pickCount, pool.length)
+    const now = Date.now()
     for (let i = 0; i < n; i++) {
-      const idx = toggles.weightUnheard
-        ? weightedPickIndex(pool, getAlbumStats)
-        : Math.floor(Math.random() * pool.length)
+      let idx
+      if (toggles.weightUnheard || toggles.boostRecentlyAdded) {
+        const weighted = pool.map(a => {
+          const stats = getAlbumStats(a)
+          const listenCount = stats?.listenCount ?? 0
+          const lastHeard   = stats?.lastHeard ?? null
+          let w = toggles.weightUnheard
+            ? (listenCount === 0 ? 10 : !lastHeard ? 5 : now - lastHeard > NINETY_DAYS_MS ? 5 : 1)
+            : 1
+          if (toggles.boostRecentlyAdded && a._added_at) {
+            const addedAt = new Date(a._added_at).getTime()
+            if (now - addedAt < THIRTY_DAYS_MS) w *= 5
+          }
+          return w
+        })
+        const total = weighted.reduce((s, w) => s + w, 0)
+        let r = Math.random() * total
+        idx = weighted.length - 1
+        for (let j = 0; j < weighted.length; j++) {
+          r -= weighted[j]
+          if (r <= 0) { idx = j; break }
+        }
+      } else {
+        idx = Math.floor(Math.random() * pool.length)
+      }
       if (idx < 0) break
       picks.push(pool[idx])
       pool.splice(idx, 1)
@@ -840,7 +973,7 @@ export default function DiscoverTab({ albums, getAlbumStats, saveLater, removeLa
   return (
     <div className="flex flex-col min-h-full">
       {/* Discovery Mode row + filter button */}
-      <div className="flex items-center gap-2 px-5 pb-3">
+      <div className="flex items-center gap-2 px-5 pt-3 pb-3">
         <button
           onClick={() => setPresetSheetOpen(true)}
           className="flex-1 flex items-center gap-3 bg-card-raised border border-border-subtle rounded-2xl px-4 py-3 text-left active:opacity-80 transition-opacity"
@@ -980,6 +1113,10 @@ export default function DiscoverTab({ albums, getAlbumStats, saveLater, removeLa
             onClose={() => setFilterModalOpen(false)}
             onSavePreset={savePreset}
             activeFilterCount={activeFilterCount}
+            albums={albums}
+            getAlbumStats={getAlbumStats}
+            recentlyAddedFilter={draftRecentlyAddedFilter}
+            setRecentlyAddedFilter={setDraftRecentlyAddedFilter}
           />
         )}
       </AnimatePresence>

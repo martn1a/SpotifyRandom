@@ -73,13 +73,14 @@ function LoadingScreen({ progress }) {
 
 function defaultCarouselSettings() {
   return {
-    _order: ['most-played', 'latest-discoveries', 'golden-oldies', 'climbers', 'fallers', 'on-this-day'],
+    _order: ['most-played', 'latest-discoveries', 'recently-added', 'golden-oldies', 'climbers', 'fallers', 'on-this-day'],
     'most-played':        { visible: true, sort: 'original' },
     'latest-discoveries': { visible: true, sort: 'original' },
     'golden-oldies':      { visible: true, sort: 'original' },
     'climbers':           { visible: true, sort: 'original' },
     'fallers':            { visible: true, sort: 'original' },
     'on-this-day':        { visible: true, sort: 'original' },
+    'recently-added':     { visible: true, sort: 'original' },
   }
 }
 
@@ -113,6 +114,17 @@ function MainApp({ onLogout }) {
   })
 
   const { playlists, playlistAlbums, loading: playlistsLoading, error: playlistsError, refreshPlaylists } = usePlaylists(selectedPlaylists)
+
+  const [hideLibraryAlbums, setHideLibraryAlbums] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('sonar_hide_library_albums')) ?? false
+    } catch { return false }
+  })
+
+  function updateHideLibraryAlbums(value) {
+    setHideLibraryAlbums(value)
+    localStorage.setItem('sonar_hide_library_albums', JSON.stringify(value))
+  }
 
   function updateSelectedPlaylists(ids) {
     const capped = ids.slice(0, 5)
@@ -201,6 +213,7 @@ function MainApp({ onLogout }) {
           playlistAlbums={playlistAlbums}
           playlistsLoading={playlistsLoading}
           playlists={playlists}
+          hideLibraryAlbums={hideLibraryAlbums}
         />
       )
       case 'later': return (
@@ -240,6 +253,8 @@ function MainApp({ onLogout }) {
         selectedPlaylists={selectedPlaylists}
         onUpdateSelectedPlaylists={updateSelectedPlaylists}
         onRefreshPlaylists={refreshPlaylists}
+        hideLibraryAlbums={hideLibraryAlbums}
+        onUpdateHideLibraryAlbums={updateHideLibraryAlbums}
       />
       <main className="flex-1 overflow-y-auto overflow-x-hidden">
         <ErrorBoundary key={activeTab}>
