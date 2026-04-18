@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'motion/react'
 import { cn } from '../../lib/utils.js'
 
@@ -20,30 +20,37 @@ const SORT_OPTIONS = [
 function DraggableList({ items, onReorder, renderItem }) {
   const [localItems, setLocalItems] = useState(items)
   const [dragIdx, setDragIdx] = useState(null)
+  const dragIdxRef = useRef(null)
 
-  useEffect(() => { setLocalItems(items) }, [items])
+  useEffect(() => {
+    if (dragIdx === null) setLocalItems(items)
+  }, [items, dragIdx])
 
   function handleDragStart(e, idx) {
+    dragIdxRef.current = idx
     setDragIdx(idx)
     e.dataTransfer.effectAllowed = 'move'
   }
 
   function handleDragEnter(idx) {
-    if (dragIdx === null || dragIdx === idx) return
+    const current = dragIdxRef.current
+    if (current === null || current === idx) return
     const next = [...localItems]
-    const [item] = next.splice(dragIdx, 1)
+    const [item] = next.splice(current, 1)
     next.splice(idx, 0, item)
+    dragIdxRef.current = idx
     setLocalItems(next)
     setDragIdx(idx)
   }
 
   function handleDragEnd() {
+    dragIdxRef.current = null
     setDragIdx(null)
     onReorder(localItems.map(i => i.id))
   }
 
   return (
-    <div>
+    <div onDrop={e => e.preventDefault()}>
       {localItems.map((item, idx) => (
         <div
           key={item.id}
@@ -129,10 +136,10 @@ function SettingsModal({
   carouselSettings,
   onUpdateCarouselSettings,
   onUpdateCarouselOrder,
-  playlists,
+  playlists = [],
   playlistsLoading,
   playlistsError,
-  selectedPlaylists,
+  selectedPlaylists = [],
   onUpdateSelectedPlaylists,
   onRefreshPlaylists,
 }) {
@@ -237,7 +244,15 @@ function SettingsModal({
                     >
                       <div className="pb-4">
                         <DraggableList
-                          items={(carouselSettings?._order ?? Object.keys(CAROUSEL_LABELS)).map(id => ({ id, label: CAROUSEL_LABELS[id] }))}
+                          items={(() => {
+                            const order = carouselSettings?._order ?? Object.keys(CAROUSEL_LABELS)
+                            const knownIds = Object.keys(CAROUSEL_LABELS)
+                            const merged = [
+                              ...order.filter(id => CAROUSEL_LABELS[id]),
+                              ...knownIds.filter(id => !order.includes(id)),
+                            ]
+                            return merged.map(id => ({ id, label: CAROUSEL_LABELS[id] }))
+                          })()}
                           onReorder={onUpdateCarouselOrder}
                           renderItem={({ id, label }) => {
                             const settings = carouselSettings?.[id] || { visible: true, sort: 'original' }
