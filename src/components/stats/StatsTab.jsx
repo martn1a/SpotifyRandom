@@ -18,7 +18,7 @@ const TIME_RANGES = [
 ]
 
 const DEFAULT_CAROUSEL_ORDER = [
-  'most-played', 'latest-discoveries', 'golden-oldies', 'climbers', 'fallers', 'on-this-day',
+  'most-played', 'latest-discoveries', 'golden-oldies', 'climbers', 'fallers', 'on-this-day', 'recently-added',
 ]
 
 // ── Helpers ───────────────────────────────────────────────────────────
@@ -195,6 +195,20 @@ export default function StatsTab({ albums, getAlbumStats, lastfmMap, lastfmLoade
       .map(e => ({ ...e, _stat: e.firstHeard ? String(new Date(e.firstHeard).getFullYear()) : null, _carouselId: 'latest-discoveries' }))
   , [enriched])
 
+  const recentlyAdded = useMemo(() =>
+    [...albums]
+      .filter(a => a._added_at)
+      .sort((a, b) => new Date(b._added_at) - new Date(a._added_at))
+      .slice(0, 20)
+      .map(a => ({
+        name:         a.name,
+        artist:       a.artists?.[0]?.name || '',
+        spotifyAlbum: a,
+        _stat:        fmtAgo(new Date(a._added_at).getTime()),
+        _carouselId:  'recently-added',
+      }))
+  , [albums])
+
   const goldenOldies = useMemo(() =>
     enriched
       .filter(e =>
@@ -247,7 +261,8 @@ export default function StatsTab({ albums, getAlbumStats, lastfmMap, lastfmLoade
     'climbers':           climbers.length,
     'fallers':            fallers.length,
     'on-this-day':        onThisDayItems.length,
-  }), [mostPlayed, latestDiscoveries, goldenOldies, climbers, fallers, onThisDayItems])
+    'recently-added':     recentlyAdded.length,
+  }), [mostPlayed, latestDiscoveries, goldenOldies, climbers, fallers, onThisDayItems, recentlyAdded])
 
   // ── Burn-filtered carousels ───────────────────────────────────────────
 
@@ -274,6 +289,10 @@ export default function StatsTab({ albums, getAlbumStats, lastfmMap, lastfmLoade
   const filteredOnThisDayItems = useMemo(
     () => onThisDayItems.filter(e => !isBurned(e.spotifyAlbum?.id, 'on-this-day')),
     [onThisDayItems, burnedMap]
+  )
+  const filteredRecentlyAdded = useMemo(
+    () => recentlyAdded.filter(e => !isBurned(e.spotifyAlbum?.id, 'recently-added')),
+    [recentlyAdded, burnedMap]
   )
 
   // ── Per-carousel burn helpers ──────────────────────────────────────────
@@ -378,7 +397,12 @@ export default function StatsTab({ albums, getAlbumStats, lastfmMap, lastfmLoade
               </AnimatePresence>
             </div>
           ) : (
-            <p className="text-[12px] text-ink-muted py-2">All burned — tap Reset to restore.</p>
+            <p className="text-[12px] text-ink-muted py-2">
+              {mostPlayedRange === '7d'
+                ? 'No albums heard in the last 7 days according to last.fm data.'
+                : 'All burned — tap Reset to restore.'
+              }
+            </p>
           )}
         </section>
       )
@@ -397,6 +421,9 @@ export default function StatsTab({ albums, getAlbumStats, lastfmMap, lastfmLoade
     ),
     'on-this-day': (carouselSettings?.['on-this-day']?.visible ?? true) && (
       <Carousel title="📅 On This Day" items={filteredOnThisDayItems} onTap={handleCarouselTap} onReset={() => resetCarousel('on-this-day')} {...carouselBurnProps('on-this-day')} />
+    ),
+    'recently-added': (carouselSettings?.['recently-added']?.visible ?? true) && (
+      <Carousel title="🔔 Recently Added" items={filteredRecentlyAdded} onTap={handleCarouselTap} onReset={() => resetCarousel('recently-added')} {...carouselBurnProps('recently-added')} />
     ),
   }
 
