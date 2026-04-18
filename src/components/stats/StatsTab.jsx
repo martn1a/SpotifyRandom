@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, Fragment } from 'react'
 import { motion, AnimatePresence } from 'motion/react'
 import AlbumModal from '../AlbumModal.jsx'
 import { useBurnTracking } from '../../hooks/useBurnTracking.js'
@@ -15,6 +15,10 @@ const TIME_RANGES = [
   { id: '6m',  label: '6M',  ms: 180 * 24 * 60 * 60 * 1000 },
   { id: '1y',  label: '1Y',  ms: 365 * 24 * 60 * 60 * 1000 },
   { id: 'all', label: 'ALL', ms: null },
+]
+
+const DEFAULT_CAROUSEL_ORDER = [
+  'most-played', 'latest-discoveries', 'golden-oldies', 'climbers', 'fallers', 'on-this-day',
 ]
 
 // ── Helpers ───────────────────────────────────────────────────────────
@@ -314,90 +318,93 @@ export default function StatsTab({ albums, getAlbumStats, lastfmMap, lastfmLoade
 
   // ── Render ────────────────────────────────────────────────────────────
 
+  const order = carouselSettings?._order ?? DEFAULT_CAROUSEL_ORDER
+
+  const blocks = {
+    'most-played': (carouselSettings?.['most-played']?.visible ?? true) && (() => {
+      const bp = carouselBurnProps('most-played')
+      return (
+        <section>
+          <div className="flex items-center justify-between mb-1">
+            <h2 className="text-[13px] font-medium text-ink">👑 Most Played</h2>
+            <div className="flex items-center gap-2">
+              {bp.lastBurnedAt != null && (
+                <span className="text-[10px] text-ink-muted">{fmtAgo(bp.lastBurnedAt)}</span>
+              )}
+              <button onClick={() => resetCarousel('most-played')} className="text-[11px] text-ink-muted active:text-ink flex items-center gap-1">
+                {bp.burnedCount > 0 && (
+                  <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-card-raised text-[9px] font-semibold text-ink-muted">{bp.burnedCount}</span>
+                )}
+                Reset
+              </button>
+            </div>
+          </div>
+          <div className="flex gap-1.5 mt-1 mb-2">
+            {TIME_RANGES.map(r => (
+              <button
+                key={r.id}
+                onClick={() => setMostPlayedRange(r.id)}
+                className={cn(
+                  'text-[10px] font-bold px-2.5 py-1 rounded-full transition-all',
+                  mostPlayedRange === r.id
+                    ? 'bg-accent text-page'
+                    : 'bg-card-raised text-ink-muted hover:text-ink'
+                )}
+              >
+                {r.label}
+              </button>
+            ))}
+          </div>
+          {bp.completionPct > 0 && (
+            <div className="h-[2px] bg-card-raised rounded-full overflow-hidden mb-2.5">
+              <div className="h-full bg-accent rounded-full transition-all" style={{ width: `${bp.completionPct}%` }} />
+            </div>
+          )}
+          {filteredMostPlayed.length > 0 ? (
+            <div className="flex gap-4 overflow-x-auto scrollbar-hide pb-1 -mx-4 px-4">
+              <AnimatePresence>
+                {applySortToItems(filteredMostPlayed, carouselSettings?.['most-played']?.sort || 'original', getAlbumStats).map((item) => (
+                  <motion.div
+                    key={`${item.artist}||${item.name}`}
+                    initial={{ opacity: 0, scale: 0.8 }}
+                    animate={{ opacity: 1, scale: 1 }}
+                    exit={{ opacity: 0, scale: 0.5, filter: 'blur(8px)' }}
+                    transition={{ type: 'spring', damping: 20, stiffness: 300 }}
+                    className="flex-shrink-0 w-[calc(50%-8px)]"
+                  >
+                    <CarouselItem entry={item} onTap={handleCarouselTap} className="w-full" />
+                  </motion.div>
+                ))}
+              </AnimatePresence>
+            </div>
+          ) : (
+            <p className="text-[12px] text-ink-muted py-2">All burned — tap Reset to restore.</p>
+          )}
+        </section>
+      )
+    })(),
+    'latest-discoveries': (carouselSettings?.['latest-discoveries']?.visible ?? true) && (
+      <Carousel title="🔭 Latest Discoveries" items={filteredLatestDiscoveries} onTap={handleCarouselTap} onReset={() => resetCarousel('latest-discoveries')} {...carouselBurnProps('latest-discoveries')} />
+    ),
+    'golden-oldies': (carouselSettings?.['golden-oldies']?.visible ?? true) && (
+      <Carousel title="🕰️ Golden Oldies" items={filteredGoldenOldies} onTap={handleCarouselTap} onReset={() => resetCarousel('golden-oldies')} {...carouselBurnProps('golden-oldies')} />
+    ),
+    'climbers': (carouselSettings?.['climbers']?.visible ?? true) && (
+      <Carousel title="📈 Climbers" items={filteredClimbers} onTap={handleCarouselTap} onReset={() => resetCarousel('climbers')} {...carouselBurnProps('climbers')} />
+    ),
+    'fallers': (carouselSettings?.['fallers']?.visible ?? true) && (
+      <Carousel title="📉 Fallers" items={filteredFallers} onTap={handleCarouselTap} onReset={() => resetCarousel('fallers')} {...carouselBurnProps('fallers')} />
+    ),
+    'on-this-day': (carouselSettings?.['on-this-day']?.visible ?? true) && (
+      <Carousel title="📅 On This Day" items={filteredOnThisDayItems} onTap={handleCarouselTap} onReset={() => resetCarousel('on-this-day')} {...carouselBurnProps('on-this-day')} />
+    ),
+  }
+
   return (
     <div className="px-4 pt-4 pb-20 space-y-6">
-
-      {/* Carousels */}
-
-      {/* Most Played */}
-      {(carouselSettings?.['most-played']?.visible ?? true) && (() => {
-        const bp = carouselBurnProps('most-played')
-        return (
-          <section>
-            <div className="flex items-center justify-between mb-1">
-              <h2 className="text-[13px] font-medium text-ink">👑 Most Played</h2>
-              <div className="flex items-center gap-2">
-                {bp.lastBurnedAt != null && (
-                  <span className="text-[10px] text-ink-muted">{fmtAgo(bp.lastBurnedAt)}</span>
-                )}
-                <button onClick={() => resetCarousel('most-played')} className="text-[11px] text-ink-muted active:text-ink flex items-center gap-1">
-                  {bp.burnedCount > 0 && (
-                    <span className="inline-flex items-center justify-center w-4 h-4 rounded-full bg-card-raised text-[9px] font-semibold text-ink-muted">{bp.burnedCount}</span>
-                  )}
-                  Reset
-                </button>
-              </div>
-            </div>
-            {/* Time-range chips */}
-            <div className="flex gap-1.5 mt-1 mb-2">
-              {TIME_RANGES.map(r => (
-                <button
-                  key={r.id}
-                  onClick={() => setMostPlayedRange(r.id)}
-                  className={cn(
-                    'text-[10px] font-bold px-2.5 py-1 rounded-full transition-all',
-                    mostPlayedRange === r.id
-                      ? 'bg-accent text-page'
-                      : 'bg-card-raised text-ink-muted hover:text-ink'
-                  )}
-                >
-                  {r.label}
-                </button>
-              ))}
-            </div>
-            {bp.completionPct > 0 && (
-              <div className="h-[2px] bg-card-raised rounded-full overflow-hidden mb-2.5">
-                <div className="h-full bg-accent rounded-full transition-all" style={{ width: `${bp.completionPct}%` }} />
-              </div>
-            )}
-            {filteredMostPlayed.length > 0 ? (
-              <div className="flex gap-4 overflow-x-auto scrollbar-hide pb-1 -mx-4 px-4">
-                <AnimatePresence>
-                  {applySortToItems(filteredMostPlayed, carouselSettings?.['most-played']?.sort || 'original', getAlbumStats).map((item) => (
-                    <motion.div
-                      key={`${item.artist}||${item.name}`}
-                      initial={{ opacity: 0, scale: 0.8 }}
-                      animate={{ opacity: 1, scale: 1 }}
-                      exit={{ opacity: 0, scale: 0.5, filter: 'blur(8px)' }}
-                      transition={{ type: 'spring', damping: 20, stiffness: 300 }}
-                      className="flex-shrink-0 w-[calc(50%-8px)]"
-                    >
-                      <CarouselItem entry={item} onTap={handleCarouselTap} className="w-full" />
-                    </motion.div>
-                  ))}
-                </AnimatePresence>
-              </div>
-            ) : (
-              <p className="text-[12px] text-ink-muted py-2">All burned — tap Reset to restore.</p>
-            )}
-          </section>
-        )
-      })()}
-
-      {(carouselSettings?.['latest-discoveries']?.visible ?? true) && (
-        <Carousel title="🔭 Latest Discoveries" items={filteredLatestDiscoveries} onTap={handleCarouselTap} onReset={() => resetCarousel('latest-discoveries')} {...carouselBurnProps('latest-discoveries')} />
-      )}
-      {(carouselSettings?.['golden-oldies']?.visible ?? true) && (
-        <Carousel title="🕰️ Golden Oldies"      items={filteredGoldenOldies}      onTap={handleCarouselTap} onReset={() => resetCarousel('golden-oldies')}      {...carouselBurnProps('golden-oldies')} />
-      )}
-      {(carouselSettings?.['climbers']?.visible ?? true) && (
-        <Carousel title="📈 Climbers"           items={filteredClimbers}          onTap={handleCarouselTap} onReset={() => resetCarousel('climbers')}            {...carouselBurnProps('climbers')} />
-      )}
-      {(carouselSettings?.['fallers']?.visible ?? true) && (
-        <Carousel title="📉 Fallers"            items={filteredFallers}           onTap={handleCarouselTap} onReset={() => resetCarousel('fallers')}             {...carouselBurnProps('fallers')} />
-      )}
-      {(carouselSettings?.['on-this-day']?.visible ?? true) && (
-        <Carousel title="📅 On This Day"        items={filteredOnThisDayItems}    onTap={handleCarouselTap} onReset={() => resetCarousel('on-this-day')}         {...carouselBurnProps('on-this-day')} />
+      {order.map(id => blocks[id]
+        ? <Fragment key={id}>{blocks[id]}</Fragment>
+        : null
       )}
 
       {selectedAlbum && (
@@ -413,7 +420,6 @@ export default function StatsTab({ albums, getAlbumStats, lastfmMap, lastfmLoade
           onBadgeClick={onBadgeClick}
         />
       )}
-
     </div>
   )
 }
