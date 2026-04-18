@@ -19,6 +19,10 @@ export default function BrowseTab({
   onBadgeClick,
   carouselSettings,
   onUpdateCarouselSettings,
+  selectedPlaylists,
+  playlistAlbums,
+  playlistsLoading,
+  playlists,
 }) {
   switch (activeSubTab) {
     case 'library':
@@ -53,6 +57,18 @@ export default function BrowseTab({
       )
     case 'explore':
     default:
-      return <ExploreTab />
+      return (
+        <ExploreTab
+          albums={albums}
+          getAlbumStats={getAlbumStats}
+          selectedPlaylists={selectedPlaylists}
+          playlistAlbums={playlistAlbums}
+          playlistsLoading={playlistsLoading}
+          playlists={playlists}
+          saveLater={saveLater}
+          removeLater={removeLater}
+          isSaved={isSaved}
+        />
+      )
   }
 }

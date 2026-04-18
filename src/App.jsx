@@ -4,6 +4,7 @@ import { getDb } from './lib/db.js'
 import { useLibrary } from './hooks/useLibrary.js'
 import { useLastfm } from './hooks/useLastfm.js'
 import { useListenLater } from './hooks/useListenLater.js'
+import { usePlaylists } from './hooks/usePlaylists.js'
 import LoginScreen from './components/LoginScreen.jsx'
 import Header from './components/layout/Header.jsx'
 import TabBar from './components/layout/TabBar.jsx'
@@ -72,6 +73,7 @@ function LoadingScreen({ progress }) {
 
 function defaultCarouselSettings() {
   return {
+    _order: ['most-played', 'latest-discoveries', 'golden-oldies', 'climbers', 'fallers', 'on-this-day'],
     'most-played':        { visible: true, sort: 'original' },
     'latest-discoveries': { visible: true, sort: 'original' },
     'golden-oldies':      { visible: true, sort: 'original' },
@@ -103,6 +105,28 @@ function MainApp({ onLogout }) {
 
   const { getAlbumStats, lastfmMap, onThisDay, loaded: lastfmLoaded, meta: lastfmMeta } = useLastfm()
   const { items: listenLater, save: saveLater, remove: removeLater, isSaved } = useListenLater()
+
+  const [selectedPlaylists, setSelectedPlaylists] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('sonar_selected_playlists')) ?? []
+    } catch { return [] }
+  })
+
+  const { playlists, playlistAlbums, loading: playlistsLoading, error: playlistsError, refreshPlaylists } = usePlaylists(selectedPlaylists)
+
+  function updateSelectedPlaylists(ids) {
+    const capped = ids.slice(0, 5)
+    setSelectedPlaylists(capped)
+    localStorage.setItem('sonar_selected_playlists', JSON.stringify(capped))
+  }
+
+  function updateCarouselOrder(newOrder) {
+    setCarouselSettings(prev => {
+      const next = { ...prev, _order: newOrder }
+      localStorage.setItem('sonar_carousel_settings', JSON.stringify(next))
+      return next
+    })
+  }
 
   async function handleRefresh() {
     const db = await getDb()
@@ -173,6 +197,10 @@ function MainApp({ onLogout }) {
           onBadgeClick={handleBadgeClick}
           carouselSettings={carouselSettings}
           onUpdateCarouselSettings={updateCarouselSettings}
+          selectedPlaylists={selectedPlaylists}
+          playlistAlbums={playlistAlbums}
+          playlistsLoading={playlistsLoading}
+          playlists={playlists}
         />
       )
       case 'later': return (
@@ -205,6 +233,13 @@ function MainApp({ onLogout }) {
         onSettingsClose={() => setIsSettingsOpen(false)}
         carouselSettings={carouselSettings}
         onUpdateCarouselSettings={updateCarouselSettings}
+        onUpdateCarouselOrder={updateCarouselOrder}
+        playlists={playlists}
+        playlistsLoading={playlistsLoading}
+        playlistsError={playlistsError}
+        selectedPlaylists={selectedPlaylists}
+        onUpdateSelectedPlaylists={updateSelectedPlaylists}
+        onRefreshPlaylists={refreshPlaylists}
       />
       <main className="flex-1 overflow-y-auto overflow-x-hidden">
         <ErrorBoundary key={activeTab}>
