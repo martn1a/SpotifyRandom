@@ -140,6 +140,7 @@ function SettingsModal({
   albumCount,
   lastfmMeta,
   onRefresh,
+  onRefreshLastfm,
   carouselSettings,
   onUpdateCarouselSettings,
   onUpdateCarouselOrder,
@@ -151,6 +152,7 @@ function SettingsModal({
   onRefreshPlaylists,
   hideLibraryAlbums = false,
   onUpdateHideLibraryAlbums,
+  onExportLibrary,
 }) {
   const [expandedSection, setExpandedSection] = useState(null)
   const [pickerOpen, setPickerOpen] = useState(false)
@@ -223,12 +225,36 @@ function SettingsModal({
                             Refresh
                           </button>
                         </div>
-                        <div className="bg-card-raised p-4 rounded-2xl border border-border-subtle">
-                          <p className="font-bold text-sm">Last.fm Data</p>
-                          <p className="text-xs text-ink-muted mt-1">
-                            {metaDate ? `Generated ${metaDate} · parser output` : 'No metadata'}
-                          </p>
+                        <div className="bg-card-raised p-4 rounded-2xl border border-border-subtle flex items-center justify-between gap-3">
+                          <div>
+                            <p className="font-bold text-sm">Last.fm Data</p>
+                            <p className="text-xs text-ink-muted mt-1">
+                              {metaDate ? `Generated ${metaDate} · parser output` : 'No metadata'}
+                            </p>
+                          </div>
+                          {onRefreshLastfm && (
+                            <button
+                              onClick={onRefreshLastfm}
+                              className="px-4 py-2 bg-accent text-page text-xs font-bold rounded-xl shrink-0"
+                            >
+                              Refresh
+                            </button>
+                          )}
                         </div>
+                        {onExportLibrary && (
+                          <div className="bg-card-raised p-4 rounded-2xl border border-border-subtle flex items-center justify-between gap-3">
+                            <div>
+                              <p className="font-bold text-sm">Export Library for Parser</p>
+                              <p className="text-xs text-ink-muted mt-1">Downloads spotify-library.json — place in parser/data/</p>
+                            </div>
+                            <button
+                              onClick={onExportLibrary}
+                              className="px-4 py-2 bg-accent text-page text-xs font-bold rounded-xl shrink-0"
+                            >
+                              Export
+                            </button>
+                          </div>
+                        )}
                       </div>
                     </motion.div>
                   )}
@@ -472,8 +498,10 @@ export default function Header({
   selectedPlaylists,
   onUpdateSelectedPlaylists,
   onRefreshPlaylists,
+  onRefreshLastfm,
   hideLibraryAlbums,
   onUpdateHideLibraryAlbums,
+  onExportLibrary,
 }) {
   return (
     <>
@@ -517,6 +545,7 @@ export default function Header({
         albumCount={albumCount}
         lastfmMeta={lastfmMeta}
         onRefresh={onRefresh}
+        onRefreshLastfm={onRefreshLastfm}
         carouselSettings={carouselSettings}
         onUpdateCarouselSettings={onUpdateCarouselSettings}
         onUpdateCarouselOrder={onUpdateCarouselOrder}
@@ -528,6 +557,7 @@ export default function Header({
         onRefreshPlaylists={onRefreshPlaylists}
         hideLibraryAlbums={hideLibraryAlbums}
         onUpdateHideLibraryAlbums={onUpdateHideLibraryAlbums}
+        onExportLibrary={onExportLibrary}
       />
     </>
   )

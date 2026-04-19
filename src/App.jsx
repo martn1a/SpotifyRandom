@@ -156,6 +156,20 @@ function MainApp({ onLogout }) {
     window.location.reload()
   }
 
+  function handleExportLibrary() {
+    const list = albums.map(a => ({
+      artist: a.artists?.[0]?.name || '',
+      album:  a.name,
+    }))
+    const blob = new Blob([JSON.stringify(list, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'spotify-library.json'
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   if (libraryError) {
     return (
       <div className="h-dvh bg-page flex flex-col items-center justify-center px-8 gap-4">
@@ -267,6 +281,7 @@ function MainApp({ onLogout }) {
         onRefreshPlaylists={refreshPlaylists}
         hideLibraryAlbums={hideLibraryAlbums}
         onUpdateHideLibraryAlbums={updateHideLibraryAlbums}
+        onExportLibrary={handleExportLibrary}
       />
       <main className="flex-1 overflow-y-auto overflow-x-hidden">
         <ErrorBoundary key={activeTab}>
