@@ -14,6 +14,7 @@
  *   node index.js --dry-run             — parse + session compute, skip API fetches
  *   node index.js --force-refetch       — ignore cache, re-fetch all track counts
  *   node index.js --fill-release-years  — one-time: fill releaseYear for cached entries
+ *   node index.js --force-refetch-tags  — ignore tags cache, re-fetch all album tags
  *
  * Environment:
  *   LASTFM_API_KEY — required unless --dry-run (set in .env file)
@@ -28,7 +29,10 @@ import {
   loadCache, saveCache, getCached, setCached, setReleaseYear, isCached,
   getCacheStats, mergeSpotifyExport, SOURCE,
 } from './lib/cache.js';
-import { setApiKey, fetchAlbumInfo } from './lib/lastfm-api.js';
+import { setApiKey, fetchAlbumInfo, fetchAlbumTags } from './lib/lastfm-api.js';
+import {
+  loadTagsCache, saveTagsCache, getCachedTags, setCachedTags, isTagsCached,
+} from './lib/album-tags-cache.js';
 import { fetchByMbId, buildMbIdMap } from './lib/musicbrainz.js';
 import {
   computeAllSessions, computePeakMonth,
@@ -39,6 +43,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const OUTPUT_DIR  = path.join(__dirname, 'output');
 const OUTPUT_FILE = path.join(OUTPUT_DIR, 'lastfm-data.json');
 const SPOTIFY_EXPORT_PATH = path.join(__dirname, 'data', 'track_counts_cache_spotify.json');
+const SPOTIFY_LIBRARY_PATH = path.join(__dirname, 'data', 'spotify-library.json');
 
 const PARSER_VERSION = '2.0.0';
 
@@ -49,6 +54,7 @@ const args = process.argv.slice(2);
 const DRY_RUN            = args.includes('--dry-run');
 const FORCE_FETCH        = args.includes('--force-refetch');
 const FILL_RELEASE_YEARS = args.includes('--fill-release-years');
+const FORCE_REFETCH_TAGS = args.includes('--force-refetch-tags');
 const MIN_SCROBBLES = 3;  // Albums below this threshold skip API fetch
 
 // ─────────────────────────────────────────────────────────────────
@@ -135,6 +141,60 @@ async function fetchMissingTrackCounts(albumsToFetch, mbIdMap) {
   }
 
   console.log(`\n  Results: ${lastfmHits} Last.fm ✓  ${mbHits} MusicBrainz ✓  ${estimates} estimated`);
+}
+
+// ─────────────────────────────────────────────────────────────────
+// STEP 3.5 — Fetch missing album genre tags
+// ─────────────────────────────────────────────────────────────────
+async function fetchMissingAlbumTags(uniqueTracksSeenMap) {
+  loadTagsCache();
+
+  // Build combined album list: Last.fm scrobbles + Spotify library export
+  const albumMap = new Map(); // key → { artist, album }
+  for (const [key, data] of uniqueTracksSeenMap) {
+    albumMap.set(key, { artist: data.artist, album: data.album });
+  }
+  if (existsSync(SPOTIFY_LIBRARY_PATH)) {
+    try {
+      const spotifyList = JSON.parse(readFileSync(SPOTIFY_LIBRARY_PATH, 'utf8'));
+      for (const { artist, album } of spotifyList) {
+        const key = `${artist.toLowerCase().trim()}||${album.toLowerCase().trim()}`;
+        if (!albumMap.has(key)) albumMap.set(key, { artist, album });
+      }
+      console.log(`  ✓ Spotify library: ${spotifyList.length} albums merged`);
+    } catch (e) {
+      console.warn(`  ⚠ Could not load spotify-library.json: ${e.message}`);
+    }
+  }
+
+  const toFetch = [...albumMap.values()].filter(({ artist, album }) =>
+    FORCE_REFETCH_TAGS ? true : !isTagsCached(artist, album)
+  );
+
+  if (toFetch.length === 0) {
+    console.log('  ✓ All album tags already cached — no API calls needed');
+    return;
+  }
+
+  console.log(`\n🏷  Fetching genre tags for ${toFetch.length.toLocaleString()} albums...`);
+  if (DRY_RUN) {
+    console.log('  ℹ DRY RUN — skipping tag fetch');
+    return;
+  }
+
+  const estimatedSec = Math.ceil(toFetch.length / 5);
+  console.log(`  Estimated time: ~${estimatedSec < 60 ? estimatedSec + 's' : Math.ceil(estimatedSec / 60) + ' min'}`);
+
+  let done = 0;
+  for (const { artist, album } of toFetch) {
+    const tags = await fetchAlbumTags(artist, album);
+    setCachedTags(artist, album, tags);
+    done++;
+    progress(done, toFetch.length, `${artist} — ${album}`);
+  }
+  console.log('');
+
+  if (!DRY_RUN) saveTagsCache();
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -538,6 +598,10 @@ async function main() {
   // Save updated cache to disk
   if (!DRY_RUN) saveCache();
 
+  // ── STEP 3.5: Fetch missing album genre tags ──────────────────
+  console.log('\nSTEP 3.5 — Fetching album genre tags');
+  await fetchMissingAlbumTags(uniqueTracksSeenMap);
+
   const cacheStatsAfter = getCacheStats();
   console.log(`\n  Cache now: ${cacheStatsAfter.total.toLocaleString()} entries (+${cacheStatsAfter.total - cacheStatsBefore.total})`);
 
@@ -608,6 +672,7 @@ async function main() {
     // Full timeline — used for On This Day, seasonal features, time-based carousels
     // Compact format: ts=timestamp, a=artist, al=album, t=track
     timeline:  timelineCompact,
+    albumTags: Object.fromEntries(loadTagsCache()),
   };
 
   // ── Write output ───────────────────────────────────────────────
