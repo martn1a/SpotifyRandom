@@ -9,6 +9,12 @@ export const GENRE_CLUSTERS = [
     kw: ['electronic','techno','house','ambient','drum and bass','dnb','dubstep','trance','garage','jungle','breakbeat','idm','glitch','downtempo','synthwave','darkwave','edm','electronica','trip-hop','synth','rave','acid','chillout','dub','eurodance','electro','bass music','vaporwave','industrial','noise','minimal techno','tech house','deep house','progressive house','elektronisch','tanzmusik','elektronische musik'],
   },
   {
+    id: 'metal',
+    label: 'Metal',
+    icon: '🤘',
+    kw: ['metal','heavy metal','black metal','death metal','doom','thrash','sludge','speed metal','power metal','prog metal','deathcore','metalcore','symphonic metal','folk metal','schwermetall'],
+  },
+  {
     id: 'rock',
     label: 'Rock',
     icon: '🎸',
@@ -19,12 +25,6 @@ export const GENRE_CLUSTERS = [
     label: 'Punk / Indie',
     icon: '📻',
     kw: ['punk','indie','hardcore','post-hardcore','noise rock','lo-fi','slacker','college rock','emo','screamo','post-punk','new wave','coldwave','indiemusik','punkrock'],
-  },
-  {
-    id: 'metal',
-    label: 'Metal',
-    icon: '🤘',
-    kw: ['metal','heavy metal','black metal','death metal','doom','thrash','sludge','speed metal','power metal','prog metal','deathcore','metalcore','symphonic metal','folk metal','schwermetall'],
   },
   {
     id: 'hiphop',
