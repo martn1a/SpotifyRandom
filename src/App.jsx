@@ -1,4 +1,4 @@
-import { useState, useEffect, Component } from 'react'
+import { useState, useEffect, useMemo, Component } from 'react'
 import { isLoggedIn, handleCallback, logout } from './lib/auth.js'
 import { getDb } from './lib/db.js'
 import { useLibrary } from './hooks/useLibrary.js'
@@ -104,7 +104,17 @@ function MainApp({ onLogout }) {
     albums, genresLoading, albumsLoading, albumsProgress, error: libraryError
   } = useLibrary()
 
-  const { getAlbumStats, lastfmMap, onThisDay, loaded: lastfmLoaded, meta: lastfmMeta } = useLastfm()
+  const { getAlbumStats, lastfmMap, onThisDay, loaded: lastfmLoaded, meta: lastfmMeta, refresh: refreshLastfm, albumTagsMap } = useLastfm()
+
+  const enrichedAlbums = useMemo(() => {
+    if (!albumTagsMap.size) return albums
+    return albums.map(a => {
+      const key = `${a.artists?.[0]?.name || ''}||${a.name}`.toLowerCase()
+      const lfmTags = albumTagsMap.get(key)
+      if (lfmTags?.length) return { ...a, _genres: lfmTags }
+      return a
+    })
+  }, [albums, albumTagsMap])
   const { items: listenLater, save: saveLater, remove: removeLater, isSaved } = useListenLater()
 
   const [selectedPlaylists, setSelectedPlaylists] = useState(() => {
@@ -183,7 +193,8 @@ function MainApp({ onLogout }) {
     switch (activeTab) {
       case 'discover': return (
         <DiscoverTab
-          albums={albums}
+          albums={enrichedAlbums}
+          genresLoading={genresLoading}
           getAlbumStats={getAlbumStats}
           saveLater={saveLater}
           removeLater={removeLater}
@@ -193,7 +204,7 @@ function MainApp({ onLogout }) {
       )
       case 'browse': return (
         <BrowseTab
-          albums={albums}
+          albums={enrichedAlbums}
           getAlbumStats={getAlbumStats}
           lastfmMap={lastfmMap}
           lastfmLoaded={lastfmLoaded}
@@ -223,7 +234,7 @@ function MainApp({ onLogout }) {
           removeLater={removeLater}
           isSaved={isSaved}
           getAlbumStats={getAlbumStats}
-          albums={albums}
+          albums={enrichedAlbums}
           onBadgeClick={handleBadgeClick}
         />
       )
@@ -238,6 +249,7 @@ function MainApp({ onLogout }) {
         albumCount={albums.length}
         lastfmMeta={lastfmMeta}
         onRefresh={handleRefresh}
+        onRefreshLastfm={refreshLastfm}
         isSidebarOpen={isSidebarOpen}
         onSidebarOpen={() => setIsSidebarOpen(true)}
         onSidebarClose={() => setIsSidebarOpen(false)}
