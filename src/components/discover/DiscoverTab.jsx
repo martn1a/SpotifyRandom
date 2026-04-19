@@ -396,7 +396,7 @@ function MultiPickList({ albums, getAlbumStats, onQueue, onSave, onRemove, isSav
 
 // ── FilterModal ───────────────────────────────────────────────────────
 
-function FilterModal({ draftFilters, draftToggles, setDraftFilters, setDraftToggles, onApply, onClose, onSavePreset, activeFilterCount, albums, getAlbumStats, recentlyAddedFilter, setRecentlyAddedFilter }) {
+function FilterModal({ draftFilters, draftToggles, setDraftFilters, setDraftToggles, onApply, onClose, onSavePreset, activeFilterCount, albums, getAlbumStats, recentlyAddedFilter, setRecentlyAddedFilter, genresLoading }) {
   const [presetName,     setPresetName]     = useState('')
   const [showNameInput,  setShowNameInput]  = useState(false)
 
@@ -409,12 +409,17 @@ function FilterModal({ draftFilters, draftToggles, setDraftFilters, setDraftTogg
     const counts = {}
     let noGenreCount = 0
     for (const a of pool) {
-      const cluster = getGenreCluster(a)
-      if (cluster) {
-        counts[cluster.id] = (counts[cluster.id] || 0) + 1
-      } else {
-        noGenreCount++
+      const seen = new Set()
+      let hasCluster = false
+      for (const g of (a._genres || [])) {
+        const c = clusterOf(g)
+        if (c !== 'other' && !seen.has(c)) {
+          counts[c] = (counts[c] || 0) + 1
+          seen.add(c)
+          hasCluster = true
+        }
       }
+      if (!hasCluster) noGenreCount++
     }
     counts['no-genre'] = noGenreCount
     return counts
@@ -520,6 +525,9 @@ function FilterModal({ draftFilters, draftToggles, setDraftFilters, setDraftTogg
           {/* Genres */}
           <div>
             <p className="text-[9px] font-bold text-ink-muted uppercase tracking-widest mb-3">Genres</p>
+            {genresLoading ? (
+              <p className="text-[11px] text-ink-muted">Loading genres…</p>
+            ) : (
             <div className="flex flex-wrap gap-2">
               {GENRE_CLUSTERS.map(c => {
                 const active = draftFilters.has(c.id)
@@ -570,6 +578,7 @@ function FilterModal({ draftFilters, draftToggles, setDraftFilters, setDraftTogg
                 )
               })()}
             </div>
+            )}
           </div>
 
           {/* Listening history */}
@@ -701,7 +710,7 @@ function FilterModal({ draftFilters, draftToggles, setDraftFilters, setDraftTogg
 
 // ── Main component ────────────────────────────────────────────────────
 
-export default function DiscoverTab({ albums, getAlbumStats, saveLater, removeLater, isSaved, onBadgeClick }) {
+export default function DiscoverTab({ albums, genresLoading, getAlbumStats, saveLater, removeLater, isSaved, onBadgeClick }) {
   const [activeFilters,   setActiveFilters]  = useState(new Set())
   const [toggles,         setToggles]        = useState({ weightUnheard: false, excludeKeywords: false, avoidRecent: false, boostRecentlyAdded: false })
   const [activePreset,    setActivePreset]   = useState(null)
@@ -1117,6 +1126,7 @@ export default function DiscoverTab({ albums, getAlbumStats, saveLater, removeLa
             getAlbumStats={getAlbumStats}
             recentlyAddedFilter={draftRecentlyAddedFilter}
             setRecentlyAddedFilter={setDraftRecentlyAddedFilter}
+            genresLoading={genresLoading}
           />
         )}
       </AnimatePresence>
