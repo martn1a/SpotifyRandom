@@ -1,17 +1,25 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 
 // Loads public/lastfm-data.json and builds a lowercase lookup map.
 // Key format: "artist||album" (lowercase) → album stats object
 // Non-blocking — app works without it, listen counts just show as 0.
 export function useLastfm() {
-  const [lastfmMap,  setLastfmMap]  = useState(new Map())
-  const [stats,      setStats]      = useState(null)
-  const [meta,       setMeta]       = useState(null)
-  const [onThisDay,  setOnThisDay]  = useState([])
-  const [loaded,     setLoaded]     = useState(false)
+  const [lastfmMap,   setLastfmMap]   = useState(new Map())
+  const [stats,       setStats]       = useState(null)
+  const [meta,        setMeta]        = useState(null)
+  const [onThisDay,   setOnThisDay]   = useState([])
+  const [loaded,      setLoaded]      = useState(false)
+  const [refreshKey,  setRefreshKey]  = useState(0)
+  const [albumTagsMap, setAlbumTagsMap] = useState(new Map())
+
+  const refresh = useCallback(() => {
+    setLoaded(false)
+    setRefreshKey(k => k + 1)
+  }, [])
 
   useEffect(() => {
-    fetch(`${import.meta.env.BASE_URL}lastfm-data.json`)
+    const cacheMode = refreshKey > 0 ? 'reload' : 'default'
+    fetch(`${import.meta.env.BASE_URL}lastfm-data.json`, { cache: cacheMode })
       .then(r => {
         if (!r.ok) throw new Error(`HTTP ${r.status}`)
         return r.json()
@@ -25,6 +33,13 @@ export function useLastfm() {
         setLastfmMap(map)
         setStats(data.stats || null)
         setMeta(data.meta || null)
+
+        // Parse album tags
+        const tagsMap = new Map()
+        for (const [key, tags] of Object.entries(data.albumTags || {})) {
+          tagsMap.set(key.toLowerCase(), tags)
+        }
+        setAlbumTagsMap(tagsMap)
 
         // Compute "On This Day" from timeline (runs once, O(N))
         const today = new Date()
@@ -52,7 +67,7 @@ export function useLastfm() {
         // lastfm data is optional — silently continue without it
         setLoaded(true)
       })
-  }, [])
+  }, [refreshKey])
 
   // Helper: look up a Spotify album object in the map
   function getAlbumStats(album) {
@@ -61,5 +76,5 @@ export function useLastfm() {
     return lastfmMap.get(key) || null
   }
 
-  return { lastfmMap, stats, meta, onThisDay, loaded, getAlbumStats }
+  return { lastfmMap, albumTagsMap, stats, meta, onThisDay, loaded, getAlbumStats, refresh }
 }

@@ -1,9 +1,11 @@
-import { useState, useEffect, Component } from 'react'
+import { useState, useEffect, useMemo, Component } from 'react'
 import { isLoggedIn, handleCallback, logout } from './lib/auth.js'
 import { getDb } from './lib/db.js'
 import { useLibrary } from './hooks/useLibrary.js'
 import { useLastfm } from './hooks/useLastfm.js'
 import { useListenLater } from './hooks/useListenLater.js'
+import { usePlaylists } from './hooks/usePlaylists.js'
+import { useSkin } from './hooks/useSkin.js'
 import LoginScreen from './components/LoginScreen.jsx'
 import Header from './components/layout/Header.jsx'
 import TabBar from './components/layout/TabBar.jsx'
@@ -72,12 +74,14 @@ function LoadingScreen({ progress }) {
 
 function defaultCarouselSettings() {
   return {
+    _order: ['most-played', 'latest-discoveries', 'recently-added', 'golden-oldies', 'climbers', 'fallers', 'on-this-day'],
     'most-played':        { visible: true, sort: 'original' },
     'latest-discoveries': { visible: true, sort: 'original' },
     'golden-oldies':      { visible: true, sort: 'original' },
     'climbers':           { visible: true, sort: 'original' },
     'fallers':            { visible: true, sort: 'original' },
     'on-this-day':        { visible: true, sort: 'original' },
+    'recently-added':     { visible: true, sort: 'original' },
   }
 }
 
@@ -97,17 +101,79 @@ function MainApp({ onLogout }) {
     }
   })
 
+  const [skin, setSkin] = useSkin()
+
   const {
     albums, genresLoading, albumsLoading, albumsProgress, error: libraryError
   } = useLibrary()
 
-  const { getAlbumStats, lastfmMap, onThisDay, loaded: lastfmLoaded, meta: lastfmMeta } = useLastfm()
+  const { getAlbumStats, lastfmMap, onThisDay, loaded: lastfmLoaded, meta: lastfmMeta, refresh: refreshLastfm, albumTagsMap } = useLastfm()
+
+  const enrichedAlbums = useMemo(() => {
+    if (!lastfmMap.size && !albumTagsMap.size) return albums
+    return albums.map(a => {
+      const key = `${a.artists?.[0]?.name || ''}||${a.name}`.toLowerCase()
+      const lfmEntry = lastfmMap.get(key)
+      const discogsStyles = lfmEntry?.discogsStyles || []
+      const discogsGenres = lfmEntry?.discogsGenres || []
+      const lfmTags = albumTagsMap.get(key) || []
+      const genres = [...discogsStyles, ...discogsGenres, ...lfmTags]
+      return { ...a, _genres: genres, _discogsGenres: discogsGenres }
+    })
+  }, [albums, lastfmMap, albumTagsMap])
   const { items: listenLater, save: saveLater, remove: removeLater, isSaved } = useListenLater()
+
+  const [selectedPlaylists, setSelectedPlaylists] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('sonar_selected_playlists')) ?? []
+    } catch { return [] }
+  })
+
+  const { playlists, playlistAlbums, loading: playlistsLoading, error: playlistsError, refreshPlaylists } = usePlaylists(selectedPlaylists)
+
+  const [hideLibraryAlbums, setHideLibraryAlbums] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem('sonar_hide_library_albums')) ?? false
+    } catch { return false }
+  })
+
+  function updateHideLibraryAlbums(value) {
+    setHideLibraryAlbums(value)
+    localStorage.setItem('sonar_hide_library_albums', JSON.stringify(value))
+  }
+
+  function updateSelectedPlaylists(ids) {
+    const capped = ids.slice(0, 5)
+    setSelectedPlaylists(capped)
+    localStorage.setItem('sonar_selected_playlists', JSON.stringify(capped))
+  }
+
+  function updateCarouselOrder(newOrder) {
+    setCarouselSettings(prev => {
+      const next = { ...prev, _order: newOrder }
+      localStorage.setItem('sonar_carousel_settings', JSON.stringify(next))
+      return next
+    })
+  }
 
   async function handleRefresh() {
     const db = await getDb()
     await db.delete('library', 'albums')
     window.location.reload()
+  }
+
+  function handleExportLibrary() {
+    const list = albums.map(a => ({
+      artist: a.artists?.[0]?.name || '',
+      album:  a.name,
+    }))
+    const blob = new Blob([JSON.stringify(list, null, 2)], { type: 'application/json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'spotify-library.json'
+    a.click()
+    URL.revokeObjectURL(url)
   }
 
   if (libraryError) {
@@ -147,7 +213,8 @@ function MainApp({ onLogout }) {
     switch (activeTab) {
       case 'discover': return (
         <DiscoverTab
-          albums={albums}
+          albums={enrichedAlbums}
+          genresLoading={genresLoading}
           getAlbumStats={getAlbumStats}
           saveLater={saveLater}
           removeLater={removeLater}
@@ -157,7 +224,7 @@ function MainApp({ onLogout }) {
       )
       case 'browse': return (
         <BrowseTab
-          albums={albums}
+          albums={enrichedAlbums}
           getAlbumStats={getAlbumStats}
           lastfmMap={lastfmMap}
           lastfmLoaded={lastfmLoaded}
@@ -173,6 +240,11 @@ function MainApp({ onLogout }) {
           onBadgeClick={handleBadgeClick}
           carouselSettings={carouselSettings}
           onUpdateCarouselSettings={updateCarouselSettings}
+          selectedPlaylists={selectedPlaylists}
+          playlistAlbums={playlistAlbums}
+          playlistsLoading={playlistsLoading}
+          playlists={playlists}
+          hideLibraryAlbums={hideLibraryAlbums}
         />
       )
       case 'later': return (
@@ -182,7 +254,7 @@ function MainApp({ onLogout }) {
           removeLater={removeLater}
           isSaved={isSaved}
           getAlbumStats={getAlbumStats}
-          albums={albums}
+          albums={enrichedAlbums}
           onBadgeClick={handleBadgeClick}
         />
       )
@@ -197,6 +269,7 @@ function MainApp({ onLogout }) {
         albumCount={albums.length}
         lastfmMeta={lastfmMeta}
         onRefresh={handleRefresh}
+        onRefreshLastfm={refreshLastfm}
         isSidebarOpen={isSidebarOpen}
         onSidebarOpen={() => setIsSidebarOpen(true)}
         onSidebarClose={() => setIsSidebarOpen(false)}
@@ -205,6 +278,18 @@ function MainApp({ onLogout }) {
         onSettingsClose={() => setIsSettingsOpen(false)}
         carouselSettings={carouselSettings}
         onUpdateCarouselSettings={updateCarouselSettings}
+        onUpdateCarouselOrder={updateCarouselOrder}
+        playlists={playlists}
+        playlistsLoading={playlistsLoading}
+        playlistsError={playlistsError}
+        selectedPlaylists={selectedPlaylists}
+        onUpdateSelectedPlaylists={updateSelectedPlaylists}
+        onRefreshPlaylists={refreshPlaylists}
+        hideLibraryAlbums={hideLibraryAlbums}
+        onUpdateHideLibraryAlbums={updateHideLibraryAlbums}
+        onExportLibrary={handleExportLibrary}
+        skin={skin}
+        onSkinChange={setSkin}
       />
       <main className="flex-1 overflow-y-auto overflow-x-hidden">
         <ErrorBoundary key={activeTab}>

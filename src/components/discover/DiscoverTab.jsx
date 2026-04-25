@@ -1,6 +1,5 @@
-import { useState, useMemo, useCallback, useRef, useEffect } from 'react'
+import { useState, useMemo, useCallback, useEffect } from 'react'
 import { motion, AnimatePresence, useMotionValue, useTransform } from 'motion/react'
-import { GENRE_CLUSTERS, clusterOf } from '../../data/genre-clusters.js'
 import { addToQueue } from '../../lib/spotify-api.js'
 import AlbumModal from '../AlbumModal.jsx'
 
@@ -10,6 +9,13 @@ const DECADES = ['60s', '70s', '80s', '90s', '00s', '10s', '20s']
 const DECADE_STARTS = { '60s': 1960, '70s': 1970, '80s': 1980, '90s': 1990, '00s': 2000, '10s': 2010, '20s': 2020 }
 const NINETY_DAYS_MS  = 90 * 24 * 60 * 60 * 1000
 const THIRTY_DAYS_MS  = 30 * 24 * 60 * 60 * 1000
+const RECENTLY_ADDED_RANGES = [
+  { id: '7d',  label: '7d',  ms: 7   * 24 * 60 * 60 * 1000 },
+  { id: '1m',  label: '1m',  ms: 30  * 24 * 60 * 60 * 1000 },
+  { id: '3m',  label: '3m',  ms: 90  * 24 * 60 * 60 * 1000 },
+  { id: '6m',  label: '6m',  ms: 180 * 24 * 60 * 60 * 1000 },
+  { id: '1y',  label: '1y',  ms: 365 * 24 * 60 * 60 * 1000 },
+]
 const BLOCKLIST_KW    = ['instrumental', 'remix', 'edit', 'live', 'reprise', 'version']
 const PICK_COUNTS     = [1, 3, 5, 10]
 
@@ -31,14 +37,6 @@ function albumDecade(album) {
   const year = parseInt((album.release_date || '').substring(0, 4))
   if (isNaN(year)) return null
   return Object.entries(DECADE_STARTS).find(([, s]) => year >= s && year < s + 10)?.[0] ?? null
-}
-
-function getGenreCluster(album) {
-  for (const g of (album._genres || [])) {
-    const id = clusterOf(g)
-    if (id !== 'other') return GENRE_CLUSTERS.find(c => c.id === id) ?? null
-  }
-  return null
 }
 
 // Weighted random — returns index into the passed array
@@ -82,10 +80,90 @@ function Chip({ label, active, onClick, children }) {
   )
 }
 
+function PresetSheet({ open, onClose, presets, customPresets, activePreset, onSelect, onDelete }) {
+  return (
+    <AnimatePresence>
+      {open && (
+        <>
+          <motion.div
+            key="ps-backdrop"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={onClose}
+            className="fixed inset-0 bg-black/60 z-40"
+          />
+          <motion.div
+            key="ps-sheet"
+            initial={{ y: '100%' }}
+            animate={{ y: 0 }}
+            exit={{ y: '100%' }}
+            transition={{ type: 'spring', damping: 30, stiffness: 300 }}
+            className="fixed bottom-0 left-0 right-0 max-h-[80vh] bg-card border-t border-border-subtle z-50 rounded-t-[2rem] overflow-hidden flex flex-col"
+          >
+            {/* Drag pill */}
+            <div className="flex justify-center py-3 flex-shrink-0">
+              <div className="w-10 h-1.5 bg-border-subtle rounded-full" />
+            </div>
+            {/* Header */}
+            <div className="flex items-center justify-between px-5 pb-4 flex-shrink-0">
+              <h2 className="text-[16px] font-bold text-ink tracking-tight">Discovery Mode</h2>
+              <button onClick={onClose} className="text-ink-muted text-xl leading-none active:text-ink">✕</button>
+            </div>
+            {/* List */}
+            <div className="overflow-y-auto flex-1 px-5 pb-8">
+              {/* Built-ins */}
+              {presets.map(p => (
+                <button
+                  key={p.id}
+                  onClick={() => { onSelect(p.id); onClose() }}
+                  className={`w-full flex items-center gap-3 py-3 border-b border-border-subtle/50 last:border-0 text-left ${activePreset === p.id ? 'border-l-2 border-l-accent pl-3' : ''}`}
+                >
+                  <span className="text-xl flex-shrink-0">{p.icon}</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[14px] font-bold text-ink">{p.label}</p>
+                    <p className="text-[10px] font-bold text-ink-muted uppercase tracking-widest mt-0.5">Smart Algorithm</p>
+                  </div>
+                  {activePreset === p.id && <span className="text-accent text-lg flex-shrink-0">✓</span>}
+                </button>
+              ))}
+              {/* Custom presets */}
+              {customPresets.map(p => {
+                const filterCount = (p.filters?.length ?? 0) + Object.values(p.toggles ?? {}).filter(Boolean).length
+                return (
+                  <div key={p.id} className={`flex items-center gap-3 py-3 border-b border-border-subtle/50 last:border-0 ${activePreset === p.id ? 'border-l-2 border-l-accent pl-3' : ''}`}>
+                    <button
+                      onClick={() => { onSelect(p.id); onClose() }}
+                      className="flex items-center gap-3 flex-1 min-w-0 text-left"
+                    >
+                      <span className="text-xl flex-shrink-0">{p.icon}</span>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-[14px] font-bold text-ink">{p.label}</p>
+                        <p className="text-[10px] font-bold text-ink-muted uppercase tracking-widest mt-0.5">{filterCount} Filter{filterCount !== 1 ? 's' : ''} Active</p>
+                      </div>
+                      {activePreset === p.id && <span className="text-accent text-lg flex-shrink-0">✓</span>}
+                    </button>
+                    <button
+                      onClick={() => onDelete(p.id)}
+                      className="flex-shrink-0 text-[11px] font-bold text-red-400 px-2 py-1 rounded active:opacity-70"
+                    >
+                      Delete
+                    </button>
+                  </div>
+                )
+              })}
+            </div>
+          </motion.div>
+        </>
+      )}
+    </AnimatePresence>
+  )
+}
+
 function FeaturedAlbumCard({ album, stats, onQueue, onSkip, onTap }) {
   const art     = album.images?.[0]?.url
   const artist  = (album.artists || []).map(a => a.name).join(', ')
-  const cluster = getGenreCluster(album)
+  const genre   = album._discogsGenres?.[0] ?? null
   const count   = stats?.listenCount ?? 0
   const year    = (album.release_date || '').substring(0, 4)
   const [gone, setGone] = useState(false)
@@ -170,11 +248,11 @@ function FeaturedAlbumCard({ album, stats, onQueue, onSkip, onTap }) {
       <div className="px-4 pt-3 pb-4 cursor-pointer" onClick={() => { if (Math.abs(x.get()) < 5) onTap() }}>
         <p className="text-[17px] font-bold text-ink leading-snug line-clamp-2">{album.name}</p>
         <p className="text-[13px] text-ink-secondary mt-1 truncate">{artist}</p>
-        {cluster && (
+        {genre && (
           <div className="flex gap-1.5 mt-2 flex-wrap">
             <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold"
               style={{ background: 'rgba(138,138,255,0.15)', color: '#a0a0ff' }}>
-              {cluster.icon} {cluster.label}
+              {genre}
             </span>
           </div>
         )}
@@ -309,14 +387,40 @@ function MultiPickList({ albums, getAlbumStats, onQueue, onSave, onRemove, isSav
 
 // ── FilterModal ───────────────────────────────────────────────────────
 
-function FilterModal({ draftFilters, draftToggles, setDraftFilters, setDraftToggles, onApply, onClose, onSavePreset, activeFilterCount }) {
+function FilterModal({ draftFilters, draftToggles, setDraftFilters, setDraftToggles, onApply, onClose, onSavePreset, activeFilterCount, albums, getAlbumStats, recentlyAddedFilter, setRecentlyAddedFilter, genresLoading }) {
   const [presetName,     setPresetName]     = useState('')
   const [showNameInput,  setShowNameInput]  = useState(false)
+
+  const { genreCounts, genreList } = useMemo(() => {
+    const activeDecades = DECADES.filter(d => draftFilters.has(d))
+    const pool = albums.filter(a => {
+      if (activeDecades.length && !activeDecades.includes(albumDecade(a))) return false
+      return true
+    })
+    const counts = {}
+    let noGenreCount = 0
+    for (const a of pool) {
+      const dg = a._discogsGenres || []
+      if (dg.length === 0) { noGenreCount++; continue }
+      for (const g of dg) counts[g] = (counts[g] || 0) + 1
+    }
+    counts['no-genre'] = noGenreCount
+    const sorted = Object.entries(counts)
+      .filter(([g]) => g !== 'no-genre')
+      .sort((a, b) => b[1] - a[1])
+      .map(([g]) => g)
+    return { genreCounts: counts, genreList: sorted }
+  }, [albums, draftFilters])
 
   function toggleDraftFilter(f) {
     setDraftFilters(prev => {
       const next = new Set(prev)
-      next.has(f) ? next.delete(f) : next.add(f)
+      if (next.has(f)) {
+        next.delete(f)
+      } else {
+        next.add(f)
+        if (genreList.includes(f)) next.delete('no-genre')
+      }
       return next
     })
   }
@@ -326,9 +430,10 @@ function FilterModal({ draftFilters, draftToggles, setDraftFilters, setDraftTogg
   }
 
   const draftCount = draftFilters.size
-    + (draftToggles.weightUnheard   ? 1 : 0)
-    + (draftToggles.excludeKeywords ? 1 : 0)
-    + (draftToggles.avoidRecent     ? 1 : 0)
+    + (draftToggles.weightUnheard      ? 1 : 0)
+    + (draftToggles.excludeKeywords    ? 1 : 0)
+    + (draftToggles.avoidRecent        ? 1 : 0)
+    + (draftToggles.boostRecentlyAdded ? 1 : 0)
 
   function handleSavePreset() {
     if (!showNameInput) { setShowNameInput(true); return }
@@ -405,24 +510,59 @@ function FilterModal({ draftFilters, draftToggles, setDraftFilters, setDraftTogg
           {/* Genres */}
           <div>
             <p className="text-[9px] font-bold text-ink-muted uppercase tracking-widest mb-3">Genres</p>
+            {genresLoading ? (
+              <p className="text-[11px] text-ink-muted">Loading genres…</p>
+            ) : (
             <div className="flex flex-wrap gap-2">
-              {GENRE_CLUSTERS.map(c => {
-                const active = draftFilters.has(c.id)
+              {genreList.map(g => {
+                const active = draftFilters.has(g)
+                const count = genreCounts[g] ?? 0
                 return (
                   <button
-                    key={c.id}
-                    onClick={() => toggleDraftFilter(c.id)}
+                    key={g}
+                    onClick={() => toggleDraftFilter(g)}
                     className={`flex items-center gap-1 px-3.5 py-1.5 rounded-full text-[11px] border transition-all duration-200 active:scale-[0.96] ${
                       active
                         ? 'border-accent bg-accent text-black font-semibold'
                         : 'border-border-subtle bg-card-raised text-ink-secondary font-medium'
                     }`}
                   >
-                    <span>{c.icon}</span><span>{c.label}</span>
+                    <span>{g}</span>
+                    <span className={active ? 'opacity-70' : 'text-ink-muted'}>{count}</span>
                   </button>
                 )
               })}
+              {/* No Genre chip */}
+              {(() => {
+                const active = draftFilters.has('no-genre')
+                const count = genreCounts['no-genre'] ?? 0
+                return (
+                  <button
+                    onClick={() => {
+                      setDraftFilters(prev => {
+                        const next = new Set(prev)
+                        if (next.has('no-genre')) {
+                          next.delete('no-genre')
+                        } else {
+                          genreList.forEach(g => next.delete(g))
+                          next.add('no-genre')
+                        }
+                        return next
+                      })
+                    }}
+                    className={`flex items-center gap-1 px-3.5 py-1.5 rounded-full text-[11px] border transition-all duration-200 active:scale-[0.96] ${
+                      active
+                        ? 'border-accent bg-accent text-black font-semibold'
+                        : 'border-border-subtle bg-card-raised text-ink-secondary font-medium'
+                    }`}
+                  >
+                    <span>No Genre</span>
+                    <span className={active ? 'opacity-70' : 'text-ink-muted'}>{count}</span>
+                  </button>
+                )
+              })()}
             </div>
+            )}
           </div>
 
           {/* Listening history */}
@@ -448,14 +588,38 @@ function FilterModal({ draftFilters, draftToggles, setDraftFilters, setDraftTogg
             </div>
           </div>
 
+          {/* Recently Added */}
+          <div>
+            <p className="text-[9px] font-bold text-ink-muted uppercase tracking-widest mb-3">Recently Added</p>
+            <div className="flex flex-wrap gap-2">
+              {RECENTLY_ADDED_RANGES.map(r => {
+                const active = recentlyAddedFilter === r.id
+                return (
+                  <button
+                    key={r.id}
+                    onClick={() => setRecentlyAddedFilter(active ? null : r.id)}
+                    className={`px-3.5 py-1.5 rounded-full text-[11px] border transition-all duration-200 active:scale-[0.96] ${
+                      active
+                        ? 'border-accent bg-accent text-black font-semibold'
+                        : 'border-border-subtle bg-card-raised text-ink-secondary font-medium'
+                    }`}
+                  >
+                    {r.label}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
           {/* Preferences */}
           <div>
             <p className="text-[9px] font-bold text-ink-muted uppercase tracking-widest mb-3">Preferences</p>
             <div className="space-y-2">
               {[
-                { key: 'weightUnheard',   label: '⚖ Weighted',            desc: 'Unheard albums 10× more likely' },
-                { key: 'excludeKeywords', label: '🚫 No Remixes',          desc: 'Filters live/remix/edit/version' },
-                { key: 'avoidRecent',     label: '🕐 Not Recently Queued', desc: 'Skips albums queued in last 30 days' },
+                { key: 'weightUnheard',      label: '⚖ Weighted',             desc: 'Unheard albums 10× more likely' },
+                { key: 'excludeKeywords',    label: '🚫 No Remixes',           desc: 'Filters live/remix/edit/version' },
+                { key: 'avoidRecent',        label: '🕐 Not Recently Queued',  desc: 'Skips albums queued in last 30 days' },
+                { key: 'boostRecentlyAdded', label: '🆕 Boost Recently Added', desc: 'Albums added in last 30 days get 5× boost' },
               ].map(({ key, label, desc }) => (
                 <button
                   key={key}
@@ -530,9 +694,9 @@ function FilterModal({ draftFilters, draftToggles, setDraftFilters, setDraftTogg
 
 // ── Main component ────────────────────────────────────────────────────
 
-export default function DiscoverTab({ albums, getAlbumStats, saveLater, removeLater, isSaved, onBadgeClick }) {
+export default function DiscoverTab({ albums, genresLoading, getAlbumStats, saveLater, removeLater, isSaved, onBadgeClick }) {
   const [activeFilters,   setActiveFilters]  = useState(new Set())
-  const [toggles,         setToggles]        = useState({ weightUnheard: false, excludeKeywords: false, avoidRecent: false })
+  const [toggles,         setToggles]        = useState({ weightUnheard: false, excludeKeywords: false, avoidRecent: false, boostRecentlyAdded: false })
   const [activePreset,    setActivePreset]   = useState(null)
   const [customPresets,   setCustomPresets]  = useState(() => {
     try { return JSON.parse(localStorage.getItem('discover_presets') || '[]') } catch { return [] }
@@ -545,8 +709,11 @@ export default function DiscoverTab({ albums, getAlbumStats, saveLater, removeLa
   const [selectedAlbum,   setSelectedAlbum]  = useState(null)
   const [queueStatus,     setQueueStatus]    = useState(null)
   const [filterModalOpen, setFilterModalOpen] = useState(false)
+  const [presetSheetOpen, setPresetSheetOpen] = useState(false)
   const [draftFilters,    setDraftFilters]   = useState(new Set())
-  const [draftToggles,    setDraftToggles]   = useState({ weightUnheard: false, excludeKeywords: false, avoidRecent: false })
+  const [draftToggles,    setDraftToggles]   = useState({ weightUnheard: false, excludeKeywords: false, avoidRecent: false, boostRecentlyAdded: false })
+  const [recentlyAddedFilter,      setRecentlyAddedFilter]      = useState(null)
+  const [draftRecentlyAddedFilter, setDraftRecentlyAddedFilter] = useState(null)
 
   // ── Filter helpers ─────────────────────────────────────────────────
 
@@ -571,18 +738,22 @@ export default function DiscoverTab({ albums, getAlbumStats, saveLater, removeLa
   function applyPreset(id) {
     if (id === 'surprise') {
       setActiveFilters(new Set())
-      setToggles({ weightUnheard: false, excludeKeywords: false, avoidRecent: false })
+      setToggles({ weightUnheard: false, excludeKeywords: false, avoidRecent: false, boostRecentlyAdded: false })
+      setRecentlyAddedFilter(null)
     } else if (id === 'forgotten') {
       setActiveFilters(new Set(['Never heard']))
-      setToggles({ weightUnheard: true, excludeKeywords: true, avoidRecent: false })
+      setToggles({ weightUnheard: true, excludeKeywords: true, avoidRecent: false, boostRecentlyAdded: false })
+      setRecentlyAddedFilter(null)
     } else if (id === 'deepcuts') {
       setActiveFilters(new Set(['70s', '80s', '90s', '00s']))
-      setToggles({ weightUnheard: false, excludeKeywords: true, avoidRecent: true })
+      setToggles({ weightUnheard: false, excludeKeywords: true, avoidRecent: true, boostRecentlyAdded: false })
+      setRecentlyAddedFilter(null)
     } else {
       const cp = customPresets.find(p => p.id === id)
       if (cp) {
         setActiveFilters(new Set(cp.filters ?? cp.savedFilters ?? []))
         setToggles(cp.toggles ?? cp.savedToggles ?? { weightUnheard: false, excludeKeywords: false, avoidRecent: false })
+        setRecentlyAddedFilter(cp.recentlyAddedFilter ?? null)
       }
     }
     setActivePreset(id)
@@ -596,6 +767,7 @@ export default function DiscoverTab({ albums, getAlbumStats, saveLater, removeLa
       label: name,
       filters: [...filters],
       toggles: { ...toggleState },
+      recentlyAddedFilter: recentlyAddedFilter,
     }
     const next = [...customPresets, preset]
     setCustomPresets(next)
@@ -613,16 +785,26 @@ export default function DiscoverTab({ albums, getAlbumStats, saveLater, removeLa
     + (toggles.weightUnheard ? 1 : 0)
     + (toggles.excludeKeywords ? 1 : 0)
     + (toggles.avoidRecent ? 1 : 0)
+    + (toggles.boostRecentlyAdded ? 1 : 0)
+    + (recentlyAddedFilter ? 1 : 0)
+
+  const activePresetObj = activePreset
+    ? ([...BUILTIN_PRESETS, ...customPresets].find(p => p.id === activePreset) ?? null)
+    : null
+  const activePresetLabel = activePresetObj?.label ?? 'Surprise Me'
+  const activePresetIcon  = activePresetObj?.icon  ?? '🎲'
 
   function openFilterModal() {
     setDraftFilters(new Set(activeFilters))
     setDraftToggles({ ...toggles })
+    setDraftRecentlyAddedFilter(recentlyAddedFilter)
     setFilterModalOpen(true)
   }
 
   function applyFilters() {
     setActiveFilters(draftFilters)
     setToggles(draftToggles)
+    setRecentlyAddedFilter(draftRecentlyAddedFilter)
     setActivePreset(null)
     setPickedAlbums([])
     setFilterModalOpen(false)
@@ -647,16 +829,19 @@ export default function DiscoverTab({ albums, getAlbumStats, saveLater, removeLa
   // ── Filtered album pool ────────────────────────────────────────────
 
   const filteredAlbums = useMemo(() => {
-    const activeDecades       = DECADES.filter(d => activeFilters.has(d))
-    const activeGenreClusters = GENRE_CLUSTERS.filter(c => activeFilters.has(c.id))
+    const activeDecades = DECADES.filter(d => activeFilters.has(d))
+    const activeGenres  = [...activeFilters].filter(f =>
+      f !== 'no-genre' && !DECADES.includes(f) && !['Never heard', 'Not recently played'].includes(f)
+    )
     const now = Date.now()
 
     return albums.filter(a => {
       if (activeDecades.length && !activeDecades.includes(albumDecade(a))) return false
-      if (activeGenreClusters.length) {
-        const albumClusters = new Set((a._genres || []).map(clusterOf))
-        if (!activeGenreClusters.some(c => albumClusters.has(c.id))) return false
+      if (activeGenres.length) {
+        const dg = a._discogsGenres || []
+        if (!activeGenres.some(g => dg.includes(g))) return false
       }
+      if (activeFilters.has('no-genre') && (a._discogsGenres?.length ?? 0) > 0) return false
       const stats = getAlbumStats(a)
       if (activeFilters.has('Never heard') && (stats?.listenCount ?? 0) > 0) return false
       if (activeFilters.has('Not recently played')) {
@@ -670,9 +855,16 @@ export default function DiscoverTab({ albums, getAlbumStats, saveLater, removeLa
       if (toggles.avoidRecent && queueHistory[a.id]) {
         if (now - queueHistory[a.id] < THIRTY_DAYS_MS) return false
       }
+      if (recentlyAddedFilter) {
+        const range = RECENTLY_ADDED_RANGES.find(r => r.id === recentlyAddedFilter)
+        if (range) {
+          const addedAt = a._added_at ? new Date(a._added_at).getTime() : null
+          if (!addedAt || now - addedAt > range.ms) return false
+        }
+      }
       return true
     })
-  }, [albums, activeFilters, toggles, queueHistory, getAlbumStats])
+  }, [albums, activeFilters, toggles, queueHistory, getAlbumStats, recentlyAddedFilter])
 
   // ── Actions ────────────────────────────────────────────────────────
 
@@ -681,10 +873,33 @@ export default function DiscoverTab({ albums, getAlbumStats, saveLater, removeLa
     const pool = [...filteredAlbums]
     const picks = []
     const n = Math.min(pickCount, pool.length)
+    const now = Date.now()
     for (let i = 0; i < n; i++) {
-      const idx = toggles.weightUnheard
-        ? weightedPickIndex(pool, getAlbumStats)
-        : Math.floor(Math.random() * pool.length)
+      let idx
+      if (toggles.weightUnheard || toggles.boostRecentlyAdded) {
+        const weighted = pool.map(a => {
+          const stats = getAlbumStats(a)
+          const listenCount = stats?.listenCount ?? 0
+          const lastHeard   = stats?.lastHeard ?? null
+          let w = toggles.weightUnheard
+            ? (listenCount === 0 ? 10 : !lastHeard ? 5 : now - lastHeard > NINETY_DAYS_MS ? 5 : 1)
+            : 1
+          if (toggles.boostRecentlyAdded && a._added_at) {
+            const addedAt = new Date(a._added_at).getTime()
+            if (now - addedAt < THIRTY_DAYS_MS) w *= 5
+          }
+          return w
+        })
+        const total = weighted.reduce((s, w) => s + w, 0)
+        let r = Math.random() * total
+        idx = weighted.length - 1
+        for (let j = 0; j < weighted.length; j++) {
+          r -= weighted[j]
+          if (r <= 0) { idx = j; break }
+        }
+      } else {
+        idx = Math.floor(Math.random() * pool.length)
+      }
       if (idx < 0) break
       picks.push(pool[idx])
       pool.splice(idx, 1)
@@ -752,49 +967,33 @@ export default function DiscoverTab({ albums, getAlbumStats, saveLater, removeLa
 
   return (
     <div className="flex flex-col min-h-full">
-      {/* In-tab header */}
-      <div className="px-5 pt-6 pb-2">
-        <h1 className="text-[26px] font-bold text-ink tracking-tight">Discover</h1>
-      </div>
-
-      {/* Preset row + filter button */}
-      <div className="flex items-center gap-2 px-5 pb-3 overflow-x-auto scrollbar-hide">
-        {BUILTIN_PRESETS.map(p => (
-          <Chip
-            key={p.id}
-            active={activePreset === p.id}
-            onClick={() => applyPreset(p.id)}
-          >
-            {p.icon} {p.label}
-          </Chip>
-        ))}
-
-        {/* ⚙ Filter button with badge */}
+      {/* Discovery Mode row + filter button */}
+      <div className="flex items-center gap-2 px-5 pt-3 pb-3">
+        <button
+          onClick={() => setPresetSheetOpen(true)}
+          className="flex-1 flex items-center gap-3 bg-card-raised border border-border-subtle rounded-2xl px-4 py-3 text-left active:opacity-80 transition-opacity"
+        >
+          <span className="text-lg flex-shrink-0">🎛</span>
+          <div className="flex-1 min-w-0">
+            <p className="text-[10px] font-bold text-ink-muted uppercase tracking-widest">Discovery Mode</p>
+            <p className="text-[14px] font-semibold text-ink mt-0.5 truncate">{activePresetIcon} {activePresetLabel}</p>
+          </div>
+          <span className="text-ink-muted text-sm flex-shrink-0">›</span>
+        </button>
         <button
           onClick={openFilterModal}
-          className="flex-shrink-0 flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border border-border-subtle bg-card-raised text-ink-secondary text-[12px] font-medium transition-all duration-200 active:scale-[0.97]"
+          className="relative flex-shrink-0 w-12 h-12 flex items-center justify-center bg-card-raised border border-border-subtle rounded-2xl active:opacity-80 transition-opacity"
         >
-          ⚙
+          <span className="text-[18px]">⊽</span>
           {activeFilterCount > 0 && (
             <span
-              className="flex items-center justify-center w-4 h-4 rounded-full text-[9px] font-bold text-black"
+              className="absolute -top-1 -right-1 flex items-center justify-center w-4 h-4 rounded-full text-[9px] font-bold text-black"
               style={{ background: '#1ed760' }}
             >
               {activeFilterCount}
             </span>
           )}
         </button>
-
-        {/* Custom presets */}
-        {customPresets.map(p => (
-          <Chip
-            key={p.id}
-            active={activePreset === p.id}
-            onClick={() => applyPreset(p.id)}
-          >
-            {p.icon} {p.label}
-          </Chip>
-        ))}
       </div>
 
       {/* Count selector */}
@@ -887,6 +1086,16 @@ export default function DiscoverTab({ albums, getAlbumStats, saveLater, removeLa
         />
       )}
 
+      <PresetSheet
+        open={presetSheetOpen}
+        onClose={() => setPresetSheetOpen(false)}
+        presets={BUILTIN_PRESETS}
+        customPresets={customPresets}
+        activePreset={activePreset}
+        onSelect={applyPreset}
+        onDelete={deleteCustomPreset}
+      />
+
       {/* Filter sheet */}
       <AnimatePresence>
         {filterModalOpen && (
@@ -899,6 +1108,11 @@ export default function DiscoverTab({ albums, getAlbumStats, saveLater, removeLa
             onClose={() => setFilterModalOpen(false)}
             onSavePreset={savePreset}
             activeFilterCount={activeFilterCount}
+            albums={albums}
+            getAlbumStats={getAlbumStats}
+            recentlyAddedFilter={draftRecentlyAddedFilter}
+            setRecentlyAddedFilter={setDraftRecentlyAddedFilter}
+            genresLoading={genresLoading}
           />
         )}
       </AnimatePresence>

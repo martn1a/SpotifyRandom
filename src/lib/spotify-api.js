@@ -106,3 +106,55 @@ export async function addToQueue(uri) {
   if (res.status === 429) throw new Error('Rate limited. Try again in a moment.')
   if (!res.ok && res.status !== 204) throw new Error(`Queue error ${res.status}`)
 }
+
+// GET /me — returns the authenticated user's profile
+export async function fetchCurrentUser() {
+  return get('https://api.spotify.com/v1/me')
+}
+
+// GET /me/playlists — paginated, returns only playlists owned by userId
+export async function fetchUserPlaylists(userId) {
+  const results = []
+  let url = 'https://api.spotify.com/v1/me/playlists?limit=50'
+  while (url) {
+    const data = await get(url)
+    for (const p of data.items ?? []) {
+      if (p.owner?.id === userId) {
+        results.push({ id: p.id, name: p.name, trackCount: p.tracks?.total ?? 0 })
+      }
+    }
+    url = data.next
+  }
+  return results
+}
+
+// GET /playlists/{id}/items — paginated, deduplicates by album ID, skips non-tracks
+export async function fetchPlaylistItems(playlistId) {
+  const albums = []
+  const seen = new Set()
+  let url = `https://api.spotify.com/v1/playlists/${encodeURIComponent(playlistId)}/items?limit=50`
+  while (url) {
+    const data = await get(url)
+    for (const item of data.items ?? []) {
+      if (item?.track?.type !== 'track') continue
+      const album = item.track.album
+      if (!album?.id || seen.has(album.id)) continue
+      seen.add(album.id)
+      albums.push(album)
+    }
+    url = data.next
+  }
+  return albums
+}
+
+// GET /albums/{id}/tracks — paginated, returns full track list (for non-library album queuing)
+export async function fetchAlbumTracks(albumId) {
+  const tracks = []
+  let url = `https://api.spotify.com/v1/albums/${encodeURIComponent(albumId)}/tracks?limit=50`
+  while (url) {
+    const data = await get(url)
+    tracks.push(...(data.items ?? []))
+    url = data.next
+  }
+  return tracks
+}

@@ -43,7 +43,7 @@ const BROWSE_SUB_TABS = [
 
 export default function TabBar({ activeTab, onTabChange, browseSubTab, onBrowseSubTabChange }) {
   return (
-    <div className="flex-shrink-0 pb-safe border-t border-border-subtle" style={{ background: 'rgba(10,10,10,0.92)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)' }}>
+    <div className="flex-shrink-0 pb-safe border-t border-border-subtle" style={{ background: 'color-mix(in srgb, var(--color-page) 92%, transparent)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)' }}>
       {/* Browse sub-tabs (only visible when Browse is active) */}
       <AnimatePresence>
         {activeTab === 'browse' && (

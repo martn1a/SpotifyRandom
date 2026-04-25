@@ -1,7 +1,7 @@
 import { openDB } from 'idb'
 
 const DB_NAME = 'albumdisc_react_v1'
-const DB_VERSION = 2
+const DB_VERSION = 3
 
 let _db = null
 
@@ -39,6 +39,16 @@ export async function getDb() {
 
         // Burn resets — one record per carousel, tracks last reset time
         db.createObjectStore('burn_resets', { keyPath: 'carouselId' })
+      }
+
+      if (oldVersion < 3) {
+        // Playlist metadata list (own playlists from Spotify)
+        if (!db.objectStoreNames.contains('playlists_meta'))
+          db.createObjectStore('playlists_meta')
+
+        // Albums per playlist (keyed by playlist ID)
+        if (!db.objectStoreNames.contains('playlist_albums'))
+          db.createObjectStore('playlist_albums')
       }
     },
   })

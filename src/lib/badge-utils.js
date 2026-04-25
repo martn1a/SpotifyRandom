@@ -1,8 +1,6 @@
-import { clusterOf } from '../data/genre-clusters.js'
-
 /**
  * Returns an array of badge objects for an album.
- * @param {object} album  - Spotify album (has _genres, release_date, tracks.items)
+ * @param {object} album  - Spotify album (has _discogsGenres, release_date, tracks.items)
  * @param {object|null} stats - Last.fm stats from getAlbumStats() (has listenCount), or null
  * @returns {Array<{ value: string, label: string, icon: string, color: string }>}
  */
@@ -46,13 +44,12 @@ export function getAlbumBadges(album, stats) {
   }
 
   // ── Genre/mood badges ────────────────────────────────────────────────
-  const genres = album._genres || []
-  const clusterIds = [...new Set(genres.map(g => clusterOf(g)).filter(id => id !== 'other'))]
+  const dg = album._discogsGenres || []
 
-  if (clusterIds.includes('electronic')) {
+  if (dg.includes('Electronic')) {
     badges.push({ value: 'late-night', label: 'Late Night', icon: '🌙', color: 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30' })
   }
-  if (clusterIds.includes('jazz') || clusterIds.includes('classical')) {
+  if (dg.includes('Jazz') || dg.includes('Classical')) {
     badges.push({ value: 'focus', label: 'Focus', icon: '🧠', color: 'bg-teal-500/20 text-teal-400 border-teal-500/30' })
   }
 
@@ -67,16 +64,14 @@ export function getAlbumBadges(album, stats) {
  * @returns {object[]}
  */
 export function getSimilarAlbums(album, library, count = 4) {
-  const genres = album._genres || []
-  const clusterIds = new Set(genres.map(g => clusterOf(g)).filter(id => id !== 'other'))
+  const dg = new Set(album._discogsGenres || [])
 
-  if (clusterIds.size === 0) return []
+  if (dg.size === 0) return []
 
   return library
     .filter(a => {
       if (a.id === album.id) return false
-      const aClusterIds = (a._genres || []).map(g => clusterOf(g)).filter(id => id !== 'other')
-      return aClusterIds.some(id => clusterIds.has(id))
+      return (a._discogsGenres || []).some(g => dg.has(g))
     })
     .slice(0, count)
 }

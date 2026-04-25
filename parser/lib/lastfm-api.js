@@ -144,3 +144,41 @@ export async function batchFetchTrackCounts(albums, onProgress) {
 function sleep(ms) {
   return new Promise(r => setTimeout(r, ms));
 }
+
+/**
+ * Fetch top genre tags for an album from Last.fm.
+ * Returns top 5 tags (lowercased), or [] on error/not-found.
+ */
+export async function fetchAlbumTags(artist, album) {
+  if (!_apiKey) throw new Error('Last.fm API key not set. Call setApiKey() first.');
+
+  const url = new URL(LASTFM_BASE);
+  url.searchParams.set('method', 'album.getTopTags');
+  url.searchParams.set('api_key', _apiKey);
+  url.searchParams.set('artist', artist);
+  url.searchParams.set('album', album);
+  url.searchParams.set('format', 'json');
+  url.searchParams.set('autocorrect', '1');
+
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      const res = await rateLimitedFetch(url.toString());
+      if (res.status === 429) {
+        console.warn(`    ⚠ Rate limited by Last.fm, waiting 10s...`);
+        await sleep(10000);
+        continue;
+      }
+      if (!res.ok) return [];
+      const data = await res.json();
+      if (data.error) return [];
+      const tagList = data?.toptags?.tag;
+      if (!tagList) return [];
+      const tags = Array.isArray(tagList) ? tagList : [tagList];
+      return tags.slice(0, 5).map(t => t.name?.toLowerCase().trim()).filter(Boolean);
+    } catch (e) {
+      if (attempt < MAX_RETRIES) await sleep(RETRY_DELAY_MS * attempt);
+      else return [];
+    }
+  }
+  return [];
+}

@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "./skins.css";
 
 @theme {
   /* Typography */
@@ -39,11 +40,14 @@
   --color-chip-inactive: #1e1e1e;
 }
 
+html {
+  color-scheme: dark;
+}
+
 html, body, #root {
   height: 100%;
   overscroll-behavior: none;
-  background: #0a0a0a;
-  color-scheme: dark;
+  background: var(--color-page);
 }
 
 @utility scrollbar-hide {
