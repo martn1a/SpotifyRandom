@@ -5,6 +5,7 @@ import { useLibrary } from './hooks/useLibrary.js'
 import { useLastfm } from './hooks/useLastfm.js'
 import { useListenLater } from './hooks/useListenLater.js'
 import { usePlaylists } from './hooks/usePlaylists.js'
+import { useSkin } from './hooks/useSkin.js'
 import LoginScreen from './components/LoginScreen.jsx'
 import Header from './components/layout/Header.jsx'
 import TabBar from './components/layout/TabBar.jsx'
@@ -100,6 +101,8 @@ function MainApp({ onLogout }) {
     }
   })
 
+  const [skin, setSkin] = useSkin()
+
   const {
     albums, genresLoading, albumsLoading, albumsProgress, error: libraryError
   } = useLibrary()
@@ -107,14 +110,17 @@ function MainApp({ onLogout }) {
   const { getAlbumStats, lastfmMap, onThisDay, loaded: lastfmLoaded, meta: lastfmMeta, refresh: refreshLastfm, albumTagsMap } = useLastfm()
 
   const enrichedAlbums = useMemo(() => {
-    if (!albumTagsMap.size) return albums
+    if (!lastfmMap.size && !albumTagsMap.size) return albums
     return albums.map(a => {
       const key = `${a.artists?.[0]?.name || ''}||${a.name}`.toLowerCase()
-      const lfmTags = albumTagsMap.get(key)
-      if (lfmTags?.length) return { ...a, _genres: lfmTags }
-      return a
+      const lfmEntry = lastfmMap.get(key)
+      const discogsStyles = lfmEntry?.discogsStyles || []
+      const discogsGenres = lfmEntry?.discogsGenres || []
+      const lfmTags = albumTagsMap.get(key) || []
+      const genres = [...discogsStyles, ...discogsGenres, ...lfmTags]
+      return { ...a, _genres: genres, _discogsGenres: discogsGenres }
     })
-  }, [albums, albumTagsMap])
+  }, [albums, lastfmMap, albumTagsMap])
   const { items: listenLater, save: saveLater, remove: removeLater, isSaved } = useListenLater()
 
   const [selectedPlaylists, setSelectedPlaylists] = useState(() => {
@@ -282,6 +288,8 @@ function MainApp({ onLogout }) {
         hideLibraryAlbums={hideLibraryAlbums}
         onUpdateHideLibraryAlbums={updateHideLibraryAlbums}
         onExportLibrary={handleExportLibrary}
+        skin={skin}
+        onSkinChange={setSkin}
       />
       <main className="flex-1 overflow-y-auto overflow-x-hidden">
         <ErrorBoundary key={activeTab}>
