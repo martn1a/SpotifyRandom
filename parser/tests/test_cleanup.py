@@ -1,5 +1,6 @@
 import sys
 import time
+import pytest
 from pathlib import Path
 from datetime import datetime, timezone, timedelta
 
@@ -118,3 +119,91 @@ def test_multiple_reasons_all_recorded():
     assert keep is True
     assert 'recently_added' in reasons
     assert 'listen_count'   in reasons
+
+
+import io
+from unittest.mock import patch, MagicMock
+import json
+import tempfile
+
+# reuse BASE_CONFIG from top of file (already defined)
+
+def _make_albums(n_keep=2, n_remove=2):
+    """2 keepable (recently_added) + n_remove old/unheard albums."""
+    now_iso = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')
+    old_iso = '2015-01-01T00:00:00Z'
+    albums = []
+    for i in range(n_keep):
+        albums.append(album(artist=f'Keep Artist {i}', name=f'Keep Album {i}',
+                            added_at=now_iso, listenCount=0, rawScrobbles=0,
+                            trackCount=10, total_tracks=10))
+    for i in range(n_remove):
+        albums.append(album(artist=f'Remove Artist {i}', name=f'Remove Album {i}',
+                            added_at=old_iso, listenCount=0, rawScrobbles=0,
+                            trackCount=10, total_tracks=10))
+    return albums
+
+
+def test_cmd_dry_run_missing_file(tmp_path, monkeypatch):
+    """--dry-run exits with error when cleanup_data.json is absent."""
+    import cleanup
+    monkeypatch.setattr(cleanup, 'DATA_PATH', tmp_path / 'nonexistent.json')
+    with pytest.raises(SystemExit):
+        cleanup.cmd_dry_run()
+
+
+def test_cmd_dry_run_writes_report(tmp_path, monkeypatch):
+    """--dry-run writes a txt file and prints report."""
+    import cleanup
+    albums = _make_albums()
+    data_file = tmp_path / 'cleanup_data.json'
+    data_file.write_text(json.dumps(albums), encoding='utf-8')
+    monkeypatch.setattr(cleanup, 'DATA_PATH', data_file)
+    monkeypatch.setattr(cleanup, 'SCRIPT_DIR', tmp_path)
+
+    with patch('builtins.print') as mock_print:
+        cleanup.cmd_dry_run()
+
+    txt_files = list(tmp_path.glob('cleanup_dry_run_*.txt'))
+    assert len(txt_files) == 1
+    content = txt_files[0].read_text(encoding='utf-8')
+    assert 'SPOTIFY LIBRARY CLEANUP' in content
+
+
+def test_cmd_run_missing_file(tmp_path, monkeypatch):
+    """--run exits with error when cleanup_data.json is absent."""
+    import cleanup
+    monkeypatch.setattr(cleanup, 'DATA_PATH', tmp_path / 'nonexistent.json')
+    with pytest.raises(SystemExit):
+        cleanup.cmd_run()
+
+
+def test_cmd_run_abort_on_wrong_answer(tmp_path, monkeypatch):
+    """--run aborts without deleting when user does not type YES."""
+    import cleanup
+    albums = _make_albums()
+    data_file = tmp_path / 'cleanup_data.json'
+    data_file.write_text(json.dumps(albums), encoding='utf-8')
+    monkeypatch.setattr(cleanup, 'DATA_PATH', data_file)
+
+    with patch('builtins.input', return_value='no'), \
+         patch('builtins.print') as mock_print:
+        cleanup.cmd_run()
+
+    printed = ' '.join(str(c) for c in mock_print.call_args_list)
+    assert 'Aborted' in printed
+
+
+def test_cmd_run_nothing_to_remove(tmp_path, monkeypatch):
+    """--run prints 'Nothing to remove' when all albums are kept."""
+    import cleanup
+    albums = _make_albums(n_keep=3, n_remove=0)
+    data_file = tmp_path / 'cleanup_data.json'
+    data_file.write_text(json.dumps(albums), encoding='utf-8')
+    monkeypatch.setattr(cleanup, 'DATA_PATH', data_file)
+
+    with patch('builtins.print') as mock_print:
+        cleanup.cmd_run()
+
+    printed = ' '.join(str(c) for c in mock_print.call_args_list)
+    assert 'Nothing to remove' in printed

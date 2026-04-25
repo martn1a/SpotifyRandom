@@ -332,6 +332,68 @@ def cmd_export():
         print('  No albums found in Spotify library.')
 
 
+# ─── Commands ────────────────────────────────────────────────────────
+
+def cmd_dry_run():
+    if not DATA_PATH.exists():
+        print('ERROR: cleanup_data.json not found. Run --export first.')
+        sys.exit(1)
+    albums  = json.loads(DATA_PATH.read_text(encoding='utf-8'))
+    results = analyze(albums, CONFIG)
+    report  = format_report(results, CONFIG)
+    print(report)
+    ts       = datetime.now().strftime('%Y-%m-%d_%H-%M')
+    out_path = SCRIPT_DIR / f'cleanup_dry_run_{ts}.txt'
+    out_path.write_text(report, encoding='utf-8')
+    print(f'\n[saved to: {out_path.name}]')
+
+
+def cmd_run():
+    if not DATA_PATH.exists():
+        print('ERROR: cleanup_data.json not found. Run --export first.')
+        sys.exit(1)
+    albums  = json.loads(DATA_PATH.read_text(encoding='utf-8'))
+    results = analyze(albums, CONFIG)
+    report  = format_report(results, CONFIG)
+    print(report)
+
+    to_remove = results['to_remove']
+    if not to_remove:
+        print('Nothing to remove.')
+        return
+
+    answer = input(f'\nDelete {len(to_remove):,} albums from Spotify? Type YES to confirm: ')
+    if answer.strip() != 'YES':
+        print('Aborted.')
+        return
+
+    load_env()
+    sp = get_spotipy()
+
+    # Re-fetch live IDs as a safety check against stale data
+    print('Re-fetching current Spotify library for fresh IDs...')
+    live_albums  = fetch_spotify_library(sp)
+    live_id_set  = {a['spotify_id'] for a in live_albums}
+    stale_ids    = [a['spotify_id'] for a in to_remove if a['spotify_id'] not in live_id_set]
+    ids_to_delete = [a['spotify_id'] for a in to_remove if a['spotify_id'] in live_id_set]
+
+    if stale_ids:
+        print(f'  {len(stale_ids):,} albums no longer in library (already removed) — skipping')
+
+    if not ids_to_delete:
+        print('Nothing left to delete after stale check.')
+        return
+
+    print(f'Deleting {len(ids_to_delete):,} albums...')
+    deleted = 0
+    for i in range(0, len(ids_to_delete), 50):
+        batch = ids_to_delete[i:i + 50]
+        sp.current_user_saved_albums_delete(batch)
+        deleted += len(batch)
+        print(f'  {deleted:,} / {len(ids_to_delete):,} deleted...', end='\r')
+    print(f'\nDone. Removed {deleted:,} albums from Spotify library.')
+
+
 # ─── Entry point ─────────────────────────────────────────────────────
 
 def main():
@@ -342,9 +404,9 @@ def main():
     if mode == '--export':
         cmd_export()
     elif mode == '--dry-run':
-        print('--dry-run not yet implemented')
+        cmd_dry_run()
     elif mode == '--run':
-        print('--run not yet implemented')
+        cmd_run()
 
 
 if __name__ == '__main__':
