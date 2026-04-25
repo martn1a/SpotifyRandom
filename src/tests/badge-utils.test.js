@@ -5,7 +5,7 @@ import { getAlbumBadges, getSimilarAlbums } from '../lib/badge-utils.js'
 const makeAlbum = (overrides = {}) => ({
   id: 'a1',
   release_date: '1995-01-01',
-  _discogsGenres: [],
+  _genres: [],
   tracks: { items: Array(10).fill({}) },
   ...overrides,
 })
@@ -67,11 +67,11 @@ describe('getAlbumBadges', () => {
 
 describe('getSimilarAlbums', () => {
   const library = [
-    makeAlbum({ id: 'a1', _discogsGenres: ['rock', 'alternative'] }),
-    makeAlbum({ id: 'a2', _discogsGenres: ['rock', 'grunge'] }),
-    makeAlbum({ id: 'a3', _discogsGenres: ['jazz', 'blues'] }),
-    makeAlbum({ id: 'a4', _discogsGenres: ['rock', 'indie'] }),
-    makeAlbum({ id: 'a5', _discogsGenres: ['electronic', 'ambient'] }),
+    makeAlbum({ id: 'a1', _genres: ['rock', 'alternative'] }),
+    makeAlbum({ id: 'a2', _genres: ['rock', 'grunge'] }),
+    makeAlbum({ id: 'a3', _genres: ['jazz', 'blues'] }),
+    makeAlbum({ id: 'a4', _genres: ['rock', 'indie'] }),
+    makeAlbum({ id: 'a5', _genres: ['electronic', 'ambient'] }),
   ]
   const currentAlbum = library[0] // a1, rock cluster
 
@@ -95,7 +95,7 @@ describe('getSimilarAlbums', () => {
   })
 
   it('returns empty array when no genres match', () => {
-    const albumNoGenre = makeAlbum({ id: 'ax', _discogsGenres: [] })
+    const albumNoGenre = makeAlbum({ id: 'ax', _genres: [] })
     const results = getSimilarAlbums(albumNoGenre, library, 4)
     expect(results).toEqual([])
   })

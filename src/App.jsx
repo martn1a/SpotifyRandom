@@ -113,12 +113,8 @@ function MainApp({ onLogout }) {
     if (!lastfmMap.size && !albumTagsMap.size) return albums
     return albums.map(a => {
       const key = `${a.artists?.[0]?.name || ''}||${a.name}`.toLowerCase()
-      const lfmEntry = lastfmMap.get(key)
-      const discogsStyles = lfmEntry?.discogsStyles || []
-      const discogsGenres = lfmEntry?.discogsGenres || []
       const lfmTags = albumTagsMap.get(key) || []
-      const genres = [...discogsStyles, ...discogsGenres, ...lfmTags]
-      return { ...a, _genres: genres, _discogsGenres: discogsGenres }
+      return { ...a, _genres: lfmTags }
     })
   }, [albums, lastfmMap, albumTagsMap])
   const { items: listenLater, save: saveLater, remove: removeLater, isSaved } = useListenLater()

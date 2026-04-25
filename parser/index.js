@@ -44,7 +44,6 @@ const OUTPUT_DIR  = path.join(__dirname, 'output');
 const OUTPUT_FILE = path.join(OUTPUT_DIR, 'lastfm-data.json');
 const SPOTIFY_EXPORT_PATH  = path.join(__dirname, 'data', 'track_counts_cache_spotify.json');
 const SPOTIFY_LIBRARY_PATH = path.join(__dirname, 'data', 'spotify-library.json');
-const DISCOGS_CACHE_PATH   = path.join(__dirname, 'data', 'discogs-cache.json');
 
 const PARSER_VERSION = '2.0.0';
 
@@ -199,18 +198,6 @@ async function fetchMissingAlbumTags(uniqueTracksSeenMap) {
 }
 
 // ─────────────────────────────────────────────────────────────────
-// Discogs cache loader
-// ─────────────────────────────────────────────────────────────────
-function loadDiscogsCache() {
-  if (!existsSync(DISCOGS_CACHE_PATH)) return new Map();
-  try {
-    return new Map(Object.entries(JSON.parse(readFileSync(DISCOGS_CACHE_PATH, 'utf8'))));
-  } catch {
-    return new Map();
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────
 // Helper: gap-based metrics
 // ─────────────────────────────────────────────────────────────────
 function computeAvgGapDays(dates) {
@@ -235,7 +222,6 @@ function buildAlbumOutput(
   sessionMap,    // Map<key, AlbumSessionStats>
   albumsSummary, // from albums CSV
   mbIdMap,       // Map<key, mbId>
-  discogsCache,  // Map<key, DiscogsEntry>
 ) {
   // Index albums CSV by key for quick lookup
   const albumIndex = new Map();
@@ -263,10 +249,7 @@ function buildAlbumOutput(
 
     // New v2: release year + derived album age
     const cachedEntry = getCached(stats.artist, stats.album);
-    const discogsEntry = discogsCache?.get(albumKey(stats.artist, stats.album));
-    const releaseYear = cachedEntry?.releaseYear || discogsEntry?.releaseYear || null;
-    const discogsGenres = (!discogsEntry || discogsEntry.notFound) ? [] : (discogsEntry.genres || []);
-    const discogsStyles = (!discogsEntry || discogsEntry.notFound) ? [] : (discogsEntry.styles || []);
+    const releaseYear = cachedEntry?.releaseYear || null;
     const firstYear = stats.firstHeard ? new Date(stats.firstHeard).getFullYear() : null;
 
     // New v2: gap-based metrics from sessionDates
@@ -304,8 +287,6 @@ function buildAlbumOutput(
       avgGapDays,
       releaseYear,
       albumAgeAtFirstListen: (releaseYear && firstYear) ? firstYear - releaseYear : null,
-      discogsGenres,
-      discogsStyles,
     };
   }
 
@@ -654,10 +635,7 @@ async function main() {
   // ── STEP 6: Build output JSON ──────────────────────────────────
   console.log('\nSTEP 5 — Building output JSON');
 
-  const discogsCache = loadDiscogsCache();
-  console.log(`  Discogs cache: ${discogsCache.size.toLocaleString()} entries (${[...discogsCache.values()].filter(v => !v.notFound).length} found)`);
-
-  const albumOutput  = buildAlbumOutput(sessionMap, albums, mbIdMap, discogsCache);
+  const albumOutput  = buildAlbumOutput(sessionMap, albums, mbIdMap);
   const artistOutput = buildArtistOutput(artists, albumOutput);
   const derivedStats = buildDerivedStats(albumOutput, fadgad, artists);
 

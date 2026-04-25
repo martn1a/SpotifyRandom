@@ -44,7 +44,7 @@ export function getAlbumBadges(album, stats) {
   }
 
   // ── Genre/mood badges ────────────────────────────────────────────────
-  const dg = album._discogsGenres || []
+  const dg = album._genres || []
 
   if (dg.includes('Electronic')) {
     badges.push({ value: 'late-night', label: 'Late Night', icon: '🌙', color: 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30' })
@@ -64,14 +64,14 @@ export function getAlbumBadges(album, stats) {
  * @returns {object[]}
  */
 export function getSimilarAlbums(album, library, count = 4) {
-  const dg = new Set(album._discogsGenres || [])
+  const dg = new Set(album._genres || [])
 
   if (dg.size === 0) return []
 
   return library
     .filter(a => {
       if (a.id === album.id) return false
-      return (a._discogsGenres || []).some(g => dg.has(g))
+      return (a._genres || []).some(g => dg.has(g))
     })
     .slice(0, count)
 }

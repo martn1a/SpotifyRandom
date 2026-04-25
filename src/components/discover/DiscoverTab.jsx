@@ -163,7 +163,7 @@ function PresetSheet({ open, onClose, presets, customPresets, activePreset, onSe
 function FeaturedAlbumCard({ album, stats, onQueue, onSkip, onTap }) {
   const art     = album.images?.[0]?.url
   const artist  = (album.artists || []).map(a => a.name).join(', ')
-  const genre   = album._discogsGenres?.[0] ?? null
+  const genre   = album._genres?.[0] ?? null
   const count   = stats?.listenCount ?? 0
   const year    = (album.release_date || '').substring(0, 4)
   const [gone, setGone] = useState(false)
@@ -400,7 +400,7 @@ function FilterModal({ draftFilters, draftToggles, setDraftFilters, setDraftTogg
     const counts = {}
     let noGenreCount = 0
     for (const a of pool) {
-      const dg = a._discogsGenres || []
+      const dg = a._genres || []
       if (dg.length === 0) { noGenreCount++; continue }
       for (const g of dg) counts[g] = (counts[g] || 0) + 1
     }
@@ -838,10 +838,10 @@ export default function DiscoverTab({ albums, genresLoading, getAlbumStats, save
     return albums.filter(a => {
       if (activeDecades.length && !activeDecades.includes(albumDecade(a))) return false
       if (activeGenres.length) {
-        const dg = a._discogsGenres || []
+        const dg = a._genres || []
         if (!activeGenres.some(g => dg.includes(g))) return false
       }
-      if (activeFilters.has('no-genre') && (a._discogsGenres?.length ?? 0) > 0) return false
+      if (activeFilters.has('no-genre') && (a._genres?.length ?? 0) > 0) return false
       const stats = getAlbumStats(a)
       if (activeFilters.has('Never heard') && (stats?.listenCount ?? 0) > 0) return false
       if (activeFilters.has('Not recently played')) {

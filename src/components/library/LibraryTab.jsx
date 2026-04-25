@@ -95,7 +95,7 @@ export default function LibraryTab({ albums, getAlbumStats, genresLoading, saveL
   const { genreCounts, visibleGenres } = useMemo(() => {
     const counts = new Map()
     for (const a of albums) {
-      for (const g of (a._discogsGenres || [])) {
+      for (const g of (a._genres || [])) {
         counts.set(g, (counts.get(g) || 0) + 1)
       }
     }
@@ -120,7 +120,7 @@ export default function LibraryTab({ albums, getAlbumStats, genresLoading, saveL
     }
 
     if (activeGenre) {
-      list = list.filter(a => (a._discogsGenres || []).includes(activeGenre))
+      list = list.filter(a => (a._genres || []).includes(activeGenre))
     }
 
     if (libraryFilter) {
