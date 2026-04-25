@@ -91,3 +91,139 @@ def should_keep(album: dict, config: dict) -> tuple:
                 reasons.append('last_heard')
 
     return bool(reasons), reasons
+
+
+# ─── Env / auth ──────────────────────────────────────────────────────
+
+def load_env():
+    env_path = SCRIPT_DIR / '.env'
+    if not env_path.exists():
+        return
+    for line in env_path.read_text(encoding='utf-8').splitlines():
+        line = line.strip()
+        if not line or line.startswith('#') or '=' not in line:
+            continue
+        k, v = line.split('=', 1)
+        os.environ[k.strip()] = v.strip().strip('"\'')
+
+
+def get_spotipy():
+    import spotipy
+    from spotipy.oauth2 import SpotifyOAuth
+    secret = os.getenv('SPOTIPY_CLIENT_SECRET')
+    if not secret:
+        print('ERROR: SPOTIPY_CLIENT_SECRET not set in parser/.env')
+        sys.exit(1)
+    return spotipy.Spotify(auth_manager=SpotifyOAuth(
+        client_id=CLIENT_ID,
+        client_secret=secret,
+        redirect_uri=REDIRECT_URI,
+        scope=SCOPES,
+        cache_path=str(SCRIPT_DIR / '.spotipyoauthcache'),
+    ))
+
+
+# ─── Export ──────────────────────────────────────────────────────────
+
+def fetch_spotify_library(sp) -> list:
+    albums = []
+    offset = 0
+    while True:
+        result = sp.current_user_saved_albums(limit=50, offset=offset)
+        items  = result['items']
+        if not items:
+            break
+        for item in items:
+            a = item['album']
+            albums.append({
+                'spotify_id':   a['id'],
+                'name':         a['name'],
+                'artist':       a['artists'][0]['name'] if a['artists'] else '',
+                'added_at':     item['added_at'],
+                'total_tracks': a['total_tracks'],
+            })
+        offset += len(items)
+        print(f'  Fetched {len(albums)} albums...', end='\r')
+        if len(items) < 50:
+            break
+    print()
+    return albums
+
+
+def merge_with_lastfm(spotify_albums: list, lastfm_data: dict) -> tuple:
+    lfm_albums = lastfm_data.get('albums', {})
+    merged  = []
+    matched = 0
+
+    for sp in spotify_albums:
+        key = normalize_key(sp['artist'], sp['name'])
+        lfm = lfm_albums.get(key)
+        rec = dict(sp)
+
+        if lfm:
+            rec.update({
+                'lfm_matched':  True,
+                'listenCount':  lfm.get('listenCount', 0),
+                'rawScrobbles': lfm.get('rawScrobbles', 0),
+                'trackCount':   lfm.get('trackCount') or sp['total_tracks'],
+                'lastHeard':    lfm.get('lastHeard'),
+                'firstHeard':   lfm.get('firstHeard'),
+                'sessionCount': lfm.get('sessionCount', 0),
+            })
+            matched += 1
+        else:
+            rec.update({
+                'lfm_matched':  False,
+                'listenCount':  0,
+                'rawScrobbles': 0,
+                'trackCount':   sp['total_tracks'],
+                'lastHeard':    None,
+                'firstHeard':   None,
+                'sessionCount': 0,
+            })
+
+        merged.append(rec)
+
+    return merged, matched
+
+
+def cmd_export():
+    load_env()
+    print('Authenticating with Spotify...')
+    sp = get_spotipy()
+
+    print('Fetching Spotify library...')
+    spotify_albums = fetch_spotify_library(sp)
+    print(f'  Total: {len(spotify_albums):,} albums')
+
+    print('Loading Last.fm data...')
+    lastfm_data = json.loads(LASTFM_PATH.read_text(encoding='utf-8'))
+
+    print('Merging...')
+    merged, matched = merge_with_lastfm(spotify_albums, lastfm_data)
+    unmatched = len(merged) - matched
+
+    DATA_PATH.write_text(json.dumps(merged, indent=2, ensure_ascii=False), encoding='utf-8')
+
+    print(f'\nExport complete → {DATA_PATH.name}')
+    print(f'  Matched with Last.fm: {matched:,} / {len(merged):,}  ({matched/len(merged)*100:.0f}%)')
+    print(f'  No Last.fm data:      {unmatched:,}  (treated as 0 scrobbles)')
+
+
+# ─── Entry point ─────────────────────────────────────────────────────
+
+def main():
+    if len(sys.argv) < 2 or sys.argv[1] not in ('--export', '--dry-run', '--run'):
+        print(__doc__)
+        sys.exit(1)
+    mode = sys.argv[1]
+    if mode == '--export':
+        cmd_export()
+    elif mode == '--dry-run':
+        print('--dry-run not yet implemented')
+    elif mode == '--run':
+        print('--run not yet implemented')
+
+
+if __name__ == '__main__':
+    main()
