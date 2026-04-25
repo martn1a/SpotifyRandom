@@ -16,3 +16,6 @@ skills-lock.json
 parser/cleanup_data.json
 parser/cleanup_dry_run_*.txt
 parser/.spotipyoauthcache
+parser/__pycache__/
+parser/*.pyc
+parser/.pytest_cache/
