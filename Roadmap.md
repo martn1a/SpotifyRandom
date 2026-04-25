@@ -71,6 +71,11 @@
 
 ## Backlog (kein aktiver Plan)
 
+- **"Zuletzt durchgehört" Carousel** (StatsTab)
+  - Die 20 zuletzt vollständig durchgehörten Alben, sortiert nach `sessionDates` (letztes Datum desc)
+  - Abgrenzung zu "Most Played": Most Played = Häufigkeit, dieses Carousel = Chronologie der letzten vollständigen Sessions
+  - **⚠ Loop-Counting überdenken (Parser):** Aktuell zählt ein Album-Loop innerhalb einer Session nur als 1 Listen, auch wenn das Album zweimal komplett durchlief. Gewünschtes Verhalten: Jeder vollständige Durchlauf (≥50% unique Coverage) = eigene Listen — auch wenn ohne 20-Min-Gap. Beispiel: Universal Beings 06.04.2026, 08:27–11:22 = sollte 2 Listens zählen, nicht 1.
+
 - Playlist Import Carousels
 - MusicBrainz Genre Enrichment
 - Drei-Zustands-Dekaden-Filter

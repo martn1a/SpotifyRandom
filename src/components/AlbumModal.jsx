@@ -225,27 +225,6 @@ export default function AlbumModal({
             </p>
           )}
 
-          {/* Last.fm stats */}
-          {stats?.listenCount > 0 && (
-            <div className="mb-6">
-              <h3 className="text-ink-muted text-[10px] font-bold uppercase tracking-widest mb-3">Last.fm Insights</h3>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                {[
-                  { label: 'Listens',     value: stats.listenCount },
-                  { label: 'Background',  value: stats.backgroundCount ?? 0 },
-                  { label: 'First heard', value: fmtDate(stats.firstHeard) },
-                  { label: 'Last heard',  value: fmtDate(stats.lastHeard) },
-                  { label: 'Peak month',  value: stats.peakMonth ?? '—' },
-                  { label: 'Scrobbles',   value: stats.rawScrobbles ?? '—' },
-                ].map((item, i) => (
-                  <div key={i} className="bg-card-raised p-3 rounded-xl border border-border-subtle">
-                    <p className="text-ink-muted text-[9px] font-bold uppercase tracking-wider mb-1">{item.label}</p>
-                    <p className="text-ink text-sm font-medium">{item.value}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
 
           {/* Similar To */}
           {similar.length > 0 && (

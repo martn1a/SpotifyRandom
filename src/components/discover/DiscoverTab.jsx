@@ -1,6 +1,5 @@
 import { useState, useMemo, useCallback, useEffect } from 'react'
 import { motion, AnimatePresence, useMotionValue, useTransform } from 'motion/react'
-import { GENRE_CLUSTERS, clusterOf } from '../../data/genre-clusters.js'
 import { addToQueue } from '../../lib/spotify-api.js'
 import AlbumModal from '../AlbumModal.jsx'
 
@@ -38,14 +37,6 @@ function albumDecade(album) {
   const year = parseInt((album.release_date || '').substring(0, 4))
   if (isNaN(year)) return null
   return Object.entries(DECADE_STARTS).find(([, s]) => year >= s && year < s + 10)?.[0] ?? null
-}
-
-function getGenreCluster(album) {
-  for (const g of (album._genres || [])) {
-    const id = clusterOf(g)
-    if (id !== 'other') return GENRE_CLUSTERS.find(c => c.id === id) ?? null
-  }
-  return null
 }
 
 // Weighted random — returns index into the passed array
@@ -172,7 +163,7 @@ function PresetSheet({ open, onClose, presets, customPresets, activePreset, onSe
 function FeaturedAlbumCard({ album, stats, onQueue, onSkip, onTap }) {
   const art     = album.images?.[0]?.url
   const artist  = (album.artists || []).map(a => a.name).join(', ')
-  const cluster = getGenreCluster(album)
+  const genre   = album._discogsGenres?.[0] ?? null
   const count   = stats?.listenCount ?? 0
   const year    = (album.release_date || '').substring(0, 4)
   const [gone, setGone] = useState(false)
@@ -257,11 +248,11 @@ function FeaturedAlbumCard({ album, stats, onQueue, onSkip, onTap }) {
       <div className="px-4 pt-3 pb-4 cursor-pointer" onClick={() => { if (Math.abs(x.get()) < 5) onTap() }}>
         <p className="text-[17px] font-bold text-ink leading-snug line-clamp-2">{album.name}</p>
         <p className="text-[13px] text-ink-secondary mt-1 truncate">{artist}</p>
-        {cluster && (
+        {genre && (
           <div className="flex gap-1.5 mt-2 flex-wrap">
             <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold"
               style={{ background: 'rgba(138,138,255,0.15)', color: '#a0a0ff' }}>
-              {cluster.icon} {cluster.label}
+              {genre}
             </span>
           </div>
         )}
@@ -400,7 +391,7 @@ function FilterModal({ draftFilters, draftToggles, setDraftFilters, setDraftTogg
   const [presetName,     setPresetName]     = useState('')
   const [showNameInput,  setShowNameInput]  = useState(false)
 
-  const genreCounts = useMemo(() => {
+  const { genreCounts, genreList } = useMemo(() => {
     const activeDecades = DECADES.filter(d => draftFilters.has(d))
     const pool = albums.filter(a => {
       if (activeDecades.length && !activeDecades.includes(albumDecade(a))) return false
@@ -409,20 +400,16 @@ function FilterModal({ draftFilters, draftToggles, setDraftFilters, setDraftTogg
     const counts = {}
     let noGenreCount = 0
     for (const a of pool) {
-      const seen = new Set()
-      let hasCluster = false
-      for (const g of (a._genres || [])) {
-        const c = clusterOf(g)
-        if (c !== 'other' && !seen.has(c)) {
-          counts[c] = (counts[c] || 0) + 1
-          seen.add(c)
-          hasCluster = true
-        }
-      }
-      if (!hasCluster) noGenreCount++
+      const dg = a._discogsGenres || []
+      if (dg.length === 0) { noGenreCount++; continue }
+      for (const g of dg) counts[g] = (counts[g] || 0) + 1
     }
     counts['no-genre'] = noGenreCount
-    return counts
+    const sorted = Object.entries(counts)
+      .filter(([g]) => g !== 'no-genre')
+      .sort((a, b) => b[1] - a[1])
+      .map(([g]) => g)
+    return { genreCounts: counts, genreList: sorted }
   }, [albums, draftFilters])
 
   function toggleDraftFilter(f) {
@@ -432,9 +419,7 @@ function FilterModal({ draftFilters, draftToggles, setDraftFilters, setDraftTogg
         next.delete(f)
       } else {
         next.add(f)
-        if (GENRE_CLUSTERS.some(c => c.id === f)) {
-          next.delete('no-genre')
-        }
+        if (genreList.includes(f)) next.delete('no-genre')
       }
       return next
     })
@@ -529,21 +514,20 @@ function FilterModal({ draftFilters, draftToggles, setDraftFilters, setDraftTogg
               <p className="text-[11px] text-ink-muted">Loading genres…</p>
             ) : (
             <div className="flex flex-wrap gap-2">
-              {GENRE_CLUSTERS.map(c => {
-                const active = draftFilters.has(c.id)
-                const count = genreCounts[c.id] ?? 0
+              {genreList.map(g => {
+                const active = draftFilters.has(g)
+                const count = genreCounts[g] ?? 0
                 return (
                   <button
-                    key={c.id}
-                    onClick={() => toggleDraftFilter(c.id)}
+                    key={g}
+                    onClick={() => toggleDraftFilter(g)}
                     className={`flex items-center gap-1 px-3.5 py-1.5 rounded-full text-[11px] border transition-all duration-200 active:scale-[0.96] ${
                       active
                         ? 'border-accent bg-accent text-black font-semibold'
                         : 'border-border-subtle bg-card-raised text-ink-secondary font-medium'
                     }`}
                   >
-                    <span>{c.icon}</span>
-                    <span>{c.label}</span>
+                    <span>{g}</span>
                     <span className={active ? 'opacity-70' : 'text-ink-muted'}>{count}</span>
                   </button>
                 )
@@ -560,7 +544,7 @@ function FilterModal({ draftFilters, draftToggles, setDraftFilters, setDraftTogg
                         if (next.has('no-genre')) {
                           next.delete('no-genre')
                         } else {
-                          GENRE_CLUSTERS.forEach(c => next.delete(c.id))
+                          genreList.forEach(g => next.delete(g))
                           next.add('no-genre')
                         }
                         return next
@@ -845,17 +829,19 @@ export default function DiscoverTab({ albums, genresLoading, getAlbumStats, save
   // ── Filtered album pool ────────────────────────────────────────────
 
   const filteredAlbums = useMemo(() => {
-    const activeDecades       = DECADES.filter(d => activeFilters.has(d))
-    const activeGenreClusters = GENRE_CLUSTERS.filter(c => activeFilters.has(c.id))
+    const activeDecades = DECADES.filter(d => activeFilters.has(d))
+    const activeGenres  = [...activeFilters].filter(f =>
+      f !== 'no-genre' && !DECADES.includes(f) && !['Never heard', 'Not recently played'].includes(f)
+    )
     const now = Date.now()
 
     return albums.filter(a => {
       if (activeDecades.length && !activeDecades.includes(albumDecade(a))) return false
-      if (activeGenreClusters.length) {
-        const albumClusters = new Set((a._genres || []).map(clusterOf))
-        if (!activeGenreClusters.some(c => albumClusters.has(c.id))) return false
+      if (activeGenres.length) {
+        const dg = a._discogsGenres || []
+        if (!activeGenres.some(g => dg.includes(g))) return false
       }
-      if (activeFilters.has('no-genre') && getGenreCluster(a) !== null) return false
+      if (activeFilters.has('no-genre') && (a._discogsGenres?.length ?? 0) > 0) return false
       const stats = getAlbumStats(a)
       if (activeFilters.has('Never heard') && (stats?.listenCount ?? 0) > 0) return false
       if (activeFilters.has('Not recently played')) {

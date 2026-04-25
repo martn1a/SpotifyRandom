@@ -1,6 +1,5 @@
 import { useState, useMemo } from 'react'
 import { motion, AnimatePresence } from 'motion/react'
-import { GENRE_CLUSTERS, clusterOf } from '../../data/genre-clusters.js'
 import AlbumModal from '../AlbumModal.jsx'
 import { cn } from '../../lib/utils.js'
 import { getAlbumBadges } from '../../lib/badge-utils.js'
@@ -86,29 +85,23 @@ const TYPE_OPTIONS = [
 
 export default function LibraryTab({ albums, getAlbumStats, genresLoading, saveLater, removeLater, isSaved, libraryFilter, onClearFilter = () => {}, onBadgeClick }) {
   const [search,        setSearch]        = useState('')
-  const [activeCluster, setActiveCluster] = useState(null)
+  const [activeGenre,   setActiveGenre]   = useState(null)
   const [typeFilter,    setTypeFilter]    = useState('all')
   const [sort,          setSort]          = useState('recently_added')
   const [selectedAlbum, setSelectedAlbum] = useState(null)
   const [isFilterOpen,  setIsFilterOpen]  = useState(false)
 
-  // Build cluster → album count map (only includes clusters with ≥1 album)
-  const clusterCounts = useMemo(() => {
+  // Build genre → album count map, sorted by count
+  const { genreCounts, visibleGenres } = useMemo(() => {
     const counts = new Map()
     for (const a of albums) {
-      const seen = new Set()
-      for (const g of (a._genres || [])) {
-        const c = clusterOf(g)
-        if (c !== 'other' && !seen.has(c)) {
-          counts.set(c, (counts.get(c) || 0) + 1)
-          seen.add(c)
-        }
+      for (const g of (a._discogsGenres || [])) {
+        counts.set(g, (counts.get(g) || 0) + 1)
       }
     }
-    return counts
+    const sorted = [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([g]) => g)
+    return { genreCounts: counts, visibleGenres: sorted }
   }, [albums])
-
-  const visibleClusters = GENRE_CLUSTERS.filter(c => clusterCounts.has(c.id))
 
   // Filter + sort
   const filtered = useMemo(() => {
@@ -126,11 +119,8 @@ export default function LibraryTab({ albums, getAlbumStats, genresLoading, saveL
       list = list.filter(a => a.album_type === typeFilter)
     }
 
-    if (activeCluster) {
-      list = list.filter(a => {
-        const clusters = new Set((a._genres || []).map(clusterOf))
-        return clusters.has(activeCluster)
-      })
+    if (activeGenre) {
+      list = list.filter(a => (a._discogsGenres || []).includes(activeGenre))
     }
 
     if (libraryFilter) {
@@ -157,7 +147,7 @@ export default function LibraryTab({ albums, getAlbumStats, genresLoading, saveL
     }
 
     return list
-  }, [albums, search, typeFilter, activeCluster, sort, getAlbumStats, libraryFilter])
+  }, [albums, search, typeFilter, activeGenre, sort, getAlbumStats, libraryFilter])
 
   return (
     <div className="flex flex-col h-full">
@@ -263,33 +253,32 @@ export default function LibraryTab({ albums, getAlbumStats, genresLoading, saveL
                 </div>
               </div>
 
-              {/* Genre cluster chips */}
-              {visibleClusters.length > 0 && (
+              {/* Genre chips */}
+              {visibleGenres.length > 0 && (
                 <div>
                   <p className="text-[10px] font-bold uppercase tracking-widest text-ink-muted mb-2">Genre</p>
                   <div className="flex gap-2 flex-wrap">
-                    {activeCluster && (
+                    {activeGenre && (
                       <button
-                        onClick={() => setActiveCluster(null)}
+                        onClick={() => setActiveGenre(null)}
                         className="px-3 py-1.5 rounded-full text-[11px] font-medium bg-accent text-page"
                       >
                         ✕ All
                       </button>
                     )}
-                    {visibleClusters.map(c => (
+                    {visibleGenres.map(g => (
                       <button
-                        key={c.id}
-                        onClick={() => setActiveCluster(activeCluster === c.id ? null : c.id)}
+                        key={g}
+                        onClick={() => setActiveGenre(activeGenre === g ? null : g)}
                         className={cn(
-                          'flex items-center gap-1 px-3 py-1.5 rounded-full text-[11px] font-medium transition-colors',
-                          activeCluster === c.id
+                          'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-medium transition-colors',
+                          activeGenre === g
                             ? 'bg-accent text-page'
                             : 'bg-card text-ink-muted border border-border-subtle'
                         )}
                       >
-                        <span>{c.icon}</span>
-                        <span>{c.label}</span>
-                        <span className="opacity-50">{clusterCounts.get(c.id)}</span>
+                        <span>{g}</span>
+                        <span className="opacity-50">{genreCounts.get(g)}</span>
                       </button>
                     ))}
                   </div>
@@ -301,7 +290,7 @@ export default function LibraryTab({ albums, getAlbumStats, genresLoading, saveL
       </AnimatePresence>
 
       {/* ── Genre loading indicator ────────────────────────────────── */}
-      {genresLoading && visibleClusters.length === 0 && (
+      {genresLoading && visibleGenres.length === 0 && (
         <p className="px-4 pb-2 text-[11px] text-ink-muted">Loading genres…</p>
       )}
 
