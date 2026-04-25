@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'motion/react'
 import { cn } from '../../lib/utils.js'
+import { SKINS } from '../../hooks/useSkin.js'
 
 const CAROUSEL_LABELS = {
   'most-played':        '👑 Most Played',
@@ -153,6 +154,8 @@ function SettingsModal({
   hideLibraryAlbums = false,
   onUpdateHideLibraryAlbums,
   onExportLibrary,
+  skin,
+  onSkinChange,
 }) {
   const [expandedSection, setExpandedSection] = useState(null)
   const [pickerOpen, setPickerOpen] = useState(false)
@@ -195,6 +198,53 @@ function SettingsModal({
             </div>
 
             <div className="flex-1 overflow-y-auto p-6 space-y-2">
+              {/* Appearance section */}
+              <div>
+                <button
+                  onClick={() => toggle('appearance')}
+                  className="w-full flex items-center justify-between py-3 font-bold text-sm text-ink"
+                >
+                  <span>Appearance</span>
+                  <span className="text-ink-muted">{expandedSection === 'appearance' ? '▲' : '▼'}</span>
+                </button>
+                <AnimatePresence>
+                  {expandedSection === 'appearance' && (
+                    <motion.div
+                      initial={{ height: 0, opacity: 0 }}
+                      animate={{ height: 'auto', opacity: 1 }}
+                      exit={{ height: 0, opacity: 0 }}
+                      className="overflow-hidden"
+                    >
+                      <div className="pb-4 space-y-2">
+                        {SKINS.map(s => (
+                          <button
+                            key={s.id}
+                            onClick={() => onSkinChange(s.id)}
+                            className={cn(
+                              'w-full flex items-center gap-3 px-4 py-3 rounded-2xl border transition-all text-left',
+                              skin === s.id
+                                ? 'bg-accent-dim border-accent'
+                                : 'bg-card-raised border-border-subtle'
+                            )}
+                          >
+                            <div className={cn(
+                              'w-4 h-4 rounded-full border-2 flex-shrink-0',
+                              skin === s.id ? 'border-accent bg-accent' : 'border-ink-muted'
+                            )} />
+                            <div>
+                              <p className={cn('text-sm font-bold', skin === s.id ? 'text-accent' : 'text-ink')}>
+                                {s.label}
+                              </p>
+                              <p className="text-xs text-ink-muted">{s.description}</p>
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </div>
+
               {/* Sync section */}
               <div>
                 <button
@@ -502,6 +552,8 @@ export default function Header({
   hideLibraryAlbums,
   onUpdateHideLibraryAlbums,
   onExportLibrary,
+  skin,
+  onSkinChange,
 }) {
   return (
     <>
@@ -558,6 +610,8 @@ export default function Header({
         hideLibraryAlbums={hideLibraryAlbums}
         onUpdateHideLibraryAlbums={onUpdateHideLibraryAlbums}
         onExportLibrary={onExportLibrary}
+        skin={skin}
+        onSkinChange={onSkinChange}
       />
     </>
   )
