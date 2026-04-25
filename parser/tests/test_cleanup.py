@@ -130,7 +130,7 @@ import tempfile
 
 def _make_albums(n_keep=2, n_remove=2):
     """2 keepable (recently_added) + n_remove old/unheard albums."""
-    now_iso = datetime.utcnow().strftime('%Y-%m-%dT%H:%M:%SZ')
+    now_iso = datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
     old_iso = '2015-01-01T00:00:00Z'
     albums = []
     for i in range(n_keep):
@@ -187,11 +187,13 @@ def test_cmd_run_abort_on_wrong_answer(tmp_path, monkeypatch):
     monkeypatch.setattr(cleanup, 'DATA_PATH', data_file)
 
     with patch('builtins.input', return_value='no'), \
-         patch('builtins.print') as mock_print:
+         patch('builtins.print') as mock_print, \
+         patch('cleanup.get_spotipy') as mock_sp:
         cleanup.cmd_run()
 
     printed = ' '.join(str(c) for c in mock_print.call_args_list)
     assert 'Aborted' in printed
+    mock_sp.assert_not_called()
 
 
 def test_cmd_run_nothing_to_remove(tmp_path, monkeypatch):
