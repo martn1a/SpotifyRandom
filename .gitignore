@@ -11,3 +11,8 @@ IDEAS.md
 burn-tracking-spec.md
 design-sandbox/
 skills-lock.json
+
+# Cleanup script outputs
+parser/cleanup_data.json
+parser/cleanup_dry_run_*.txt
+parser/.spotipyoauthcache
