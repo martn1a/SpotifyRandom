@@ -199,7 +199,7 @@ def analyze(albums: list, config: dict) -> dict:
         keep, reasons = should_keep(album, config)
         if keep:
             for r in reasons:
-                keep_reasons[r] = keep_reasons.get(r, 0) + 1
+                keep_reasons[r] += 1
             to_keep.append(album)
         else:
             if (album.get('rawScrobbles') or 0) == 0:
@@ -208,7 +208,7 @@ def analyze(albums: list, config: dict) -> dict:
                 remove_reasons['low_coverage'] += 1
             to_remove.append(album)
 
-    no_lfm = sum(1 for a in albums if not a.get('lfm_matched', True))
+    no_lfm = sum(1 for a in albums if not a.get('lfm_matched', False))
 
     return {
         'total':          len(albums),
@@ -230,7 +230,7 @@ def _fmt_coverage(album: dict) -> str:
 
 def _fmt_date_ms(ms) -> str:
     if not ms:
-        return '          -'
+        return '         -'
     return datetime.fromtimestamp(ms / 1000, tz=timezone.utc).strftime('%Y-%m-%d')
 
 
