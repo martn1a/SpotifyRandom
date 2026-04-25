@@ -187,6 +187,121 @@ def merge_with_lastfm(spotify_albums: list, lastfm_data: dict) -> tuple:
     return merged, matched
 
 
+# ─── Analysis ────────────────────────────────────────────────────────
+
+def analyze(albums: list, config: dict) -> dict:
+    to_keep   = []
+    to_remove = []
+    keep_reasons   = {'recently_added': 0, 'listen_count': 0, 'scrobble_coverage': 0, 'last_heard': 0}
+    remove_reasons = {'never_scrobbled': 0, 'low_coverage': 0}
+
+    for album in albums:
+        keep, reasons = should_keep(album, config)
+        if keep:
+            for r in reasons:
+                keep_reasons[r] = keep_reasons.get(r, 0) + 1
+            to_keep.append(album)
+        else:
+            if (album.get('rawScrobbles') or 0) == 0:
+                remove_reasons['never_scrobbled'] += 1
+            else:
+                remove_reasons['low_coverage'] += 1
+            to_remove.append(album)
+
+    no_lfm = sum(1 for a in albums if not a.get('lfm_matched', True))
+
+    return {
+        'total':          len(albums),
+        'to_keep':        to_keep,
+        'to_remove':      to_remove,
+        'keep_reasons':   keep_reasons,
+        'remove_reasons': remove_reasons,
+        'no_lfm_match':   no_lfm,
+    }
+
+
+def _fmt_coverage(album: dict) -> str:
+    tc = album.get('trackCount') or album.get('total_tracks') or 0
+    sc = album.get('rawScrobbles', 0) or 0
+    if tc == 0:
+        return '  n/a'
+    return f'{sc / tc * 100:4.0f}%'
+
+
+def _fmt_date_ms(ms) -> str:
+    if not ms:
+        return '          -'
+    return datetime.fromtimestamp(ms / 1000, tz=timezone.utc).strftime('%Y-%m-%d')
+
+
+def format_report(results: dict, config: dict) -> str:
+    total    = results['total']
+    n_remove = len(results['to_remove'])
+    n_keep   = len(results['to_keep'])
+    kr       = results['keep_reasons']
+    rr       = results['remove_reasons']
+    cov_pct  = int(config['keep_if_scrobble_coverage'] * 100)
+
+    settings = (
+        f"added<{config['keep_added_within_days']}d"
+        f" | listens≥{config['keep_if_listen_count_gte']}"
+        f" | coverage≥{cov_pct}%"
+        + (f" | last_heard<{config['keep_if_last_heard_days']}d"
+           if config['keep_if_last_heard_days'] > 0 else '')
+    )
+
+    pct_remove = n_remove / total * 100 if total else 0
+    pct_keep   = n_keep   / total * 100 if total else 0
+
+    lines = [
+        '=' * 62,
+        '  SPOTIFY LIBRARY CLEANUP — DRY RUN',
+        f'  Settings: {settings}',
+        '=' * 62,
+        f'  Total albums in library:   {total:>6,}',
+        f'  No Last.fm data:           {results["no_lfm_match"]:>6,}  (treated as 0 scrobbles)',
+        '',
+        f'  Would REMOVE:  {n_remove:>6,}  ({pct_remove:.1f}%)',
+        f'  Would KEEP:    {n_keep:>6,}  ({pct_keep:.1f}%)',
+        '',
+        '  Kept because (an album can satisfy multiple):',
+        f'    Added recently  (<{config["keep_added_within_days"]}d):   {kr.get("recently_added", 0):>5,}',
+        f'    Listened through (≥{config["keep_if_listen_count_gte"]}×):     {kr.get("listen_count", 0):>5,}',
+        f'    Scrobble coverage (≥{cov_pct}%):  {kr.get("scrobble_coverage", 0):>5,}',
+    ]
+    if config['keep_if_last_heard_days'] > 0:
+        lines.append(f'    Last heard (<{config["keep_if_last_heard_days"]}d):           {kr.get("last_heard", 0):>5,}')
+
+    lines += [
+        '',
+        '  Remove breakdown:',
+        f'    Never scrobbled (0):       {rr["never_scrobbled"]:>5,}',
+        f'    Low coverage (<{cov_pct}%):       {rr["low_coverage"]:>5,}',
+        '=' * 62,
+    ]
+
+    if results['to_remove']:
+        CA, CB = 22, 26
+        header = (
+            f'{"Artist":<{CA}} | {"Album":<{CB}} | {"Added":10} | '
+            f'{"Scrobbles":>9} | {"Cover":>5} | {"Listens":>7}'
+        )
+        lines += ['', f'ALBUMS TO REMOVE ({n_remove:,}):', header, '-' * len(header)]
+
+        for a in sorted(results['to_remove'],
+                        key=lambda x: (x.get('artist', '').lower(), x.get('name', '').lower())):
+            lines.append(
+                f'{(a.get("artist") or "")[:CA]:<{CA}} | '
+                f'{(a.get("name")   or "")[:CB]:<{CB}} | '
+                f'{(a.get("added_at") or "")[:10]:10} | '
+                f'{(a.get("rawScrobbles") or 0):>9,} | '
+                f'{_fmt_coverage(a):>5} | '
+                f'{(a.get("listenCount") or 0):>7}'
+            )
+
+    return '\n'.join(lines)
+
+
 def cmd_export():
     load_env()
     print('Authenticating with Spotify...')
