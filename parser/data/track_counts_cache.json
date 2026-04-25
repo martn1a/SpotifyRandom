@@ -28525,5 +28525,59 @@
     "source": "lastfm",
     "fetchedAt": 1776533039830,
     "releaseYear": null
+  },
+  "baiuca||mangüeiro": {
+    "trackCount": 1,
+    "source": "estimate",
+    "fetchedAt": 1777138240488,
+    "releaseYear": null
+  },
+  "cero39||6": {
+    "trackCount": 9,
+    "source": "lastfm",
+    "fetchedAt": 1777138240938,
+    "releaseYear": null
+  },
+  "aura safari||sensory blending": {
+    "trackCount": 9,
+    "source": "estimate",
+    "fetchedAt": 1777138241016,
+    "releaseYear": null
+  },
+  "pasteur lappe||african funk experimentals (1979 to 1981)": {
+    "trackCount": 12,
+    "source": "lastfm",
+    "fetchedAt": 1777138241253,
+    "releaseYear": null
+  },
+  "raphaël dion||le cancer": {
+    "trackCount": 5,
+    "source": "lastfm",
+    "fetchedAt": 1777138241457,
+    "releaseYear": null
+  },
+  "shabaka||of the earth": {
+    "trackCount": 12,
+    "source": "lastfm",
+    "fetchedAt": 1777138241647,
+    "releaseYear": null
+  },
+  "andrés||sunday kinda love": {
+    "trackCount": 4,
+    "source": "lastfm",
+    "fetchedAt": 1777138242119,
+    "releaseYear": null
+  },
+  "steely dan||aja": {
+    "trackCount": 7,
+    "source": "lastfm",
+    "fetchedAt": 1777138243032,
+    "releaseYear": null
+  },
+  "steely dan||can't buy a thrill": {
+    "trackCount": 10,
+    "source": "lastfm",
+    "fetchedAt": 1777138243125,
+    "releaseYear": null
   }
 }
