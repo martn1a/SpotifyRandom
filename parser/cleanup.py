@@ -155,17 +155,17 @@ def merge_with_lastfm(spotify_albums: list, lastfm_data: dict) -> tuple:
     merged  = []
     matched = 0
 
-    for sp in spotify_albums:
-        key = normalize_key(sp['artist'], sp['name'])
+    for album in spotify_albums:
+        key = normalize_key(album['artist'], album['name'])
         lfm = lfm_albums.get(key)
-        rec = dict(sp)
+        rec = dict(album)
 
         if lfm:
             rec.update({
                 'lfm_matched':  True,
                 'listenCount':  lfm.get('listenCount', 0),
                 'rawScrobbles': lfm.get('rawScrobbles', 0),
-                'trackCount':   lfm.get('trackCount') or sp['total_tracks'],
+                'trackCount':   lfm.get('trackCount') or album['total_tracks'],
                 'lastHeard':    lfm.get('lastHeard'),
                 'firstHeard':   lfm.get('firstHeard'),
                 'sessionCount': lfm.get('sessionCount', 0),
@@ -176,7 +176,7 @@ def merge_with_lastfm(spotify_albums: list, lastfm_data: dict) -> tuple:
                 'lfm_matched':  False,
                 'listenCount':  0,
                 'rawScrobbles': 0,
-                'trackCount':   sp['total_tracks'],
+                'trackCount':   album['total_tracks'],
                 'lastHeard':    None,
                 'firstHeard':   None,
                 'sessionCount': 0,
@@ -197,6 +197,9 @@ def cmd_export():
     print(f'  Total: {len(spotify_albums):,} albums')
 
     print('Loading Last.fm data...')
+    if not LASTFM_PATH.exists():
+        print(f'ERROR: Last.fm data not found at {LASTFM_PATH}')
+        sys.exit(1)
     lastfm_data = json.loads(LASTFM_PATH.read_text(encoding='utf-8'))
 
     print('Merging...')
@@ -206,8 +209,12 @@ def cmd_export():
     DATA_PATH.write_text(json.dumps(merged, indent=2, ensure_ascii=False), encoding='utf-8')
 
     print(f'\nExport complete → {DATA_PATH.name}')
-    print(f'  Matched with Last.fm: {matched:,} / {len(merged):,}  ({matched/len(merged)*100:.0f}%)')
-    print(f'  No Last.fm data:      {unmatched:,}  (treated as 0 scrobbles)')
+    if merged:
+        pct = f'{matched / len(merged) * 100:.0f}%'
+        print(f'  Matched with Last.fm: {matched:,} / {len(merged):,}  ({pct})')
+        print(f'  No Last.fm data:      {unmatched:,}  (treated as 0 scrobbles)')
+    else:
+        print('  No albums found in Spotify library.')
 
 
 # ─── Entry point ─────────────────────────────────────────────────────
