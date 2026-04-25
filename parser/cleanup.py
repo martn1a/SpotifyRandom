@@ -44,7 +44,11 @@ def normalize_key(artist: str, album: str) -> str:
     """Lowercase + strip bracket suffixes — matches the React app's normalizeAlbumKey()."""
     artist = artist.lower().strip()
     album  = album.lower().strip()
-    album  = re.sub(r'\s*[\(\[][^\)\]]*[\)\]]', '', album).strip()
+    while True:
+        stripped = re.sub(r'\s*(\([^)]*\)|\[[^\]]*\])\s*$', '', album).strip()
+        if stripped == album:
+            break
+        album = stripped
     return f'{artist}||{album}'
 
 
@@ -66,8 +70,9 @@ def should_keep(album: dict, config: dict) -> tuple:
             reasons.append('recently_added')
 
     # Criterion 2: fully listened through N+ times (parser session algorithm)
+    # threshold=0 disables this criterion (consistent with coverage/last_heard)
     listen_count = album.get('listenCount', 0) or 0
-    if listen_count >= config['keep_if_listen_count_gte']:
+    if config['keep_if_listen_count_gte'] > 0 and listen_count >= config['keep_if_listen_count_gte']:
         reasons.append('listen_count')
 
     # Criterion 3: lifetime scrobble coverage (looser than session algorithm)
