@@ -598,7 +598,7 @@ function FilterModal({ draftFilters, draftToggles, setDraftFilters, setDraftTogg
           <div>
             <p className="text-[9px] font-bold text-ink-muted uppercase tracking-widest mb-3">Listening History</p>
             <div className="flex flex-wrap gap-2">
-              {['Never heard', 'Not recently played'].map(label => {
+              {['Never heard', 'Not recently played', 'Not yet finished'].map(label => {
                 const active = draftFilters.has(label)
                 return (
                   <button
@@ -723,17 +723,26 @@ function FilterModal({ draftFilters, draftToggles, setDraftFilters, setDraftTogg
 
 // ── Main component ────────────────────────────────────────────────────
 
+function loadDiscoverState() {
+  try {
+    const raw = localStorage.getItem('discover_state')
+    if (!raw) return null
+    return JSON.parse(raw)
+  } catch { return null }
+}
+
 export default function DiscoverTab({ albums, genresLoading, getAlbumStats, saveLater, removeLater, isSaved, onBadgeClick }) {
-  const [activeFilters,   setActiveFilters]  = useState(new Set())
-  const [toggles,         setToggles]        = useState({ weightUnheard: false, excludeKeywords: false, avoidRecent: false, boostRecentlyAdded: false })
-  const [activePreset,    setActivePreset]   = useState(null)
+  const _saved = loadDiscoverState()
+  const [activeFilters,   setActiveFilters]  = useState(() => new Set(_saved?.activeFilters ?? []))
+  const [toggles,         setToggles]        = useState(_saved?.toggles ?? { weightUnheard: false, excludeKeywords: false, avoidRecent: false, boostRecentlyAdded: false })
+  const [activePreset,    setActivePreset]   = useState(_saved?.activePreset ?? null)
   const [customPresets,   setCustomPresets]  = useState(() => {
     try { return JSON.parse(localStorage.getItem('discover_presets') || '[]') } catch { return [] }
   })
   const [queueHistory,    setQueueHistory]   = useState(() => {
     try { return JSON.parse(localStorage.getItem('discover_queue_history') || '{}') } catch { return {} }
   })
-  const [pickCount,       setPickCount]      = useState(1)
+  const [pickCount,       setPickCount]      = useState(_saved?.pickCount ?? 1)
   const [pickedAlbums,    setPickedAlbums]   = useState([])
   const [selectedAlbum,   setSelectedAlbum]  = useState(null)
   const [queueStatus,     setQueueStatus]    = useState(null)
@@ -741,12 +750,26 @@ export default function DiscoverTab({ albums, genresLoading, getAlbumStats, save
   const [presetSheetOpen, setPresetSheetOpen] = useState(false)
   const [draftFilters,    setDraftFilters]   = useState(new Set())
   const [draftToggles,    setDraftToggles]   = useState({ weightUnheard: false, excludeKeywords: false, avoidRecent: false, boostRecentlyAdded: false })
-  const [recentlyAddedFilter,      setRecentlyAddedFilter]      = useState(null)
+  const [recentlyAddedFilter,      setRecentlyAddedFilter]      = useState(_saved?.recentlyAddedFilter ?? null)
   const [draftRecentlyAddedFilter, setDraftRecentlyAddedFilter] = useState(null)
-  const [activeCluster,  setActiveCluster]  = useState(null)
-  const [activeGenre,    setActiveGenre]    = useState(null)
+  const [activeCluster,  setActiveCluster]  = useState(_saved?.activeCluster ?? null)
+  const [activeGenre,    setActiveGenre]    = useState(_saved?.activeGenre ?? null)
   const [draftCluster,   setDraftCluster]   = useState(null)
   const [draftGenre,     setDraftGenre]     = useState(null)
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('discover_state', JSON.stringify({
+        activePreset,
+        activeFilters: [...activeFilters],
+        toggles,
+        recentlyAddedFilter,
+        activeCluster,
+        activeGenre,
+        pickCount,
+      }))
+    } catch {}
+  }, [activePreset, activeFilters, toggles, recentlyAddedFilter, activeCluster, activeGenre, pickCount])
 
   // ── Filter helpers ─────────────────────────────────────────────────
 
@@ -884,6 +907,10 @@ export default function DiscoverTab({ albums, genresLoading, getAlbumStats, save
       if (activeFilters.has('Not recently played')) {
         const lh = stats?.lastHeard
         if (lh && now - lh <= NINETY_DAYS_MS) return false
+      }
+      if (activeFilters.has('Not yet finished')) {
+        if (!isSaved(a.id)) return false
+        if ((stats?.uniqueListeningDays ?? 0) >= 2) return false
       }
       if (toggles.excludeKeywords) {
         const l = (a.name || '').toLowerCase()
