@@ -67,7 +67,7 @@ function normalizeAlbumKey(artist, album) {
 function CarouselItem({ entry, onTap, className }) {
   const [imgError, setImgError] = useState(false)
   const images = entry.spotifyAlbum?.images
-  const art = !imgError ? images?.[0]?.url : null
+  const art = !imgError ? (images?.[0]?.url ?? null) : null
   const itemClass = className ?? 'flex-shrink-0 w-[calc(50%-8px)]'
 
   return (
@@ -131,7 +131,21 @@ function Carousel({ title, items, onTap, onReset, burnedCount, lastBurnedAt, com
             ))}
           </div>
         )
-        : <p className="text-[12px] text-ink-muted py-2">All burned — tap Reset to restore.</p>
+        : (
+          <div className="flex flex-col items-center gap-3 py-6 px-4 bg-card-raised rounded-2xl border border-border-subtle text-center">
+            <span className="text-2xl">🔥</span>
+            <p className="text-[13px] font-medium text-ink">All caught up</p>
+            <p className="text-[11px] text-ink-muted">You've burned every album in this list.</p>
+            {onReset && (
+              <button
+                onClick={onReset}
+                className="mt-1 px-4 py-2 rounded-full text-[12px] font-semibold bg-card border border-border-subtle text-ink-secondary active:opacity-70 transition-opacity"
+              >
+                ↺ Restore list
+              </button>
+            )}
+          </div>
+        )
       }
     </section>
   )
@@ -397,12 +411,25 @@ export default function StatsTab({ albums, getAlbumStats, lastfmMap, lastfmLoade
               </AnimatePresence>
             </div>
           ) : (
-            <p className="text-[12px] text-ink-muted py-2">
-              {mostPlayedRange === '7d'
-                ? 'No albums heard in the last 7 days according to last.fm data.'
-                : 'All burned — tap Reset to restore.'
-              }
-            </p>
+            <div className="flex flex-col items-center gap-3 py-6 px-4 bg-card-raised rounded-2xl border border-border-subtle text-center">
+              <span className="text-2xl">{mostPlayedRange === '7d' ? '🎵' : '🔥'}</span>
+              <p className="text-[13px] font-medium text-ink">
+                {mostPlayedRange === '7d' ? 'Nothing heard this week' : 'All caught up'}
+              </p>
+              <p className="text-[11px] text-ink-muted">
+                {mostPlayedRange === '7d'
+                  ? 'No Last.fm scrobbles found in the last 7 days.'
+                  : "You've burned every album in this list."}
+              </p>
+              {mostPlayedRange !== '7d' && (
+                <button
+                  onClick={() => resetCarousel('most-played')}
+                  className="mt-1 px-4 py-2 rounded-full text-[12px] font-semibold bg-card border border-border-subtle text-ink-secondary active:opacity-70 transition-opacity"
+                >
+                  ↺ Restore list
+                </button>
+              )}
+            </div>
           )}
         </section>
       )
