@@ -388,40 +388,48 @@ function MultiPickList({ albums, getAlbumStats, onQueue, onSave, onRemove, isSav
 
 // ── FilterModal ───────────────────────────────────────────────────────
 
-function FilterModal({ draftFilters, draftToggles, setDraftFilters, setDraftToggles, onApply, onClose, onSavePreset, activeFilterCount, albums, getAlbumStats, recentlyAddedFilter, setRecentlyAddedFilter, genresLoading }) {
+function FilterModal({ draftFilters, draftToggles, setDraftFilters, setDraftToggles, draftCluster, setDraftCluster, draftGenre, setDraftGenre, onApply, onClose, onSavePreset, activeFilterCount, albums, getAlbumStats, recentlyAddedFilter, setRecentlyAddedFilter, genresLoading }) {
   const [presetName,     setPresetName]     = useState('')
   const [showNameInput,  setShowNameInput]  = useState(false)
 
-  const { genreCounts, genreList } = useMemo(() => {
+  const { clusterCounts, drillGenreCounts } = useMemo(() => {
     const activeDecades = DECADES.filter(d => draftFilters.has(d))
     const pool = albums.filter(a => {
       if (activeDecades.length && !activeDecades.includes(albumDecade(a))) return false
       return true
     })
-    const counts = {}
-    let noGenreCount = 0
+    const cCounts = {}
+    let noGenre = 0
     for (const a of pool) {
-      const dg = a._genres || []
-      if (dg.length === 0) { noGenreCount++; continue }
-      for (const g of dg) counts[g] = (counts[g] || 0) + 1
+      const genres = a._genres || []
+      if (genres.length === 0) { noGenre++; continue }
+      const seen = new Set()
+      for (const g of genres) {
+        const c = clusterOf(g)
+        if (c !== 'other' && !seen.has(c)) {
+          cCounts[c] = (cCounts[c] || 0) + 1
+          seen.add(c)
+        }
+      }
     }
-    counts['no-genre'] = noGenreCount
-    const sorted = Object.entries(counts)
-      .filter(([g]) => g !== 'no-genre')
-      .sort((a, b) => b[1] - a[1])
-      .map(([g]) => g)
-    return { genreCounts: counts, genreList: sorted }
-  }, [albums, draftFilters])
+    if (noGenre > 0) cCounts['no-genre'] = noGenre
+    const gCounts = {}
+    if (draftCluster && draftCluster !== 'no-genre') {
+      for (const a of pool) {
+        for (const g of (a._genres || [])) {
+          if (clusterOf(g) === draftCluster) {
+            gCounts[g] = (gCounts[g] || 0) + 1
+          }
+        }
+      }
+    }
+    return { clusterCounts: cCounts, drillGenreCounts: gCounts }
+  }, [albums, draftFilters, draftCluster])
 
   function toggleDraftFilter(f) {
     setDraftFilters(prev => {
       const next = new Set(prev)
-      if (next.has(f)) {
-        next.delete(f)
-      } else {
-        next.add(f)
-        if (genreList.includes(f)) next.delete('no-genre')
-      }
+      next.has(f) ? next.delete(f) : next.add(f)
       return next
     })
   }
@@ -431,6 +439,7 @@ function FilterModal({ draftFilters, draftToggles, setDraftFilters, setDraftTogg
   }
 
   const draftCount = draftFilters.size
+    + (draftCluster ? 1 : 0)
     + (draftToggles.weightUnheard      ? 1 : 0)
     + (draftToggles.excludeKeywords    ? 1 : 0)
     + (draftToggles.avoidRecent        ? 1 : 0)
@@ -513,56 +522,75 @@ function FilterModal({ draftFilters, draftToggles, setDraftFilters, setDraftTogg
             <p className="text-[9px] font-bold text-ink-muted uppercase tracking-widest mb-3">Genres</p>
             {genresLoading ? (
               <p className="text-[11px] text-ink-muted">Loading genres…</p>
+            ) : draftCluster && draftCluster !== 'no-genre' ? (
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={() => { setDraftCluster(null); setDraftGenre(null) }}
+                  className="px-3.5 py-1.5 rounded-full text-[11px] border border-accent bg-accent text-black font-semibold transition-all duration-200 active:scale-[0.96]"
+                >
+                  ← {GENRE_CLUSTERS.find(c => c.id === draftCluster)?.label}
+                </button>
+                {Object.entries(drillGenreCounts)
+                  .sort((a, b) => b[1] - a[1])
+                  .map(([g, count]) => {
+                    const active = draftGenre === g
+                    return (
+                      <button
+                        key={g}
+                        onClick={() => setDraftGenre(active ? null : g)}
+                        className={`flex items-center gap-1 px-3.5 py-1.5 rounded-full text-[11px] border transition-all duration-200 active:scale-[0.96] ${
+                          active
+                            ? 'border-accent bg-accent text-black font-semibold'
+                            : 'border-border-subtle bg-card-raised text-ink-secondary font-medium'
+                        }`}
+                      >
+                        <span>{g}</span>
+                        <span className={active ? 'opacity-70' : 'text-ink-muted'}>{count}</span>
+                      </button>
+                    )
+                  })
+                }
+              </div>
             ) : (
-            <div className="flex flex-wrap gap-2">
-              {genreList.map(g => {
-                const active = draftFilters.has(g)
-                const count = genreCounts[g] ?? 0
-                return (
-                  <button
-                    key={g}
-                    onClick={() => toggleDraftFilter(g)}
-                    className={`flex items-center gap-1 px-3.5 py-1.5 rounded-full text-[11px] border transition-all duration-200 active:scale-[0.96] ${
-                      active
-                        ? 'border-accent bg-accent text-black font-semibold'
-                        : 'border-border-subtle bg-card-raised text-ink-secondary font-medium'
-                    }`}
-                  >
-                    <span>{g}</span>
-                    <span className={active ? 'opacity-70' : 'text-ink-muted'}>{count}</span>
-                  </button>
-                )
-              })}
-              {/* No Genre chip */}
-              {(() => {
-                const active = draftFilters.has('no-genre')
-                const count = genreCounts['no-genre'] ?? 0
-                return (
-                  <button
-                    onClick={() => {
-                      setDraftFilters(prev => {
-                        const next = new Set(prev)
-                        if (next.has('no-genre')) {
-                          next.delete('no-genre')
-                        } else {
-                          genreList.forEach(g => next.delete(g))
-                          next.add('no-genre')
-                        }
-                        return next
-                      })
-                    }}
-                    className={`flex items-center gap-1 px-3.5 py-1.5 rounded-full text-[11px] border transition-all duration-200 active:scale-[0.96] ${
-                      active
-                        ? 'border-accent bg-accent text-black font-semibold'
-                        : 'border-border-subtle bg-card-raised text-ink-secondary font-medium'
-                    }`}
-                  >
-                    <span>No Genre</span>
-                    <span className={active ? 'opacity-70' : 'text-ink-muted'}>{count}</span>
-                  </button>
-                )
-              })()}
-            </div>
+              <div className="flex flex-wrap gap-2">
+                {GENRE_CLUSTERS
+                  .filter(c => (clusterCounts[c.id] || 0) > 0)
+                  .sort((a, b) => (clusterCounts[b.id] || 0) - (clusterCounts[a.id] || 0))
+                  .map(c => {
+                    const active = draftCluster === c.id
+                    return (
+                      <button
+                        key={c.id}
+                        onClick={() => { setDraftCluster(c.id); setDraftGenre(null) }}
+                        className={`flex items-center gap-1 px-3.5 py-1.5 rounded-full text-[11px] border transition-all duration-200 active:scale-[0.96] ${
+                          active
+                            ? 'border-accent bg-accent text-black font-semibold'
+                            : 'border-border-subtle bg-card-raised text-ink-secondary font-medium'
+                        }`}
+                      >
+                        <span>{c.icon} {c.label}</span>
+                        <span className={active ? 'opacity-70' : 'text-ink-muted'}>{clusterCounts[c.id]}</span>
+                      </button>
+                    )
+                  })
+                }
+                {(clusterCounts['no-genre'] || 0) > 0 && (() => {
+                  const active = draftCluster === 'no-genre'
+                  return (
+                    <button
+                      onClick={() => { setDraftCluster(active ? null : 'no-genre'); setDraftGenre(null) }}
+                      className={`flex items-center gap-1 px-3.5 py-1.5 rounded-full text-[11px] border transition-all duration-200 active:scale-[0.96] ${
+                        active
+                          ? 'border-accent bg-accent text-black font-semibold'
+                          : 'border-border-subtle bg-card-raised text-ink-secondary font-medium'
+                      }`}
+                    >
+                      <span>No Genre</span>
+                      <span className={active ? 'opacity-70' : 'text-ink-muted'}>{clusterCounts['no-genre']}</span>
+                    </button>
+                  )
+                })()}
+              </div>
             )}
           </div>
 
