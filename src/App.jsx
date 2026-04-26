@@ -110,13 +110,13 @@ function MainApp({ onLogout }) {
   const { getAlbumStats, lastfmMap, onThisDay, loaded: lastfmLoaded, meta: lastfmMeta, refresh: refreshLastfm, albumTagsMap } = useLastfm()
 
   const enrichedAlbums = useMemo(() => {
-    if (!lastfmMap.size && !albumTagsMap.size) return albums
     return albums.map(a => {
+      if ((a._genres || []).length > 0) return a
       const key = `${a.artists?.[0]?.name || ''}||${a.name}`.toLowerCase()
       const lfmTags = albumTagsMap.get(key) || []
       return { ...a, _genres: lfmTags }
     })
-  }, [albums, lastfmMap, albumTagsMap])
+  }, [albums, albumTagsMap])
   const { items: listenLater, save: saveLater, remove: removeLater, isSaved } = useListenLater()
 
   const [selectedPlaylists, setSelectedPlaylists] = useState(() => {
