@@ -280,34 +280,73 @@ export default function LibraryTab({ albums, getAlbumStats, genresLoading, saveL
               </div>
 
               {/* Genre chips */}
-              {visibleGenres.length > 0 && (
+              {Object.keys(clusterCounts).length > 0 && (
                 <div>
                   <p className="text-[10px] font-bold uppercase tracking-widest text-ink-muted mb-2">Genre</p>
-                  <div className="flex gap-2 flex-wrap">
-                    {activeGenre && (
+                  {activeCluster && activeCluster !== 'no-genre' ? (
+                    <div className="flex gap-2 flex-wrap">
                       <button
-                        onClick={() => setActiveGenre(null)}
+                        onClick={() => { setActiveCluster(null); setActiveGenre(null) }}
                         className="px-3 py-1.5 rounded-full text-[11px] font-medium bg-accent text-page"
                       >
-                        ✕ All
+                        ← {GENRE_CLUSTERS.find(c => c.id === activeCluster)?.label}
                       </button>
-                    )}
-                    {visibleGenres.map(g => (
-                      <button
-                        key={g}
-                        onClick={() => setActiveGenre(activeGenre === g ? null : g)}
-                        className={cn(
-                          'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-medium transition-colors',
-                          activeGenre === g
-                            ? 'bg-accent text-page'
-                            : 'bg-card text-ink-muted border border-border-subtle'
-                        )}
-                      >
-                        <span>{g}</span>
-                        <span className="opacity-50">{genreCounts.get(g)}</span>
-                      </button>
-                    ))}
-                  </div>
+                      {Object.entries(drillGenreCounts)
+                        .sort((a, b) => b[1] - a[1])
+                        .map(([g, count]) => (
+                          <button
+                            key={g}
+                            onClick={() => setActiveGenre(activeGenre === g ? null : g)}
+                            className={cn(
+                              'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-medium transition-colors',
+                              activeGenre === g
+                                ? 'bg-accent text-page'
+                                : 'bg-card text-ink-muted border border-border-subtle'
+                            )}
+                          >
+                            <span>{g}</span>
+                            <span className="opacity-50">{count}</span>
+                          </button>
+                        ))
+                      }
+                    </div>
+                  ) : (
+                    <div className="flex gap-2 flex-wrap">
+                      {GENRE_CLUSTERS
+                        .filter(c => (clusterCounts[c.id] || 0) > 0)
+                        .sort((a, b) => (clusterCounts[b.id] || 0) - (clusterCounts[a.id] || 0))
+                        .map(c => (
+                          <button
+                            key={c.id}
+                            onClick={() => { setActiveCluster(c.id); setActiveGenre(null) }}
+                            className={cn(
+                              'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-medium transition-colors',
+                              activeCluster === c.id
+                                ? 'bg-accent text-page'
+                                : 'bg-card text-ink-muted border border-border-subtle'
+                            )}
+                          >
+                            <span>{c.icon} {c.label}</span>
+                            <span className="opacity-50">{clusterCounts[c.id]}</span>
+                          </button>
+                        ))
+                      }
+                      {(clusterCounts['no-genre'] || 0) > 0 && (
+                        <button
+                          onClick={() => { setActiveCluster(activeCluster === 'no-genre' ? null : 'no-genre'); setActiveGenre(null) }}
+                          className={cn(
+                            'flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-medium transition-colors',
+                            activeCluster === 'no-genre'
+                              ? 'bg-accent text-page'
+                              : 'bg-card text-ink-muted border border-border-subtle'
+                          )}
+                        >
+                          <span>No Genre</span>
+                          <span className="opacity-50">{clusterCounts['no-genre']}</span>
+                        </button>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -316,7 +355,7 @@ export default function LibraryTab({ albums, getAlbumStats, genresLoading, saveL
       </AnimatePresence>
 
       {/* ── Genre loading indicator ────────────────────────────────── */}
-      {genresLoading && visibleGenres.length === 0 && (
+      {genresLoading && Object.keys(clusterCounts).length === 0 && (
         <p className="px-4 pb-2 text-[11px] text-ink-muted">Loading genres…</p>
       )}
 
