@@ -2,6 +2,7 @@ import { useState, useMemo, useCallback, useEffect } from 'react'
 import { motion, AnimatePresence, useMotionValue, useTransform } from 'motion/react'
 import { addToQueue } from '../../lib/spotify-api.js'
 import AlbumModal from '../AlbumModal.jsx'
+import { GENRE_CLUSTERS, clusterOf } from '../../data/genre-clusters.js'
 
 // ── Constants ─────────────────────────────────────────────────────────
 
@@ -714,6 +715,10 @@ export default function DiscoverTab({ albums, genresLoading, getAlbumStats, save
   const [draftToggles,    setDraftToggles]   = useState({ weightUnheard: false, excludeKeywords: false, avoidRecent: false, boostRecentlyAdded: false })
   const [recentlyAddedFilter,      setRecentlyAddedFilter]      = useState(null)
   const [draftRecentlyAddedFilter, setDraftRecentlyAddedFilter] = useState(null)
+  const [activeCluster,  setActiveCluster]  = useState(null)
+  const [activeGenre,    setActiveGenre]    = useState(null)
+  const [draftCluster,   setDraftCluster]   = useState(null)
+  const [draftGenre,     setDraftGenre]     = useState(null)
 
   // ── Filter helpers ─────────────────────────────────────────────────
 
@@ -782,6 +787,7 @@ export default function DiscoverTab({ albums, genresLoading, getAlbumStats, save
   }
 
   const activeFilterCount = activeFilters.size
+    + (activeCluster ? 1 : 0)
     + (toggles.weightUnheard ? 1 : 0)
     + (toggles.excludeKeywords ? 1 : 0)
     + (toggles.avoidRecent ? 1 : 0)
@@ -798,6 +804,8 @@ export default function DiscoverTab({ albums, genresLoading, getAlbumStats, save
     setDraftFilters(new Set(activeFilters))
     setDraftToggles({ ...toggles })
     setDraftRecentlyAddedFilter(recentlyAddedFilter)
+    setDraftCluster(activeCluster)
+    setDraftGenre(activeGenre)
     setFilterModalOpen(true)
   }
 
@@ -805,6 +813,8 @@ export default function DiscoverTab({ albums, genresLoading, getAlbumStats, save
     setActiveFilters(draftFilters)
     setToggles(draftToggles)
     setRecentlyAddedFilter(draftRecentlyAddedFilter)
+    setActiveCluster(draftCluster)
+    setActiveGenre(draftGenre)
     setActivePreset(null)
     setPickedAlbums([])
     setFilterModalOpen(false)
@@ -830,18 +840,17 @@ export default function DiscoverTab({ albums, genresLoading, getAlbumStats, save
 
   const filteredAlbums = useMemo(() => {
     const activeDecades = DECADES.filter(d => activeFilters.has(d))
-    const activeGenres  = [...activeFilters].filter(f =>
-      f !== 'no-genre' && !DECADES.includes(f) && !['Never heard', 'Not recently played'].includes(f)
-    )
     const now = Date.now()
 
     return albums.filter(a => {
       if (activeDecades.length && !activeDecades.includes(albumDecade(a))) return false
-      if (activeGenres.length) {
-        const dg = a._genres || []
-        if (!activeGenres.some(g => dg.includes(g))) return false
+      if (activeGenre) {
+        if (!(a._genres || []).includes(activeGenre)) return false
+      } else if (activeCluster === 'no-genre') {
+        if ((a._genres?.length ?? 0) > 0) return false
+      } else if (activeCluster) {
+        if (!(a._genres || []).some(g => clusterOf(g) === activeCluster)) return false
       }
-      if (activeFilters.has('no-genre') && (a._genres?.length ?? 0) > 0) return false
       const stats = getAlbumStats(a)
       if (activeFilters.has('Never heard') && (stats?.listenCount ?? 0) > 0) return false
       if (activeFilters.has('Not recently played')) {
@@ -864,7 +873,7 @@ export default function DiscoverTab({ albums, genresLoading, getAlbumStats, save
       }
       return true
     })
-  }, [albums, activeFilters, toggles, queueHistory, getAlbumStats, recentlyAddedFilter])
+  }, [albums, activeFilters, activeCluster, activeGenre, toggles, queueHistory, getAlbumStats, recentlyAddedFilter])
 
   // ── Actions ────────────────────────────────────────────────────────
 
@@ -1104,6 +1113,10 @@ export default function DiscoverTab({ albums, genresLoading, getAlbumStats, save
             draftToggles={draftToggles}
             setDraftFilters={setDraftFilters}
             setDraftToggles={setDraftToggles}
+            draftCluster={draftCluster}
+            setDraftCluster={setDraftCluster}
+            draftGenre={draftGenre}
+            setDraftGenre={setDraftGenre}
             onApply={applyFilters}
             onClose={() => setFilterModalOpen(false)}
             onSavePreset={savePreset}
