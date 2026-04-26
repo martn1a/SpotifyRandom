@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react'
 import AlbumModal from '../AlbumModal.jsx'
 import { cn } from '../../lib/utils.js'
 import { getAlbumBadges } from '../../lib/badge-utils.js'
+import { GENRE_CLUSTERS, clusterOf } from '../../data/genre-clusters.js'
 
 // ── Sub-components ────────────────────────────────────────────────────
 
@@ -85,23 +86,44 @@ const TYPE_OPTIONS = [
 
 export default function LibraryTab({ albums, getAlbumStats, genresLoading, saveLater, removeLater, isSaved, libraryFilter, onClearFilter = () => {}, onBadgeClick }) {
   const [search,        setSearch]        = useState('')
+  const [activeCluster, setActiveCluster] = useState(null)
   const [activeGenre,   setActiveGenre]   = useState(null)
   const [typeFilter,    setTypeFilter]    = useState('all')
   const [sort,          setSort]          = useState('recently_added')
   const [selectedAlbum, setSelectedAlbum] = useState(null)
   const [isFilterOpen,  setIsFilterOpen]  = useState(false)
 
-  // Build genre → album count map, sorted by count
-  const { genreCounts, visibleGenres } = useMemo(() => {
-    const counts = new Map()
+  const clusterCounts = useMemo(() => {
+    const counts = {}
+    let noGenre = 0
     for (const a of albums) {
-      for (const g of (a._genres || [])) {
-        counts.set(g, (counts.get(g) || 0) + 1)
+      const genres = a._genres || []
+      if (genres.length === 0) { noGenre++; continue }
+      const seen = new Set()
+      for (const g of genres) {
+        const c = clusterOf(g)
+        if (c !== 'other' && !seen.has(c)) {
+          counts[c] = (counts[c] || 0) + 1
+          seen.add(c)
+        }
       }
     }
-    const sorted = [...counts.entries()].sort((a, b) => b[1] - a[1]).map(([g]) => g)
-    return { genreCounts: counts, visibleGenres: sorted }
+    if (noGenre > 0) counts['no-genre'] = noGenre
+    return counts
   }, [albums])
+
+  const drillGenreCounts = useMemo(() => {
+    if (!activeCluster || activeCluster === 'no-genre') return {}
+    const counts = {}
+    for (const a of albums) {
+      for (const g of (a._genres || [])) {
+        if (clusterOf(g) === activeCluster) {
+          counts[g] = (counts[g] || 0) + 1
+        }
+      }
+    }
+    return counts
+  }, [albums, activeCluster])
 
   // Filter + sort
   const filtered = useMemo(() => {
@@ -121,6 +143,10 @@ export default function LibraryTab({ albums, getAlbumStats, genresLoading, saveL
 
     if (activeGenre) {
       list = list.filter(a => (a._genres || []).includes(activeGenre))
+    } else if (activeCluster === 'no-genre') {
+      list = list.filter(a => (a._genres || []).length === 0)
+    } else if (activeCluster) {
+      list = list.filter(a => (a._genres || []).some(g => clusterOf(g) === activeCluster))
     }
 
     if (libraryFilter) {
@@ -147,7 +173,7 @@ export default function LibraryTab({ albums, getAlbumStats, genresLoading, saveL
     }
 
     return list
-  }, [albums, search, typeFilter, activeGenre, sort, getAlbumStats, libraryFilter])
+  }, [albums, search, typeFilter, activeCluster, activeGenre, sort, getAlbumStats, libraryFilter])
 
   return (
     <div className="flex flex-col h-full">
