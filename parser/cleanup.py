@@ -19,15 +19,15 @@ from datetime import datetime, timezone
 # ─── TUNE THESE ──────────────────────────────────────────────────────
 KEEP_ADDED_WITHIN_DAYS    = 365   # albums added < N days ago → always keep
 KEEP_IF_LISTEN_COUNT_GTE  = 1     # albums with ≥ N full listens (parser sessions) → keep
-KEEP_IF_SCROBBLE_COVERAGE = 0.30  # rawScrobbles / trackCount ≥ this → keep  (0.0 = disabled)
-KEEP_IF_LAST_HEARD_DAYS   = 0     # last scrobble < N days ago → keep  (0 = disabled)
+KEEP_IF_SCROBBLE_COVERAGE = 0.0  # rawScrobbles / trackCount ≥ this → keep  (0.0 = disabled)
+KEEP_IF_LAST_HEARD_DAYS   = 365     # last scrobble < N days ago → keep  (0 = disabled)
 # ─────────────────────────────────────────────────────────────────────
 
 SCRIPT_DIR   = Path(__file__).parent
 LASTFM_PATH  = SCRIPT_DIR.parent / 'public' / 'lastfm-data.json'
 DATA_PATH    = SCRIPT_DIR / 'cleanup_data.json'
 CLIENT_ID    = 'ed48e32b12fd4b01ad0dbdf383cb3ff6'
-REDIRECT_URI = 'http://localhost:8888/callback'
+REDIRECT_URI = 'http://127.0.0.1:8888/callback'
 SCOPES       = 'user-library-read user-library-modify'
 
 CONFIG = {

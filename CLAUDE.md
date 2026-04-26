@@ -99,10 +99,7 @@ cd parser && npm install && node index.js  # Parser (lokal)
 
 ## Offene Backlog-Items (nächste Session)
 
-Siehe Roadmap.md für vollständige Liste. Priorität:
-1. Artist Deep Dive modal (tap Künstlername → alle Alben des Künstlers)
-2. Library Coverage Bar in Stats (X / Y Albums heard, Z%)
-3. Animationen (Tab-Übergänge, Card-Slides)
+Siehe Roadmap.md für vollständige Liste.
 
 ## Architektur-Entscheidungen
 

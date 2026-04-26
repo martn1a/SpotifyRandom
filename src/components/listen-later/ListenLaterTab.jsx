@@ -95,6 +95,7 @@ export default function ListenLaterTab({ items, saveLater, removeLater, isSaved,
                         className="w-full h-full object-cover transition-transform group-hover:scale-105"
                         referrerPolicy="no-referrer"
                         loading="lazy"
+                        decoding="async"
                       />
                     )
                     : (

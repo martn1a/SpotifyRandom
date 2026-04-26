@@ -27,20 +27,9 @@
   - Batch: "Queue All" / "Save All"
   - Weighted Pick funktioniert mit Multi-Pick (sampling without replacement)
 
-- [ ] **Artist Deep Dive Modal** ← Phase 4.2 (Parser Tier 1 ✅ — jetzt unblocked)
-  - Tap auf Künstlername → alle Library-Alben des Artists
-  - Heard/Unheard, Top Albums (aus Parser `topAlbums[]`), Coverage %, Album Cards
-  - Coverage % visuell darstellen (Fortschrittsbalken)
-
-- [ ] **Library Coverage Bar** (StatsTab, Phase 4.3)
-  - X / Y Albums heard, Z% — global + nach Artist
-
-- [ ] **Empty-State bei geleerten Carousels** (Phase 4.4)
+- [ ] **Empty-State bei geleerten Carousels**
   - Feedback wenn alle Alben eines Carousels geburnt wurden
   - Ggf. "Reset"-CTA direkt im leeren Carousel
-
-- [ ] **Animationen** (Phase 4.5)
-  - Tab-Übergänge, Card-Slides
 
 ---
 
