@@ -12,17 +12,18 @@
  *   Group scrobbles into sessions using time gaps.
  *   A session counts as a listen only if enough of the album was covered.
  *
- * Algorithm constants (all evidence-based from real listening data):
- *   SESSION_GAP_MS     = 20 minutes — gap that splits sessions
- *   LISTEN_THRESHOLD   = 0.50       — 50% unique tracks = 1 listen
- *   PASSIVE_GAP_AVG_MS = 15 minutes — avg gap flagging background listening
- *   MIN_SESSION_TRACKS = 2          — single-track plays never count as listens
+ * Algorithm constants:
+ *   SESSION_GAP_MS     = 8 hours  — gap that splits sessions (covers pauses within a day)
+ *   LISTEN_THRESHOLD   = 0.50     — 50% unique tracks = 1 listen
+ *   MIN_SESSION_TRACKS = 2        — single-track plays never count as listens
+ *
+ * Background detection removed: passive/ambient sessions count the same as active ones.
+ * Loop counting fixed: each full pass through the album counts as a separate listen.
  */
 
-const SESSION_GAP_MS       = 20 * 60 * 1000;   // 20 minutes
-const LISTEN_THRESHOLD     = 0.50;              // 50% unique track coverage
-const PASSIVE_AVG_GAP_MS   = 15 * 60 * 1000;   // 15 min avg gap = background
-const MIN_SESSION_TRACKS   = 2;                 // need at least 2 track plays
+const SESSION_GAP_MS       = 8 * 60 * 60 * 1000;  // 8 hours
+const LISTEN_THRESHOLD     = 0.50;                  // 50% unique track coverage
+const MIN_SESSION_TRACKS   = 2;                     // need at least 2 track plays
 
 /**
  * Compute full session stats for all albums from fadgad scrobbles.
@@ -102,10 +103,8 @@ export function computeAlbumSessions(artist, album, scrobbles, knownTrackCount) 
     const scored = scoreSession(session, effectiveTrackCount);
     sessionDetails.push(scored);
 
-    if (scored.isPassive) {
-      backgroundCount++;
-    } else if (scored.countsAsListen) {
-      listenCount++;
+    if (scored.listenCount > 0) {
+      listenCount += scored.listenCount;
       sessionDates.push(scored.startTs);
     }
   }
@@ -124,7 +123,6 @@ export function computeAlbumSessions(artist, album, scrobbles, knownTrackCount) 
     trackCountIsEstimate,
     // Session-based listen counts
     listenCount,
-    backgroundCount,
     sessionCount:       sessions.length,
     // Temporal data
     firstHeard:         timestamps[0],
@@ -162,7 +160,7 @@ function splitIntoSessions(scrobbles) {
 }
 
 /**
- * Score a single session to determine if it counts as a listen.
+ * Score a single session to determine how many listens it counts as.
  *
  * @param {Array<{track, timestamp}>} session
  * @param {number} totalTrackCount - known or estimated total tracks on album
@@ -173,51 +171,29 @@ function scoreSession(session, totalTrackCount) {
   const coverage = uniqueTracksInSession.size / totalTrackCount;
   const totalPlays = session.length;
 
-  // Calculate average gap between consecutive scrobbles
-  let avgGapMs = 0;
-  if (session.length > 1) {
-    const gaps = [];
-    for (let i = 1; i < session.length; i++) {
-      gaps.push(session[i].timestamp - session[i - 1].timestamp);
-    }
-    avgGapMs = gaps.reduce((a, b) => a + b, 0) / gaps.length;
-  }
-
-  // Passive/background detection:
-  // If tracks arrive very slowly (avg gap > 15min), it's likely ambient/background
-  const isPassive = avgGapMs > PASSIVE_AVG_GAP_MS && session.length > 2;
-
-  // Loop detection:
-  // If scrobbles >> unique tracks, the album is being looped.
-  // We count each "pass" through the album as its own potential listen.
+  // Loop detection: scrobbles >> unique tracks → album is being looped.
+  // Each full pass through the album counts as a separate listen.
   const loopRatio = totalPlays / Math.max(uniqueTracksInSession.size, 1);
   const isLooping = loopRatio >= 2.0 && uniqueTracksInSession.size >= 3;
 
-  let countsAsListen = false;
+  let listenCount = 0;
 
-  if (isPassive) {
-    // Background sessions never count as primary listens
-    countsAsListen = false;
-  } else if (isLooping) {
-    // For looping sessions: count each complete pass (>= threshold coverage)
-    // The session itself counts as 1 if coverage in first pass >= threshold.
-    // Additional loops are already represented by the same session counter.
-    countsAsListen = coverage >= LISTEN_THRESHOLD;
+  if (isLooping) {
+    // Count each complete pass as its own listen
+    const passes = Math.floor(totalPlays / totalTrackCount);
+    if (coverage >= LISTEN_THRESHOLD && passes >= 1) listenCount = passes;
   } else {
-    // Normal session: counts if enough of the album was covered
-    countsAsListen = coverage >= LISTEN_THRESHOLD && totalPlays >= MIN_SESSION_TRACKS;
+    if (coverage >= LISTEN_THRESHOLD && totalPlays >= MIN_SESSION_TRACKS) listenCount = 1;
   }
 
   return {
-    trackCount:            session.length,
-    uniqueTracks:          uniqueTracksInSession.size,
-    coverage:              Math.round(coverage * 100) / 100,
-    avgGapMs:              Math.round(avgGapMs),
-    isPassive,
+    trackCount:   session.length,
+    uniqueTracks: uniqueTracksInSession.size,
+    coverage:     Math.round(coverage * 100) / 100,
     isLooping,
-    countsAsListen,
-    startTs:               session[0].timestamp,
-    endTs:                 session[session.length - 1].timestamp,
+    listenCount,
+    startTs:      session[0].timestamp,
+    endTs:        session[session.length - 1].timestamp,
   };
 }
 
@@ -307,7 +283,6 @@ function emptyStats(artist, album, trackCount) {
     trackCount: trackCount || 0,
     trackCountIsEstimate: !trackCount,
     listenCount: 0,
-    backgroundCount: 0,
     sessionCount: 0,
     firstHeard: null,
     lastHeard: null,

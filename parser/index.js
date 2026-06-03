@@ -268,7 +268,6 @@ function buildAlbumOutput(
       rank:                csvEntry?.rank ?? 9999,
       // Session-based listen counts
       listenCount:         stats.listenCount,
-      backgroundCount:     stats.backgroundCount,
       sessionCount:        stats.sessionCount,
       // Temporal
       firstHeard:          stats.firstHeard,
@@ -621,16 +620,14 @@ async function main() {
   const sessionMap = computeAllSessions(fadgad, getTrackCount);
 
   // Summarise session results
-  let totalListens = 0, totalBackground = 0, withSessions = 0;
+  let totalListens = 0, withSessions = 0;
   for (const stats of sessionMap.values()) {
     totalListens += stats.listenCount;
-    totalBackground += stats.backgroundCount;
     if (stats.listenCount > 0) withSessions++;
   }
   console.log(`  Albums processed: ${sessionMap.size.toLocaleString()}`);
   console.log(`  Albums with ≥1 listen: ${withSessions.toLocaleString()}`);
   console.log(`  Total album listens (session-based): ${totalListens.toLocaleString()}`);
-  console.log(`  Background/passive sessions: ${totalBackground.toLocaleString()}`);
 
   // ── STEP 6: Build output JSON ──────────────────────────────────
   console.log('\nSTEP 5 — Building output JSON');
