@@ -466,6 +466,62 @@ export default function StatsTab({ albums, getAlbumStats, lastfmMap, lastfmLoade
       }))
   }, [enriched, albums, lastfmByKey, now])
 
+  // ── Listening Streaks ─────────────────────────────────────────────────
+
+  const listeningDays = useMemo(() => {
+    const days = new Set()
+    for (const entry of lastfmMap.values()) {
+      for (const ts of entry.sessionDates || []) {
+        days.add(new Date(ts).toISOString().slice(0, 10))
+      }
+    }
+    return days
+  }, [lastfmMap])
+
+  const streakStats = useMemo(() => {
+    if (listeningDays.size === 0) return { current: 0, longest: 0, total: 0, lastDay: null }
+
+    const todayStr     = new Date(now).toISOString().slice(0, 10)
+    const yesterdayStr = new Date(now - 86400000).toISOString().slice(0, 10)
+
+    // Current streak: count back from today (or yesterday if today not yet heard)
+    let current  = 0
+    const startDay = listeningDays.has(todayStr)
+      ? todayStr
+      : listeningDays.has(yesterdayStr) ? yesterdayStr : null
+
+    if (startDay) {
+      let d = new Date(startDay)
+      while (listeningDays.has(d.toISOString().slice(0, 10))) {
+        current++
+        d = new Date(d.getTime() - 86400000)
+      }
+    }
+
+    // Longest streak: sorted unique days → max consecutive run
+    const sorted  = [...listeningDays].sort()
+    let longest   = sorted.length > 0 ? 1 : 0
+    let run       = 1
+    for (let i = 1; i < sorted.length; i++) {
+      const diffDays = Math.round(
+        (new Date(sorted[i]) - new Date(sorted[i - 1])) / 86400000
+      )
+      if (diffDays === 1) {
+        run++
+        if (run > longest) longest = run
+      } else {
+        run = 1
+      }
+    }
+
+    return {
+      current,
+      longest,
+      total:   listeningDays.size,
+      lastDay: sorted[sorted.length - 1],
+    }
+  }, [listeningDays, now])
+
   // ── On This Day ───────────────────────────────────────────────────────
 
   const onThisDayItems = useMemo(() =>
