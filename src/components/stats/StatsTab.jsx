@@ -266,6 +266,56 @@ export default function StatsTab({ albums, getAlbumStats, lastfmMap, lastfmLoade
       .map(e => ({ ...e, _stat: '↓', _carouselId: 'fallers' }))
   , [enriched])
 
+  const overdue = useMemo(() => {
+    return [...enriched]
+      .filter(e =>
+        e.avgGapDays != null &&
+        e.listenCount > 0 &&
+        (now - (e.lastHeard || 0)) > e.avgGapDays * 1.5 * 86400000
+      )
+      .map(e => ({
+        ...e,
+        _overdueRatio: (now - (e.lastHeard || 0)) / (e.avgGapDays * 86400000),
+        _stat: `Alle ${Math.round(e.avgGapDays)}d — seit ${Math.round((now - (e.lastHeard || 0)) / 86400000)}d`,
+        _carouselId: 'overdue',
+      }))
+      .sort((a, b) => b._overdueRatio - a._overdueRatio)
+      .slice(0, 20)
+  }, [enriched, now])
+
+  const peakNostalgie = useMemo(() => {
+    const currentMonth = new Date().getMonth() + 1
+    return [...enriched]
+      .filter(e => {
+        if (!e.peakMonth) return false
+        const mm = parseInt(e.peakMonth.split('-')[1], 10)
+        return mm === currentMonth
+      })
+      .sort((a, b) => b.listenCount - a.listenCount)
+      .slice(0, 20)
+      .map(e => ({
+        ...e,
+        _stat: `Peak ${e.peakMonth.split('-')[0]}`,
+        _carouselId: 'peak-nostalgie',
+      }))
+  }, [enriched])
+
+  const formerLove = useMemo(() =>
+    [...enriched]
+      .filter(e =>
+        e.listenCount >= 5 &&
+        e.trend === 'falling' &&
+        (now - (e.lastHeard || 0)) > 180 * 86400000
+      )
+      .sort((a, b) => b.listenCount - a.listenCount)
+      .slice(0, 20)
+      .map(e => ({
+        ...e,
+        _stat: `${e.listenCount}× — vor ${Math.round((now - (e.lastHeard || 0)) / 86400000 / 30)}M`,
+        _carouselId: 'former-love',
+      }))
+  , [enriched, now])
+
   // ── On This Day ───────────────────────────────────────────────────────
 
   const onThisDayItems = useMemo(() =>
