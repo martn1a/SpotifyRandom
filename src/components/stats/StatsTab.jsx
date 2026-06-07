@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react'
 import AlbumModal from '../AlbumModal.jsx'
 import { useBurnTracking } from '../../hooks/useBurnTracking.js'
 import { cn } from '../../lib/utils.js'
+import { GENRE_CLUSTERS, clusterOf } from '../../data/genre-clusters.js'
 
 // ── Constants ─────────────────────────────────────────────────────────
 
@@ -19,6 +20,7 @@ const TIME_RANGES = [
 
 const DEFAULT_CAROUSEL_ORDER = [
   'most-played', 'latest-discoveries', 'golden-oldies', 'climbers', 'fallers', 'on-this-day', 'recently-added',
+  'overdue', 'peak-nostalgie', 'long-waiting', 'artist-gaps', 'former-love', 'genre-dive', 'gateway', 'streaks',
 ]
 
 // ── Helpers ───────────────────────────────────────────────────────────
@@ -173,6 +175,15 @@ export default function StatsTab({ albums, getAlbumStats, lastfmMap, lastfmLoade
     return m
   }, [albums])
 
+  // Reverse lookup: normalized key → lastfm entry (for Spotify-sourced carousels)
+  const lastfmByKey = useMemo(() => {
+    const m = new Map()
+    for (const [key, entry] of lastfmMap.entries()) {
+      m.set(key, entry)
+    }
+    return m
+  }, [lastfmMap])
+
   // All lastfm entries with listenCount > 0, enriched with Spotify album ref
   // Only include entries that match a library album (so carousels never show placeholder covers)
   const enriched = useMemo(() =>
@@ -192,14 +203,19 @@ export default function StatsTab({ albums, getAlbumStats, lastfmMap, lastfmLoade
 
   const mostPlayed = useMemo(() => {
     const range = TIME_RANGES.find(r => r.id === mostPlayedRange)
+    const cutoff = range?.ms ? Date.now() - range.ms : null
+
     return [...enriched]
-      .filter(e => {
-        if (!range || range.ms === null) return true
-        return (e.lastHeard || 0) > Date.now() - range.ms
+      .map(e => {
+        const periodListens = cutoff
+          ? (e.sessionDates || []).filter(d => d > cutoff).length
+          : e.listenCount
+        return { ...e, _periodListens: periodListens }
       })
-      .sort((a, b) => b.listenCount - a.listenCount)
+      .filter(e => e._periodListens > 0)
+      .sort((a, b) => b._periodListens - a._periodListens)
       .slice(0, 20)
-      .map(e => ({ ...e, _stat: `${e.listenCount}×`, _carouselId: 'most-played' }))
+      .map(e => ({ ...e, _stat: `${e._periodListens}×`, _carouselId: 'most-played' }))
   }, [enriched, mostPlayedRange])
 
   const latestDiscoveries = useMemo(() =>
