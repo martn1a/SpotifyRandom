@@ -180,6 +180,8 @@ export default function StatsTab({ albums, getAlbumStats, lastfmMap, lastfmLoade
     const m = new Map()
     for (const [key, entry] of lastfmMap.entries()) {
       m.set(key, entry)
+      const normKey = normalizeAlbumKey(entry.artist || '', entry.name || '')
+      if (normKey !== key) m.set(normKey, entry)
     }
     return m
   }, [lastfmMap])
@@ -658,7 +660,11 @@ export default function StatsTab({ albums, getAlbumStats, lastfmMap, lastfmLoade
 
   // ── Render ────────────────────────────────────────────────────────────
 
-  const order = carouselSettings?._order ?? DEFAULT_CAROUSEL_ORDER
+  const savedOrder = carouselSettings?._order ?? []
+  const order = [
+    ...savedOrder,
+    ...DEFAULT_CAROUSEL_ORDER.filter(id => !savedOrder.includes(id)),
+  ]
 
   const blocks = {
     'most-played': (carouselSettings?.['most-played']?.visible ?? true) && (() => {
