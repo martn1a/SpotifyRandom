@@ -548,7 +548,14 @@ export default function StatsTab({ albums, getAlbumStats, lastfmMap, lastfmLoade
     'fallers':            fallers.length,
     'on-this-day':        onThisDayItems.length,
     'recently-added':     recentlyAdded.length,
-  }), [mostPlayed, latestDiscoveries, goldenOldies, climbers, fallers, onThisDayItems, recentlyAdded])
+    'overdue':            overdue.length,
+    'peak-nostalgie':     peakNostalgie.length,
+    'long-waiting':       longWaiting.length,
+    'artist-gaps':        artistGaps.length,
+    'former-love':        formerLove.length,
+    'genre-dive':         genreDive.length,
+    'gateway':            gateway.length,
+  }), [mostPlayed, latestDiscoveries, goldenOldies, climbers, fallers, onThisDayItems, recentlyAdded, overdue, peakNostalgie, longWaiting, artistGaps, formerLove, genreDive, gateway])
 
   // ── Burn-filtered carousels ───────────────────────────────────────────
 
@@ -579,6 +586,34 @@ export default function StatsTab({ albums, getAlbumStats, lastfmMap, lastfmLoade
   const filteredRecentlyAdded = useMemo(
     () => recentlyAdded.filter(e => !isBurned(e.spotifyAlbum?.id, 'recently-added')),
     [recentlyAdded, burnedMap]
+  )
+  const filteredOverdue = useMemo(
+    () => overdue.filter(e => !isBurned(e.spotifyAlbum?.id, 'overdue')),
+    [overdue, burnedMap]
+  )
+  const filteredPeakNostalgie = useMemo(
+    () => peakNostalgie.filter(e => !isBurned(e.spotifyAlbum?.id, 'peak-nostalgie')),
+    [peakNostalgie, burnedMap]
+  )
+  const filteredLongWaiting = useMemo(
+    () => longWaiting.filter(e => !isBurned(e.spotifyAlbum?.id, 'long-waiting')),
+    [longWaiting, burnedMap]
+  )
+  const filteredArtistGaps = useMemo(
+    () => artistGaps.filter(e => !isBurned(e.spotifyAlbum?.id, 'artist-gaps')),
+    [artistGaps, burnedMap]
+  )
+  const filteredFormerLove = useMemo(
+    () => formerLove.filter(e => !isBurned(e.spotifyAlbum?.id, 'former-love')),
+    [formerLove, burnedMap]
+  )
+  const filteredGenreDive = useMemo(
+    () => genreDive.filter(e => !isBurned(e.spotifyAlbum?.id, 'genre-dive')),
+    [genreDive, burnedMap]
+  )
+  const filteredGateway = useMemo(
+    () => gateway.filter(e => !isBurned(e.spotifyAlbum?.id, 'gateway')),
+    [gateway, burnedMap]
   )
 
   // ── Per-carousel burn helpers ──────────────────────────────────────────
