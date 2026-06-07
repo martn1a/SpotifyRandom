@@ -380,6 +380,92 @@ export default function StatsTab({ albums, getAlbumStats, lastfmMap, lastfmLoade
       })
   }, [enriched, albums, lastfmByKey])
 
+  // ── Genre Deep Dive ───────────────────────────────────────────────────
+  const genreDive = useMemo(() => {
+    const cutoff30 = now - 30 * 86400000
+
+    // Count recent sessions per cluster
+    const clusterCounts = new Map()
+    for (const e of enriched) {
+      const recent = (e.sessionDates || []).filter(d => d > cutoff30).length
+      if (recent === 0) continue
+      const tags    = e.spotifyAlbum?._genres || []
+      const cluster = tags.map(g => clusterOf(g)).find(c => c !== 'other')
+      if (!cluster) continue
+      clusterCounts.set(cluster, (clusterCounts.get(cluster) || 0) + recent)
+    }
+
+    if (clusterCounts.size === 0) return []
+
+    const topCluster = [...clusterCounts.entries()]
+      .sort((a, b) => b[1] - a[1])[0][0]
+    const topLabel = GENRE_CLUSTERS.find(c => c.id === topCluster)?.label ?? topCluster
+
+    return albums
+      .filter(a => {
+        const tags    = a._genres || []
+        const cluster = tags.map(g => clusterOf(g)).find(c => c !== 'other')
+        if (cluster !== topCluster) return false
+        const artist  = a.artists?.[0]?.name || ''
+        const key     = `${artist}||${a.name}`.toLowerCase()
+        const normKey = normalizeAlbumKey(artist, a.name)
+        const lfm     = lastfmByKey.get(key) ?? lastfmByKey.get(normKey)
+        return (lfm?.listenCount ?? 0) === 0
+      })
+      .sort((a, b) => new Date(b._added_at || 0) - new Date(a._added_at || 0))
+      .slice(0, 20)
+      .map(a => ({
+        name:        a.name,
+        artist:      a.artists?.[0]?.name || '',
+        spotifyAlbum: a,
+        listenCount: 0,
+        _stat:       `Weil du ${topLabel} liebst`,
+        _carouselId: 'genre-dive',
+      }))
+  }, [enriched, albums, lastfmByKey, now])
+
+  // ── Gateway ───────────────────────────────────────────────────────────
+  const gateway = useMemo(() => {
+    const cutoff90 = now - 90 * 86400000
+
+    const discoveryGenres = new Set()
+    for (const e of enriched) {
+      if (!e.firstHeard || e.firstHeard <= cutoff90) continue
+      const tags    = e.spotifyAlbum?._genres || []
+      const cluster = tags.map(g => clusterOf(g)).find(c => c !== 'other')
+      if (cluster) discoveryGenres.add(cluster)
+    }
+
+    if (discoveryGenres.size === 0) return []
+
+    // Daily seed for deterministic shuffle
+    const today = new Date().toISOString().slice(0, 10)
+    const seed  = today.split('-').reduce((acc, n) => acc + parseInt(n, 10), 0)
+
+    return albums
+      .filter(a => {
+        const tags    = a._genres || []
+        const cluster = tags.map(g => clusterOf(g)).find(c => c !== 'other')
+        if (!cluster || !discoveryGenres.has(cluster)) return false
+        const artist  = a.artists?.[0]?.name || ''
+        const key     = `${artist}||${a.name}`.toLowerCase()
+        const normKey = normalizeAlbumKey(artist, a.name)
+        const lfm     = lastfmByKey.get(key) ?? lastfmByKey.get(normKey)
+        return (lfm?.listenCount ?? 0) === 0
+      })
+      .map(a => ({ a, _sort: Math.sin(seed + a.name.length + (a.artists?.[0]?.name || '').length) }))
+      .sort((x, y) => x._sort - y._sort)
+      .slice(0, 20)
+      .map(({ a }) => ({
+        name:        a.name,
+        artist:      a.artists?.[0]?.name || '',
+        spotifyAlbum: a,
+        listenCount: 0,
+        _stat:       'Frisch entdecktes Genre',
+        _carouselId: 'gateway',
+      }))
+  }, [enriched, albums, lastfmByKey, now])
+
   // ── On This Day ───────────────────────────────────────────────────────
 
   const onThisDayItems = useMemo(() =>
