@@ -439,7 +439,7 @@ export default function StatsTab({ albums, getAlbumStats, lastfmMap, lastfmLoade
     if (discoveryGenres.size === 0) return []
 
     // Daily seed for deterministic shuffle
-    const today = new Date().toISOString().slice(0, 10)
+    const today = new Date(now).toISOString().slice(0, 10)
     const seed  = today.split('-').reduce((acc, n) => acc + parseInt(n, 10), 0)
 
     return albums
