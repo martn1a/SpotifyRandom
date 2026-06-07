@@ -270,6 +270,7 @@ export default function StatsTab({ albums, getAlbumStats, lastfmMap, lastfmLoade
     return [...enriched]
       .filter(e =>
         e.avgGapDays != null &&
+        e.avgGapDays > 0 &&
         e.listenCount > 0 &&
         (now - (e.lastHeard || 0)) > e.avgGapDays * 1.5 * 86400000
       )
@@ -293,11 +294,14 @@ export default function StatsTab({ albums, getAlbumStats, lastfmMap, lastfmLoade
       })
       .sort((a, b) => b.listenCount - a.listenCount)
       .slice(0, 20)
-      .map(e => ({
-        ...e,
-        _stat: `Peak ${e.peakMonth.split('-')[0]}`,
-        _carouselId: 'peak-nostalgie',
-      }))
+      .map(e => {
+        const [year] = e.peakMonth.split('-')
+        return {
+          ...e,
+          _stat: `Peak ${year}`,
+          _carouselId: 'peak-nostalgie',
+        }
+      })
   }, [enriched])
 
   const formerLove = useMemo(() =>
