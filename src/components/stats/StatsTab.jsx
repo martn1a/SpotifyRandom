@@ -320,6 +320,66 @@ export default function StatsTab({ albums, getAlbumStats, lastfmMap, lastfmLoade
       }))
   , [enriched, now])
 
+  // ── Lange Wartend ─────────────────────────────────────────────────────
+
+  const longWaiting = useMemo(() => {
+    return albums
+      .filter(a => a._added_at)
+      .map(a => {
+        const artist = a.artists?.[0]?.name || ''
+        const key    = `${artist}||${a.name}`.toLowerCase()
+        const normKey = normalizeAlbumKey(artist, a.name)
+        const lfm    = lastfmByKey.get(key) ?? lastfmByKey.get(normKey)
+        return { a, artist, listenCount: lfm?.listenCount ?? 0 }
+      })
+      .filter(({ listenCount }) => listenCount === 0)
+      .sort((x, y) => new Date(x.a._added_at) - new Date(y.a._added_at))
+      .slice(0, 20)
+      .map(({ a, artist }) => ({
+        name:        a.name,
+        artist,
+        spotifyAlbum: a,
+        listenCount: 0,
+        _stat:       `Seit ${Math.round((now - new Date(a._added_at).getTime()) / 86400000)}d in Library`,
+        _carouselId: 'long-waiting',
+      }))
+  }, [albums, lastfmByKey, now])
+
+  // ── Artist-Lücken ─────────────────────────────────────────────────────
+
+  const artistGaps = useMemo(() => {
+    const lovedArtists = new Set(
+      enriched
+        .filter(e => e.listenCount >= 3)
+        .map(e => (e.artist || '').toLowerCase())
+    )
+
+    return albums
+      .filter(a => {
+        const artist = a.artists?.[0]?.name || ''
+        if (!lovedArtists.has(artist.toLowerCase())) return false
+        const key     = `${artist}||${a.name}`.toLowerCase()
+        const normKey = normalizeAlbumKey(artist, a.name)
+        const lfm     = lastfmByKey.get(key) ?? lastfmByKey.get(normKey)
+        return (lfm?.listenCount ?? 0) === 0
+      })
+      .sort((a, b) =>
+        (a.artists?.[0]?.name || '').localeCompare(b.artists?.[0]?.name || '')
+      )
+      .slice(0, 20)
+      .map(a => {
+        const artist = a.artists?.[0]?.name || ''
+        return {
+          name:        a.name,
+          artist,
+          spotifyAlbum: a,
+          listenCount: 0,
+          _stat:       `${artist} • Noch nicht gehört`,
+          _carouselId: 'artist-gaps',
+        }
+      })
+  }, [enriched, albums, lastfmByKey])
+
   // ── On This Day ───────────────────────────────────────────────────────
 
   const onThisDayItems = useMemo(() =>
