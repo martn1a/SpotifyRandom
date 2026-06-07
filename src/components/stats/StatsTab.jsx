@@ -759,6 +759,66 @@ export default function StatsTab({ albums, getAlbumStats, lastfmMap, lastfmLoade
     'recently-added': (carouselSettings?.['recently-added']?.visible ?? true) && (
       <Carousel title="🔔 Recently Added" items={filteredRecentlyAdded} onTap={handleCarouselTap} onReset={() => resetCarousel('recently-added')} {...carouselBurnProps('recently-added')} />
     ),
+    'overdue': (carouselSettings?.['overdue']?.visible ?? true) && (
+      <Carousel title="⏰ Überfällig" items={filteredOverdue} onTap={handleCarouselTap} onReset={() => resetCarousel('overdue')} {...carouselBurnProps('overdue')} />
+    ),
+    'peak-nostalgie': (carouselSettings?.['peak-nostalgie']?.visible ?? true) && (
+      <Carousel title="📅 Peak Nostalgie" items={filteredPeakNostalgie} onTap={handleCarouselTap} onReset={() => resetCarousel('peak-nostalgie')} {...carouselBurnProps('peak-nostalgie')} />
+    ),
+    'long-waiting': (carouselSettings?.['long-waiting']?.visible ?? true) && (
+      <Carousel title="📦 Lange Wartend" items={filteredLongWaiting} onTap={handleCarouselTap} onReset={() => resetCarousel('long-waiting')} {...carouselBurnProps('long-waiting')} />
+    ),
+    'artist-gaps': (carouselSettings?.['artist-gaps']?.visible ?? true) && (
+      <Carousel title="🎯 Artist-Lücken" items={filteredArtistGaps} onTap={handleCarouselTap} onReset={() => resetCarousel('artist-gaps')} {...carouselBurnProps('artist-gaps')} />
+    ),
+    'former-love': (carouselSettings?.['former-love']?.visible ?? true) && (
+      <Carousel title="💔 Frühere Liebe" items={filteredFormerLove} onTap={handleCarouselTap} onReset={() => resetCarousel('former-love')} {...carouselBurnProps('former-love')} />
+    ),
+    'genre-dive': (carouselSettings?.['genre-dive']?.visible ?? true) && (
+      <Carousel title="🎸 Genre Deep Dive" items={filteredGenreDive} onTap={handleCarouselTap} onReset={() => resetCarousel('genre-dive')} {...carouselBurnProps('genre-dive')} />
+    ),
+    'gateway': (carouselSettings?.['gateway']?.visible ?? true) && (
+      <Carousel title="🚪 Gateway" items={filteredGateway} onTap={handleCarouselTap} onReset={() => resetCarousel('gateway')} {...carouselBurnProps('gateway')} />
+    ),
+    'streaks': (carouselSettings?.['streaks']?.visible ?? true) && (() => {
+      const pct = streakStats.longest > 0
+        ? Math.round((streakStats.current / streakStats.longest) * 100)
+        : 0
+      return (
+        <section>
+          <h2 className="text-[13px] font-medium text-ink mb-2.5">🔥 Listening Streaks</h2>
+          <div className="bg-card rounded-2xl p-4">
+            <div className="grid grid-cols-3 gap-2 mb-3">
+              <div className="text-center">
+                <p className="text-[26px] font-bold text-ink leading-none">{streakStats.current}</p>
+                <p className="text-[10px] text-ink-muted mt-1">Aktuell</p>
+              </div>
+              <div className="text-center border-x border-border-subtle">
+                <p className="text-[26px] font-bold text-accent leading-none">{streakStats.longest}</p>
+                <p className="text-[10px] text-ink-muted mt-1">Längste</p>
+              </div>
+              <div className="text-center">
+                <p className="text-[26px] font-bold text-ink leading-none">{streakStats.total}</p>
+                <p className="text-[10px] text-ink-muted mt-1">Gesamt</p>
+              </div>
+            </div>
+            {streakStats.longest > 0 && (
+              <div className="h-[3px] bg-card-raised rounded-full overflow-hidden">
+                <div
+                  className="h-full bg-accent rounded-full transition-all"
+                  style={{ width: `${pct}%` }}
+                />
+              </div>
+            )}
+            {streakStats.current === 0 && streakStats.lastDay && (
+              <p className="text-[11px] text-ink-muted mt-2 text-center">
+                Zuletzt gehört: {new Date(streakStats.lastDay).toLocaleDateString('de', { day: 'numeric', month: 'short', year: 'numeric' })}
+              </p>
+            )}
+          </div>
+        </section>
+      )
+    })(),
   }
 
   return (
