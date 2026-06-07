@@ -74,7 +74,7 @@ function LoadingScreen({ progress }) {
 
 function defaultCarouselSettings() {
   return {
-    _order: ['most-played', 'latest-discoveries', 'recently-added', 'golden-oldies', 'climbers', 'fallers', 'on-this-day'],
+    _order: ['most-played', 'latest-discoveries', 'recently-added', 'golden-oldies', 'climbers', 'fallers', 'on-this-day', 'overdue', 'peak-nostalgie', 'long-waiting', 'artist-gaps', 'former-love', 'genre-dive', 'gateway', 'streaks'],
     'most-played':        { visible: true, sort: 'original' },
     'latest-discoveries': { visible: true, sort: 'original' },
     'golden-oldies':      { visible: true, sort: 'original' },
@@ -82,6 +82,14 @@ function defaultCarouselSettings() {
     'fallers':            { visible: true, sort: 'original' },
     'on-this-day':        { visible: true, sort: 'original' },
     'recently-added':     { visible: true, sort: 'original' },
+    'overdue':            { visible: true, sort: 'original' },
+    'peak-nostalgie':     { visible: true, sort: 'original' },
+    'long-waiting':       { visible: true, sort: 'original' },
+    'artist-gaps':        { visible: true, sort: 'original' },
+    'former-love':        { visible: true, sort: 'original' },
+    'genre-dive':         { visible: true, sort: 'original' },
+    'gateway':            { visible: true, sort: 'original' },
+    'streaks':            { visible: true },
   }
 }
 

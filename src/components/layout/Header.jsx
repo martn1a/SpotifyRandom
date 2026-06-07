@@ -11,6 +11,14 @@ const CAROUSEL_LABELS = {
   'fallers':            '📉 Fallers',
   'on-this-day':        '📅 On This Day',
   'recently-added':     '🔔 Recently Added',
+  'overdue':            '⏰ Überfällig',
+  'peak-nostalgie':     '📅 Peak Nostalgie',
+  'long-waiting':       '📦 Lange Wartend',
+  'artist-gaps':        '🎯 Artist-Lücken',
+  'former-love':        '💔 Frühere Liebe',
+  'genre-dive':         '🎸 Genre Deep Dive',
+  'gateway':            '🚪 Gateway',
+  'streaks':            '🔥 Listening Streaks',
 }
 
 const SORT_OPTIONS = [
@@ -347,7 +355,7 @@ function SettingsModal({
                                 <span className="text-ink-muted text-base select-none cursor-grab active:cursor-grabbing">⠿</span>
                                 <span className="text-sm font-medium flex-1">{label}</span>
                                 <div className="flex gap-1">
-                                  {SORT_OPTIONS.map(opt => (
+                                  {id !== 'streaks' && SORT_OPTIONS.map(opt => (
                                     <button
                                       key={opt.id}
                                       onClick={() => onUpdateCarouselSettings(id, { sort: opt.id })}
