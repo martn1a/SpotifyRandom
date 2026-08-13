@@ -97,7 +97,7 @@ export default function AlbumModal({
 
   const handleSave = useCallback(() => {
     triggerBurn(() => {
-      if (saved) onRemove(currentAlbum)
+      if (saved) onRemove(currentAlbum.id)
       else onSave(currentAlbum)
     })
   }, [saved, currentAlbum, onSave, onRemove, triggerBurn])
