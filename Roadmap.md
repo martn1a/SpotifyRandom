@@ -9,6 +9,8 @@
 - **Burn Tracking** — Burn bei Queue/Save, Reset pro Carousel, Badge, Per-Carousel-Metriken in StatsTab
 - **Carousel Empty-State** — Styled Card mit 🔥 + inline Reset-CTA wenn alle Alben geburnt
 - **Parser v2.0** — Per-Album: `uniqueListeningDays`, `sessionDates[]`, `avgGapDays`, `releaseYear`, `albumAgeAtFirstListen`. Per-Artist: `coveragePercent`, `topAlbums[]`, `mostRediscoveredAlbum`
+- **8 neue StatsTab-Carousels** — ⏰ Überfällig, 📅 Peak Nostalgie, 📦 Lange Wartend, 🎯 Artist-Lücken, 💔 Frühere Liebe, 🎸 Genre Deep Dive, 🚪 Gateway — alle über Settings togglebar
+- **Listening Streaks** — Stats-Karte mit Aktuell/Längste/Gesamt Streak
 
 ---
 
@@ -21,9 +23,6 @@
 - **"Pick for Me"-Modus** (DiscoverTab)
   - Automatische Preset-Auswahl basierend auf Tageszeit / Wochentag
   - Beispiel: Montag morgens → Deep Cuts, Freitag abends → Surprise Me
-
-- **Listening Streaks**
-  - Wie viele Tage in Folge wurde gehört, längste Streak etc.
 
 ---
 
